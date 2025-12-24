@@ -6,6 +6,7 @@ import path from "path";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
 import { pipeline } from "stream/promises";
+import { Readable } from "stream";
 
 export const runtime = 'nodejs';
 
@@ -35,8 +36,12 @@ export async function POST(req: NextRequest) {
     const videoPath = path.join(tempDir, `${uuidv4()}.${ext}`);
     
     // Stream file to disk to avoid memory exhaustion
-    const fileStream = videoFile.stream() as unknown as NodeJS.ReadableStream;
+    // Convert Web Stream to Node Stream
+    // @ts-ignore - Readable.fromWeb is available in Node 18+ but Typescript might complain depending on lib
+    const fileStream = Readable.fromWeb(videoFile.stream());
     await pipeline(fileStream, fs.createWriteStream(videoPath));
+    
+    console.log(`File written to ${videoPath}`);
 
     const fileSizeInMB = videoFile.size / (1024 * 1024);
     let processPath = videoPath;
@@ -46,7 +51,7 @@ export async function POST(req: NextRequest) {
       const audioPath = path.join(tempDir, `${uuidv4()}.m4a`); 
       await extractAudio(videoPath, audioPath);
       processPath = audioPath;
-      mimeType = "audio/mpeg"; 
+      mimeType = "audio/mp4"; 
     }
 
     const geminiFile = await uploadToGemini(processPath, mimeType);
