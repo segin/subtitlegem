@@ -38,9 +38,9 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek }: Subti
 
     setTranslatingId(sub.id);
     
-    // Get context
-    const prev = subtitles[index - 1]?.text;
-    const next = subtitles[index + 1]?.text;
+    // Get extended context (2 lines before/after)
+    const contextBefore = subtitles.slice(Math.max(0, index - 2), index).map(s => s.text).join('\n');
+    const contextAfter = subtitles.slice(index + 1, index + 3).map(s => s.text).join('\n');
 
     try {
       const res = await fetch("/api/translate", {
@@ -48,9 +48,9 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek }: Subti
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: sub.text,
-          targetLanguage: "the requested secondary language", // Ideally this should be passed in prop
-          contextBefore: prev,
-          contextAfter: next
+          targetLanguage: "the requested secondary language", 
+          contextBefore,
+          contextAfter
         })
       });
       const data = await res.json();

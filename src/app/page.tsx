@@ -8,9 +8,9 @@ import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
-import { parseSRTTime } from "@/lib/utils";
+import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { v4 as uuidv4 } from "uuid";
-import { Download, Sparkles, FileText, Code } from "lucide-react";
+import { Download, Sparkles, Code } from "lucide-react";
 
 export default function Home() {
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
@@ -24,13 +24,42 @@ export default function Home() {
     // Map raw subtitles to our SubtitleLine format
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
-      startTime: parseSRTTime(s.startTime),
+      startTime: parseSRTTime(s.startTime), // Using srt-utils parser which is robust
       endTime: parseSRTTime(s.endTime),
       text: s.text,
       secondaryText: s.secondaryText
     }));
     setSubtitles(mapped);
     setVideoUrl(url);
+  };
+
+  const handleDownloadSRT = () => {
+    // Generate English SRT
+    const primaryContent = stringifySRT(subtitles, 'primary');
+    const primaryBlob = new Blob([primaryContent], { type: 'text/plain' });
+    const primaryUrl = URL.createObjectURL(primaryBlob);
+    
+    const a = document.createElement('a');
+    a.href = primaryUrl;
+    a.download = 'subtitles_en.srt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+
+    // Generate Secondary SRT if exists
+    const hasSecondary = subtitles.some(s => s.secondaryText);
+    if (hasSecondary) {
+        const secondaryContent = stringifySRT(subtitles, 'secondary');
+        const secondaryBlob = new Blob([secondaryContent], { type: 'text/plain' });
+        const secondaryUrl = URL.createObjectURL(secondaryBlob);
+        
+        const b = document.createElement('a');
+        b.href = secondaryUrl;
+        b.download = 'subtitles_secondary.srt';
+        document.body.appendChild(b);
+        b.click();
+        document.body.removeChild(b);
+    }
   };
 
   return (
@@ -79,10 +108,10 @@ export default function Home() {
                  </button>
                  <button 
                   className="flex-1 flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded-lg shadow transition-all text-sm font-semibold"
-                  onClick={() => alert("Export feature pending...")}
+                  onClick={handleDownloadSRT}
                 >
                   <Download className="w-4 h-4" />
-                  <span>Export Video</span>
+                  <span>Download SRTs</span>
                 </button>
                </div>
 
