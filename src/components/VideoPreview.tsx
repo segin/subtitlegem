@@ -65,11 +65,11 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
   };
 
   return (
-    <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-gray-800 shadow-2xl">
+    <div className="relative w-full aspect-video bg-black overflow-hidden border border-[#333333] shadow-lg">
       <video
         ref={videoRef}
         src={videoUrl}
-        className="w-full h-full"
+        className="w-full h-full object-contain"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         controls
@@ -80,12 +80,13 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
           {/* Primary Track Layer */}
           <div style={getPositionStyles(config.primary)}>
              <div 
-                className="p-2 rounded shadow-lg text-center max-w-[80%]"
+                className="p-2 text-center max-w-[80%]"
                 style={{ 
                   backgroundColor: config.primary.backgroundColor,
                   color: config.primary.color,
                   fontSize: `${config.primary.fontSize}px`,
                   fontFamily: config.primary.fontFamily,
+                  borderRadius: '2px', // Slight rounding or none
                 }}
               >
                 {activeSubtitle.text}
@@ -96,12 +97,13 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
           {activeSubtitle.secondaryText && (
             <div style={getPositionStyles(config.secondary)}>
                <div 
-                  className="p-2 rounded shadow-lg text-center max-w-[80%]"
+                  className="p-2 text-center max-w-[80%]"
                   style={{ 
                     backgroundColor: config.secondary.backgroundColor,
                     color: config.secondary.color,
                     fontSize: `${config.secondary.fontSize}px`,
                     fontFamily: config.secondary.fontFamily,
+                    borderRadius: '2px',
                   }}
                 >
                   {activeSubtitle.secondaryText}

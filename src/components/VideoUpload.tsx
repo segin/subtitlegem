@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Upload, FileVideo, CheckCircle2, AlertCircle, Film, Languages, Cpu, Loader2 } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2 } from "lucide-react";
 
 export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles: any[], videoUrl: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -10,14 +10,12 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
   const [model, setModel] = useState("gemini-2.5-flash");
   
-  // Progress tracking state
   const [progress, setProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
-  const [uploadSpeed, setUploadSpeed] = useState(0); // bytes per second
+  const [uploadSpeed, setUploadSpeed] = useState(0);
 
   const startTimeRef = useRef<number>(0);
-  const lastLoadedRef = useRef<number>(0);
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
@@ -33,9 +31,6 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
       setFile(e.target.files[0]);
       setError(null);
       setProgress(0);
-      setUploadedBytes(0);
-      setTotalBytes(0);
-      setUploadSpeed(0);
     }
   };
 
@@ -55,25 +50,16 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
     formData.append("model", model);
 
     const xhr = new XMLHttpRequest();
-    
     startTimeRef.current = Date.now();
-    lastLoadedRef.current = 0;
 
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) {
         const now = Date.now();
-        const timeDiff = (now - startTimeRef.current) / 1000; // seconds
-
-        // Calculate speed
-        if (timeDiff > 0) {
-            const speed = event.loaded / timeDiff;
-            setUploadSpeed(speed);
-        }
-
+        const timeDiff = (now - startTimeRef.current) / 1000;
+        if (timeDiff > 0) setUploadSpeed(event.loaded / timeDiff);
         setProgress(Math.round((event.loaded / event.total) * 100));
         setUploadedBytes(event.loaded);
         setTotalBytes(event.total);
-        lastLoadedRef.current = event.loaded;
       }
     });
 
@@ -81,34 +67,19 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
           const data = JSON.parse(xhr.responseText);
-          if (data.error) {
-            setError(data.error);
-          } else {
-            const videoUrl = URL.createObjectURL(file);
-            onUploadComplete(data.subtitles, videoUrl);
-          }
-        } catch (e) {
-          setError("Failed to parse response");
-        }
+          if (data.error) setError(data.error);
+          else onUploadComplete(data.subtitles, URL.createObjectURL(file));
+        } catch (e) { setError("Failed to parse response"); }
       } else if (xhr.status === 429) {
-        setError("Gemini API Rate Limit exceeded. Please wait a minute and try again.");
+        setError("Rate limit exceeded. Please wait.");
       } else {
-        try {
-          const data = JSON.parse(xhr.responseText);
-          if (data.error && (data.error.includes("429") || data.error.includes("quota"))) {
-            setError("Gemini API Rate Limit exceeded. Please wait a minute and try again.");
-          } else {
-            setError(data.error || `Upload failed: ${xhr.statusText}`);
-          }
-        } catch (e) {
-          setError(`Upload failed: ${xhr.statusText}`);
-        }
+         setError(`Upload failed: ${xhr.statusText}`);
       }
       setLoading(false);
     });
 
     xhr.addEventListener("error", () => {
-      setError("Network error occurred during upload");
+      setError("Network error");
       setLoading(false);
     });
 
@@ -117,7 +88,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
   };
 
   return (
-    <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 transition-all">
+    <div className="w-full bg-[#252526] p-6 text-[#cccccc]">
       <input
         type="file"
         accept="video/*"
@@ -130,117 +101,91 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
       {!file ? (
         <label 
           htmlFor="video-input" 
-          className="group cursor-pointer flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-700 rounded-xl hover:border-indigo-500 hover:bg-slate-800/50 transition-all duration-300"
+          className="group cursor-pointer flex flex-col items-center justify-center h-48 border border-dashed border-[#444444] bg-[#2d2d2d] hover:bg-[#333333] hover:border-[#666666] transition-all"
         >
-          <div className="p-4 bg-slate-800 rounded-full mb-4 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
-            <Upload className="w-8 h-8 text-slate-400 group-hover:text-indigo-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-slate-200 mb-1 group-hover:text-white">Click to Upload Video</h3>
-          <p className="text-sm text-slate-500">MP4, MOV, MKV up to 400MB (Direct) or larger (Audio Extract)</p>
+          <Upload className="w-8 h-8 text-[#666666] group-hover:text-[#999999] mb-3" />
+          <span className="text-sm font-medium text-[#999999] group-hover:text-[#cccccc]">Import Media File</span>
         </label>
       ) : (
         <div className="space-y-6">
-           <div className="flex items-center space-x-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
-              <div className="p-3 bg-indigo-500/20 rounded-lg">
-                <FileVideo className="w-6 h-6 text-indigo-400" />
-              </div>
+           {/* File Info */}
+           <div className="flex items-center space-x-3 p-3 bg-[#2d2d2d] border border-[#3e3e42]">
+              <FileVideo className="w-5 h-5 text-[#007acc]" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                <p className="text-xs text-slate-400">{formatBytes(file.size)}</p>
+                <p className="text-sm font-medium text-[#e1e1e1] truncate">{file.name}</p>
+                <p className="text-xs text-[#888888]">{formatBytes(file.size)}</p>
               </div>
               {!loading && (
-                <button 
-                  onClick={() => setFile(null)}
-                  className="text-xs text-slate-400 hover:text-white underline"
-                >
-                  Change
-                </button>
+                <button onClick={() => setFile(null)} className="text-xs text-[#007acc] hover:underline">Change</button>
               )}
            </div>
 
+           {/* Config Grid */}
            <div className="grid grid-cols-2 gap-4">
-             <div className="space-y-1.5">
-               <label className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                 <Cpu className="w-3 h-3" />
-                 <span>AI Model</span>
-               </label>
-               <div className="relative">
-                 <select
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    disabled={loading}
-                    className="w-full appearance-none bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
-                  >
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (High Quality)</option>
-                  </select>
-               </div>
+             <div className="space-y-1">
+               <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">AI Model</label>
+               <select
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  disabled={loading}
+                  className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
+                >
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                </select>
              </div>
              
-             <div className="space-y-1.5">
-               <label className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                 <Languages className="w-3 h-3" />
-                 <span>Target Language</span>
-               </label>
-               <div className="relative">
-                  <select
-                    value={secondaryLanguage}
-                    onChange={(e) => setSecondaryLanguage(e.target.value)}
-                    disabled={loading}
-                    className="w-full appearance-none bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
-                  >
-                    <option value="Simplified Chinese">Simplified Chinese</option>
-                    <option value="Spanish">Spanish</option>
-                    <option value="French">French</option>
-                    <option value="Japanese">Japanese</option>
-                    <option value="German">German</option>
-                    <option value="None">None (English Only)</option>
-                  </select>
-               </div>
+             <div className="space-y-1">
+               <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">Target Lang</label>
+                <select
+                  value={secondaryLanguage}
+                  onChange={(e) => setSecondaryLanguage(e.target.value)}
+                  disabled={loading}
+                  className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
+                >
+                  <option value="Simplified Chinese">Simplified Chinese</option>
+                  <option value="Spanish">Spanish</option>
+                  <option value="French">French</option>
+                  <option value="Japanese">Japanese</option>
+                  <option value="German">German</option>
+                  <option value="None">None</option>
+                </select>
              </div>
            </div>
 
+           {/* Progress / Action */}
            {loading ? (
-             <div className="space-y-3 bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-                <div className="flex justify-between items-end">
-                  <div className="flex items-center space-x-2">
-                     <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
-                     <span className="text-sm font-medium text-slate-200">
-                        {progress < 100 ? "Uploading Video..." : "AI Processing..."}
-                     </span>
-                  </div>
-                  <span className="text-sm font-mono text-indigo-400">{progress}%</span>
+             <div className="space-y-2 bg-[#1e1e1e] p-3 border border-[#3e3e42]">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="flex items-center gap-2 text-[#cccccc]">
+                     <Loader2 className="w-3 h-3 animate-spin text-[#007acc]" />
+                     {progress < 100 ? "Uploading..." : "Analyzing..."}
+                  </span>
+                  <span className="font-mono text-[#007acc]">{progress}%</span>
                 </div>
-                
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-                  <div 
-                    className="bg-indigo-500 h-full transition-all duration-300 ease-out relative" 
-                    style={{ width: `${progress}%` }}
-                  >
-                    <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                  </div>
+                <div className="w-full bg-[#333333] h-1">
+                  <div className="bg-[#007acc] h-1 transition-all duration-200" style={{ width: `${progress}%` }} />
                 </div>
-                
-                <div className="flex justify-between text-[10px] text-slate-500 font-mono uppercase">
-                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                <div className="flex justify-between text-[10px] text-[#666666] font-mono">
+                  <span>{formatBytes(uploadedBytes)}</span>
                   <span>{formatBytes(uploadSpeed)}/s</span>
                 </div>
              </div>
            ) : (
              <button
               onClick={handleUpload}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
+              className="w-full py-2 bg-[#007acc] hover:bg-[#0062a3] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center space-x-2 rounded-sm"
             >
-              <Film className="w-5 h-5" />
-              <span>Generate Subtitles</span>
+              <Film className="w-4 h-4" />
+              <span>Process Video</span>
             </button>
            )}
         </div>
       )}
 
       {error && (
-        <div className="mt-6 flex items-start space-x-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
+        <div className="mt-4 flex items-center space-x-2 text-xs text-red-400 bg-red-950/20 border border-red-900/50 p-2">
+          <AlertCircle className="w-4 h-4" />
           <span>{error}</span>
         </div>
       )}

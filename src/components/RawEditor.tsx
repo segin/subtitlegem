@@ -24,14 +24,6 @@ export function RawEditor({ subtitles, onSave, onCancel }: RawEditorProps) {
     const parsedPrimary = parseSRT(primarySRT);
     const parsedSecondary = parseSRT(secondarySRT);
 
-    // Merge logic: simpler to just rebuild list. 
-    // We assume primary is the source of truth for timing IDs, 
-    // but this is tricky if they drift. 
-    // For this simple editor, we'll try to match by index or just regenerate IDs.
-    
-    // Better approach: Take primary structure, map secondary text if times match approx?
-    // Or just zip them.
-    
     const maxLength = Math.max(parsedPrimary.length, parsedSecondary.length);
     const newSubtitles: SubtitleLine[] = [];
 
@@ -41,14 +33,13 @@ export function RawEditor({ subtitles, onSave, onCancel }: RawEditorProps) {
       
       if (p) {
         newSubtitles.push({
-            id: uuidv4(), // New IDs because syncing old ones is hard via raw text
+            id: uuidv4(),
             startTime: p.startTime!,
             endTime: p.endTime!,
             text: p.text || "",
-            secondaryText: s ? s.text : "" // In parseSRT, 'text' holds the content
+            secondaryText: s ? s.text : ""
         });
       } else if (s) {
-          // Secondary has extra lines? Add them as primary with empty text?
            newSubtitles.push({
             id: uuidv4(),
             startTime: s.startTime!,
@@ -63,31 +54,43 @@ export function RawEditor({ subtitles, onSave, onCancel }: RawEditorProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-8">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[80vh] flex flex-col overflow-hidden">
-        <header className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-          <h2 className="text-xl font-bold text-gray-800">Raw SRT Editor</h2>
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-8">
+      <div className="bg-[#252526] border border-[#333333] shadow-2xl w-full max-w-6xl h-[80vh] flex flex-col overflow-hidden rounded-sm">
+        <header className="h-10 border-b border-[#333333] flex justify-between items-center px-4 bg-[#2d2d2d]">
+          <h2 className="text-xs font-bold text-[#cccccc] uppercase tracking-wide">Raw SRT Editor</h2>
           <div className="space-x-2">
-            <button onClick={onCancel} className="px-4 py-2 text-gray-600 hover:bg-gray-200 rounded">Cancel</button>
-            <button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded font-bold">Save Changes</button>
+            <button 
+              onClick={onCancel} 
+              className="px-3 py-1 text-xs text-[#cccccc] hover:bg-[#3e3e42] rounded-sm transition-colors"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleSave} 
+              className="px-3 py-1 bg-[#007acc] text-white hover:bg-[#0062a3] text-xs font-semibold rounded-sm transition-colors"
+            >
+              Apply Changes
+            </button>
           </div>
         </header>
         
         <div className="flex-1 flex overflow-hidden">
-          <div className="flex-1 flex flex-col border-r border-gray-200">
-             <div className="p-2 bg-gray-100 font-semibold text-center border-b">Primary (English)</div>
+          <div className="flex-1 flex flex-col border-r border-[#333333]">
+             <div className="py-1 bg-[#1e1e1e] border-b border-[#333333] text-[10px] font-bold text-[#888888] text-center uppercase">Primary Track</div>
              <textarea 
-                className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none"
+                className="flex-1 p-4 font-mono text-xs bg-[#1e1e1e] text-[#cccccc] resize-none focus:outline-none custom-scrollbar"
                 value={primarySRT}
                 onChange={e => setPrimarySRT(e.target.value)}
+                spellCheck={false}
              />
           </div>
           <div className="flex-1 flex flex-col">
-             <div className="p-2 bg-gray-100 font-semibold text-center border-b">Secondary</div>
+             <div className="py-1 bg-[#1e1e1e] border-b border-[#333333] text-[10px] font-bold text-[#888888] text-center uppercase">Secondary Track</div>
              <textarea 
-                className="flex-1 p-4 font-mono text-sm resize-none focus:outline-none"
+                className="flex-1 p-4 font-mono text-xs bg-[#1e1e1e] text-[#d7ba7d] resize-none focus:outline-none custom-scrollbar"
                 value={secondarySRT}
                 onChange={e => setSecondarySRT(e.target.value)}
+                spellCheck={false}
              />
           </div>
         </div>

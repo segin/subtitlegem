@@ -81,39 +81,39 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek }: Subti
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-300">
-      <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-900 sticky top-0 z-10">
-        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tracks ({subtitles.length})</h3>
+    <div className="flex flex-col h-full bg-[#252526] text-[#cccccc]">
+      <div className="h-8 border-b border-[#333333] flex justify-between items-center px-2 bg-[#2d2d2d]">
+        <h3 className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">Tracks ({subtitles.length})</h3>
         <button 
           onClick={addSubtitle}
-          className="flex items-center text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-500 transition-colors"
+          className="flex items-center text-[10px] bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] px-2 py-0.5 rounded-sm border border-[#333333] transition-colors"
         >
           <Plus className="w-3 h-3 mr-1" /> Add
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-0 space-y-[1px] custom-scrollbar bg-[#1e1e1e]">
         {subtitles.map((sub, index) => {
           const isActive = currentTime >= sub.startTime && currentTime <= sub.endTime;
           return (
             <div 
               key={sub.id} 
               id={`sub-${sub.id}`}
-              className={`p-3 rounded-lg border transition-all group ${isActive ? "border-indigo-500/50 bg-indigo-500/10 shadow-[0_0_15px_rgba(99,102,241,0.1)]" : "border-slate-800 bg-slate-900 hover:border-slate-700"}`}
+              className={`p-2 transition-all group border-l-2 ${isActive ? "border-[#007acc] bg-[#2a2d2e]" : "border-transparent bg-[#252526] hover:bg-[#2a2d2e]"}`}
             >
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-start mb-1.5">
                 <div 
-                  className={`flex items-center space-x-1.5 text-[10px] font-mono cursor-pointer transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-500 hover:text-indigo-400'}`}
+                  className={`flex items-center space-x-1.5 text-[10px] font-mono cursor-pointer transition-colors ${isActive ? 'text-[#007acc]' : 'text-[#666666] hover:text-[#999999]'}`}
                   onClick={() => onSeek(sub.startTime)}
                 >
                   <Clock className="w-3 h-3" />
                   <span>{formatSRTTime(sub.startTime).split(',')[0]}</span>
                 </div>
                 
-                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
                    <button 
                       onClick={() => handleTranslate(index)}
-                      className={`p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-purple-400 transition-colors ${translatingId === sub.id ? 'animate-pulse text-purple-500' : ''}`}
+                      className={`p-1 hover:bg-[#3e3e42] rounded-sm text-[#888888] hover:text-[#d7ba7d] transition-colors ${translatingId === sub.id ? 'animate-pulse text-[#d7ba7d]' : ''}`}
                       title="Auto-translate"
                       disabled={translatingId === sub.id}
                    >
@@ -121,16 +121,16 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek }: Subti
                    </button>
                    <button 
                       onClick={() => deleteSubtitle(sub.id)}
-                      className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors"
+                      className="p-1 hover:bg-[#3e3e42] rounded-sm text-[#888888] hover:text-[#f14c4c] transition-colors"
                    >
                      <Trash2 className="w-3 h-3" />
                    </button>
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1">
                 <textarea
-                  className="w-full text-sm bg-slate-950 border border-slate-800 rounded p-2 text-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none transition-all placeholder:text-slate-600"
+                  className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#cccccc] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
                   rows={2}
                   value={sub.text}
                   onChange={(e) => handleTextChange(sub.id, 'text', e.target.value)}
@@ -138,7 +138,7 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek }: Subti
                   placeholder="Primary Text..."
                 />
                 <textarea
-                  className="w-full text-xs bg-slate-950 border border-slate-800 rounded p-2 text-indigo-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 outline-none resize-none transition-all placeholder:text-slate-600"
+                  className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#d7ba7d] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
                   rows={2}
                   value={sub.secondaryText || ""}
                   onChange={(e) => handleTextChange(sub.id, 'secondaryText', e.target.value)}
