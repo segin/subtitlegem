@@ -51,7 +51,7 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
   const text = response.text();
   
   // Try to parse JSON from the response
-  const jsonMatch = text.match(/\[.*\]/s);
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
   if (jsonMatch) {
     return JSON.parse(jsonMatch[0]);
   }

@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
     serverActions: {
       allowedOrigins: ["*"],
     },
+    // @ts-ignore
     allowedDevOrigins: ["localhost:3050", "0.0.0.0:3050"],
   },
 };
