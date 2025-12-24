@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Upload, FileVideo, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, FileVideo, CheckCircle2, AlertCircle, Film, Languages, Cpu, Loader2 } from "lucide-react";
 
 export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles: any[], videoUrl: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -117,7 +117,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
   };
 
   return (
-    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors w-full max-w-2xl mx-auto">
+    <div className="w-full bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 transition-all">
       <input
         type="file"
         accept="video/*"
@@ -126,88 +126,122 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
         id="video-input"
         disabled={loading}
       />
-      <label htmlFor="video-input" className={`cursor-pointer flex flex-col items-center ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-        {file ? (
-          <FileVideo className="w-16 h-16 text-blue-500 mb-4" />
-        ) : (
-          <Upload className="w-16 h-16 text-gray-400 mb-4" />
-        )}
-        <span className="text-lg font-medium text-gray-700">
-          {file ? file.name : "Select a video to subtitle"}
-        </span>
-        <span className="text-sm text-gray-500 mt-1">
-          Supports most video formats (max 400MB for direct video)
-        </span>
-      </label>
-
-      {file && (
-        <div className="mt-6 w-full max-w-md space-y-4">
-           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                disabled={loading}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Language</label>
-              <select
-                value={secondaryLanguage}
-                onChange={(e) => setSecondaryLanguage(e.target.value)}
-                disabled={loading}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                <option value="Simplified Chinese">Simplified Chinese</option>
-                <option value="Spanish">Spanish</option>
-                <option value="French">French</option>
-                <option value="Japanese">Japanese</option>
-                <option value="German">German</option>
-                <option value="None">None</option>
-              </select>
-            </div>
+      
+      {!file ? (
+        <label 
+          htmlFor="video-input" 
+          className="group cursor-pointer flex flex-col items-center justify-center p-12 border-2 border-dashed border-slate-700 rounded-xl hover:border-indigo-500 hover:bg-slate-800/50 transition-all duration-300"
+        >
+          <div className="p-4 bg-slate-800 rounded-full mb-4 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
+            <Upload className="w-8 h-8 text-slate-400 group-hover:text-indigo-400" />
           </div>
-          
-          {loading && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-gray-600">
-                <span>{progress < 100 ? "Uploading..." : "Processing with Gemini..."}</span>
-                <span>{progress}%</span>
+          <h3 className="text-lg font-semibold text-slate-200 mb-1 group-hover:text-white">Click to Upload Video</h3>
+          <p className="text-sm text-slate-500">MP4, MOV, MKV up to 400MB (Direct) or larger (Audio Extract)</p>
+        </label>
+      ) : (
+        <div className="space-y-6">
+           <div className="flex items-center space-x-4 p-4 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="p-3 bg-indigo-500/20 rounded-lg">
+                <FileVideo className="w-6 h-6 text-indigo-400" />
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div 
-                  className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out" 
-                  style={{ width: `${progress}%` }}
-                ></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white truncate">{file.name}</p>
+                <p className="text-xs text-slate-400">{formatBytes(file.size)}</p>
               </div>
-              <div className="flex justify-between text-[10px] text-gray-500 font-mono">
-                <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
-                <span>{formatBytes(uploadSpeed)}/s</span>
-              </div>
-            </div>
-          )}
+              {!loading && (
+                <button 
+                  onClick={() => setFile(null)}
+                  className="text-xs text-slate-400 hover:text-white underline"
+                >
+                  Change
+                </button>
+              )}
+           </div>
 
-          <button
-            onClick={handleUpload}
-            disabled={loading}
-            className={`w-full py-2 px-4 rounded-md text-white font-semibold transition-all ${
-              loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700 shadow-md"
-            }`}
-          >
-            {loading ? "Processing..." : "Generate Subtitles"}
-          </button>
+           <div className="grid grid-cols-2 gap-4">
+             <div className="space-y-1.5">
+               <label className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                 <Cpu className="w-3 h-3" />
+                 <span>AI Model</span>
+               </label>
+               <div className="relative">
+                 <select
+                    value={model}
+                    onChange={(e) => setModel(e.target.value)}
+                    disabled={loading}
+                    className="w-full appearance-none bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
+                  >
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash (Fast)</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro (High Quality)</option>
+                  </select>
+               </div>
+             </div>
+             
+             <div className="space-y-1.5">
+               <label className="flex items-center space-x-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                 <Languages className="w-3 h-3" />
+                 <span>Target Language</span>
+               </label>
+               <div className="relative">
+                  <select
+                    value={secondaryLanguage}
+                    onChange={(e) => setSecondaryLanguage(e.target.value)}
+                    disabled={loading}
+                    className="w-full appearance-none bg-slate-950 border border-slate-700 text-slate-200 text-sm rounded-lg p-3 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all disabled:opacity-50"
+                  >
+                    <option value="Simplified Chinese">Simplified Chinese</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="German">German</option>
+                    <option value="None">None (English Only)</option>
+                  </select>
+               </div>
+             </div>
+           </div>
+
+           {loading ? (
+             <div className="space-y-3 bg-slate-950/50 p-4 rounded-lg border border-slate-800">
+                <div className="flex justify-between items-end">
+                  <div className="flex items-center space-x-2">
+                     <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" />
+                     <span className="text-sm font-medium text-slate-200">
+                        {progress < 100 ? "Uploading Video..." : "AI Processing..."}
+                     </span>
+                  </div>
+                  <span className="text-sm font-mono text-indigo-400">{progress}%</span>
+                </div>
+                
+                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-full transition-all duration-300 ease-out relative" 
+                    style={{ width: `${progress}%` }}
+                  >
+                    <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                  </div>
+                </div>
+                
+                <div className="flex justify-between text-[10px] text-slate-500 font-mono uppercase">
+                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                  <span>{formatBytes(uploadSpeed)}/s</span>
+                </div>
+             </div>
+           ) : (
+             <button
+              onClick={handleUpload}
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/25 transition-all active:scale-[0.98] flex items-center justify-center space-x-2"
+            >
+              <Film className="w-5 h-5" />
+              <span>Generate Subtitles</span>
+            </button>
+           )}
         </div>
       )}
 
       {error && (
-        <div className="mt-4 flex items-center text-red-600 text-sm p-3 bg-red-50 rounded-md border border-red-200 w-full justify-center">
-          <AlertCircle className="w-4 h-4 mr-2" />
-          {error}
+        <div className="mt-6 flex items-start space-x-3 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <span>{error}</span>
         </div>
       )}
     </div>
