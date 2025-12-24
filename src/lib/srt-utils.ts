@@ -12,9 +12,28 @@ export const formatSRTTime = (seconds: number): string => {
 };
 
 export const parseSRTTime = (timeStr: string): number => {
-  const [hms, ms] = timeStr.split(',');
-  const [h, m, s] = hms.split(':').map(Number);
-  return h * 3600 + m * 60 + s + (Number(ms) || 0) / 1000;
+  if (!timeStr) return 0;
+  
+  // Normalize separators: replace dot with comma for standard processing if needed, 
+  // but actually we just split by non-digits usually.
+  // Let's handle HH:MM:SS,mmm AND MM:SS,mmm AND HH:MM:SS.mmm
+  
+  const parts = timeStr.trim().split(/[:,.]/);
+  
+  // parts could be [HH, MM, SS, mmm] or [MM, SS, mmm]
+  
+  let h = 0, m = 0, s = 0, ms = 0;
+  
+  if (parts.length === 4) {
+    [h, m, s, ms] = parts.map(Number);
+  } else if (parts.length === 3) {
+    [m, s, ms] = parts.map(Number);
+  } else {
+    // Fallback or error
+    return 0;
+  }
+  
+  return h * 3600 + m * 60 + s + (ms || 0) / 1000;
 };
 
 export function stringifySRT(subtitles: SubtitleLine[], type: 'primary' | 'secondary'): string {

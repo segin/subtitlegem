@@ -30,11 +30,24 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
   
   const prompt = `
     Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
-    Return the result strictly in SRT format. 
-    If a secondary language is requested, provide it as a separate SRT or combined if possible, 
-    but for this tool, please return a JSON array of objects with the following structure:
-    [{ "startTime": "00:00:01,000", "endTime": "00:00:04,000", "text": "English text", "secondaryText": "Secondary language text" }]
-    Ensure the timings are accurate.
+    
+    You must output a strictly valid JSON array of objects. Do not output raw SRT text.
+    
+    JSON Structure:
+    [
+      { 
+        "startTime": "00:00:01,000", 
+        "endTime": "00:00:04,000", 
+        "text": "English text", 
+        "secondaryText": "Secondary language text" 
+      }
+    ]
+
+    CRITICAL TIMESTAMP RULES:
+    1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
+    2. ALWAYS include the Hour part, even if it is 00. Example: "00:01:30,500" is CORRECT. "01:30,500" is WRONG.
+    3. Use a comma (,) for milliseconds, not a dot or colon.
+    4. Ensure timings are synchronized with the audio speech.
   `;
 
   try {
