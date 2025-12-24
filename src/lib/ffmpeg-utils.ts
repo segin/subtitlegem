@@ -2,6 +2,19 @@ import ffmpeg from "fluent-ffmpeg";
 import path from "path";
 import fs from "fs";
 
+export async function getAudioCodec(filePath: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      const audioStream = metadata.streams.find((s) => s.codec_type === "audio");
+      if (!audioStream || !audioStream.codec_name) {
+        return reject(new Error("No audio stream found"));
+      }
+      resolve(audioStream.codec_name);
+    });
+  });
+}
+
 export async function extractAudio(videoPath: string, outputPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     ffmpeg(videoPath)

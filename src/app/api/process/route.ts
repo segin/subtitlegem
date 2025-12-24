@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { uploadToGemini, generateSubtitles } from "@/lib/gemini";
-import { extractAudio } from "@/lib/ffmpeg-utils";
+import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -86,10 +86,57 @@ export async function POST(req: NextRequest) {
 
     if (fileSizeInMB > 400) {
       console.log("File > 400MB, extracting audio...");
-      const audioPath = path.join(tempDir, `${uuidv4()}.m4a`); 
-      await extractAudio(videoPath, audioPath);
-      processPath = audioPath;
-      mimeType = "audio/mp4"; 
+      try {
+        const codec = await getAudioCodec(videoPath);
+        console.log(`Detected audio codec: ${codec}`);
+
+        let ext = "m4a";
+        let newMime = "audio/mp4";
+
+        switch (codec) {
+          case "aac":
+            ext = "m4a";
+            newMime = "audio/mp4";
+            break;
+          case "mp3":
+            ext = "mp3";
+            newMime = "audio/mpeg";
+            break;
+          case "opus":
+            ext = "ogg";
+            newMime = "audio/ogg";
+            break;
+          case "vorbis":
+            ext = "ogg";
+            newMime = "audio/ogg";
+            break;
+          case "flac":
+            ext = "flac";
+            newMime = "audio/flac";
+            break;
+          case "pcm_s16le":
+          case "pcm_s24le":
+            ext = "wav";
+            newMime = "audio/wav";
+            break;
+          default:
+            console.warn(`Unknown/unmapped codec ${codec}, defaulting to m4a/mp4 container.`);
+            ext = "m4a";
+            newMime = "audio/mp4";
+        }
+
+        const audioPath = path.join(tempDir, `${uuidv4()}.${ext}`); 
+        await extractAudio(videoPath, audioPath);
+        processPath = audioPath;
+        mimeType = newMime;
+      } catch (err) {
+        console.error("Failed to detect audio codec, falling back to m4a", err);
+        // Fallback
+        const audioPath = path.join(tempDir, `${uuidv4()}.m4a`); 
+        await extractAudio(videoPath, audioPath);
+        processPath = audioPath;
+        mimeType = "audio/mp4"; 
+      }
     }
 
     const geminiFile = await uploadToGemini(processPath, mimeType);
