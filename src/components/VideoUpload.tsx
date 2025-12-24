@@ -81,6 +81,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
               <option value="French">French</option>
               <option value="Japanese">Japanese</option>
               <option value="German">German</option>
+              <option value="None">None</option>
             </select>
           </div>
           

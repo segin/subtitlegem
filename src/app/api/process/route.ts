@@ -5,49 +5,87 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
-import { pipeline } from "stream/promises";
+import busboy from "busboy";
 import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 
 export const runtime = 'nodejs';
 
+// Add "None" or empty string to allowed
 const ALLOWED_LANGUAGES = ["Simplified Chinese", "Spanish", "French", "Japanese", "German"];
 
 export async function POST(req: NextRequest) {
-  console.log("Processing POST request to /api/process");
-  
+  console.log("Processing POST request to /api/process (Streamed via Busboy)");
+
   try {
-    const formData = await req.formData();
-    const videoFile = formData.get("video") as File;
-    const secondaryLanguage = formData.get("secondaryLanguage") as string || "Simplified Chinese";
-
-    if (!videoFile) {
-      return NextResponse.json({ error: "No video file provided" }, { status: 400 });
+    const contentType = req.headers.get("content-type");
+    if (!contentType || !contentType.includes("multipart/form-data")) {
+      return NextResponse.json({ error: "Content-Type must be multipart/form-data" }, { status: 400 });
     }
-
-    if (!ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
-       return NextResponse.json({ error: "Invalid secondary language" }, { status: 400 });
-    }
-
-    console.log(`Received file: ${videoFile.name}, size: ${videoFile.size}, type: ${videoFile.type}`);
 
     const tempDir = os.tmpdir();
-    // Sanitize filename: use UUID + strictly mapped extension or default
-    const ext = videoFile.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || "tmp";
-    const videoPath = path.join(tempDir, `${uuidv4()}.${ext}`);
+    let videoPath = "";
+    let mimeType = "";
+    let secondaryLanguage = "Simplified Chinese";
     
-    // Stream file to disk to avoid memory exhaustion
-    // Convert Web Stream to Node Stream
-    // @ts-ignore - Readable.fromWeb is available in Node 18+ but Typescript might complain depending on lib
-    const fileStream = Readable.fromWeb(videoFile.stream());
-    await pipeline(fileStream, fs.createWriteStream(videoPath));
-    
-    console.log(`File written to ${videoPath}`);
+    // Create a promise to handle the busboy parsing
+    await new Promise<void>((resolve, reject) => {
+      const bb = busboy({ headers: { "content-type": contentType } });
 
-    const fileSizeInMB = videoFile.size / (1024 * 1024);
+      bb.on("file", (name, file, info) => {
+        if (name === "video") {
+          const { filename, mimeType: fileMime } = info;
+          mimeType = fileMime;
+          
+          const ext = filename.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || "tmp";
+          videoPath = path.join(tempDir, `${uuidv4()}.${ext}`);
+          console.log(`Streaming file to ${videoPath}`);
+
+          const writeStream = fs.createWriteStream(videoPath);
+          file.pipe(writeStream);
+
+          writeStream.on("error", reject);
+        } else {
+          file.resume(); // Skip other files
+        }
+      });
+
+      bb.on("field", (name, val) => {
+        if (name === "secondaryLanguage") {
+          secondaryLanguage = val;
+        }
+      });
+
+      bb.on("close", resolve);
+      bb.on("error", reject);
+
+      // Convert Web Stream to Node Stream and pipe to busboy
+      // @ts-ignore
+      const nodeStream = Readable.fromWeb(req.body);
+      nodeStream.pipe(bb);
+    });
+
+    if (!videoPath) {
+        return NextResponse.json({ error: "No video file provided" }, { status: 400 });
+    }
+    
+    // Validate Secondary Language (if present and not "None")
+    if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
+        // If it's empty, we treat it as no secondary language
+        if (secondaryLanguage.trim() !== "") {
+             return NextResponse.json({ error: "Invalid secondary language" }, { status: 400 });
+        }
+    }
+
+    // Check file size on disk
+    const stats = fs.statSync(videoPath);
+    const fileSizeInMB = stats.size / (1024 * 1024);
+    console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
+
     let processPath = videoPath;
-    let mimeType = videoFile.type;
 
     if (fileSizeInMB > 400) {
+      console.log("File > 400MB, extracting audio...");
       const audioPath = path.join(tempDir, `${uuidv4()}.m4a`); 
       await extractAudio(videoPath, audioPath);
       processPath = audioPath;
@@ -55,17 +93,16 @@ export async function POST(req: NextRequest) {
     }
 
     const geminiFile = await uploadToGemini(processPath, mimeType);
-    const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage);
+    const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage === "None" ? undefined : secondaryLanguage);
 
-    // Clean up temp files
+    // Clean up
     try {
         if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
         if (processPath !== videoPath && fs.existsSync(processPath)) fs.unlinkSync(processPath);
-    } catch (cleanupError) {
-        console.error("Error cleaning up files:", cleanupError);
-    }
+    } catch (e) { console.error("Cleanup error", e); }
 
     return NextResponse.json({ subtitles });
+
   } catch (error: any) {
     console.error("Error processing video:", error);
     return NextResponse.json({ error: error.message || "Failed to process video" }, { status: 500 });
