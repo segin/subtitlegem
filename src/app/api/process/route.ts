@@ -6,21 +6,23 @@ import path from "path";
 import os from "os";
 import { v4 as uuidv4 } from "uuid";
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  console.log("Processing POST request to /api/process");
+  console.log("Headers:", Object.fromEntries(req.headers));
+  
   try {
     const formData = await req.formData();
     const videoFile = formData.get("video") as File;
     const secondaryLanguage = formData.get("secondaryLanguage") as string || "Simplified Chinese";
 
     if (!videoFile) {
+      console.error("No video file found in FormData");
       return NextResponse.json({ error: "No video file provided" }, { status: 400 });
     }
+
+    console.log(`Received file: ${videoFile.name}, size: ${videoFile.size}, type: ${videoFile.type}`);
 
     const tempDir = os.tmpdir();
     const videoPath = path.join(tempDir, `${uuidv4()}-${videoFile.name}`);
