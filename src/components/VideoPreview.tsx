@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, TrackStyle, Alignment } from "@/types/subtitle";
 
 interface PreviewProps {
   videoUrl: string;
@@ -33,12 +33,35 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
     }
   };
 
-  const getAlignmentClass = () => {
-    switch (config.alignment) {
-      case 'left': return 'text-left items-start';
-      case 'right': return 'text-right items-end';
-      default: return 'text-center items-center';
-    }
+  // Convert numpad alignment to flex/grid styles
+  const getPositionStyles = (style: TrackStyle) => {
+    const { alignment, marginV, marginH } = style;
+    
+    // Horizontal
+    let justifyContent = 'center';
+    if ([1, 4, 7].includes(alignment)) justifyContent = 'flex-start';
+    if ([3, 6, 9].includes(alignment)) justifyContent = 'flex-end';
+
+    // Vertical
+    let alignItems = 'center';
+    if ([7, 8, 9].includes(alignment)) alignItems = 'flex-start';
+    if ([1, 2, 3].includes(alignment)) alignItems = 'flex-end';
+
+    return {
+      display: 'flex',
+      width: '100%',
+      height: '100%',
+      position: 'absolute' as const,
+      top: 0,
+      left: 0,
+      pointerEvents: 'none' as const,
+      justifyContent,
+      alignItems,
+      paddingTop: `${marginV}px`,
+      paddingBottom: `${marginV}px`,
+      paddingLeft: `${marginH}px`,
+      paddingRight: `${marginH}px`,
+    };
   };
 
   return (
@@ -52,31 +75,40 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
         controls
       />
       
-      {/* Subtitle Overlay */}
       {activeSubtitle && (
-        <div 
-          className={`absolute inset-0 pointer-events-none flex flex-col justify-end p-4 mb-[${config.marginH}px] px-[${config.marginW}px] ${getAlignmentClass()}`}
-          style={{ 
-            marginBottom: `${config.marginH}px`,
-            paddingLeft: `${config.marginW}px`,
-            paddingRight: `${config.marginW}px`
-          }}
-        >
-          <div 
-            className="p-2 rounded shadow-lg transition-all duration-200"
-            style={{ 
-              backgroundColor: config.backgroundColor,
-              color: config.color,
-              fontSize: `${config.fontSize}px`,
-              fontFamily: config.fontFamily,
-            }}
-          >
-            <p>{activeSubtitle.text}</p>
-            {activeSubtitle.secondaryText && (
-              <p className="opacity-90 mt-1 text-[0.85em]">{activeSubtitle.secondaryText}</p>
-            )}
+        <>
+          {/* Primary Track Layer */}
+          <div style={getPositionStyles(config.primary)}>
+             <div 
+                className="p-2 rounded shadow-lg text-center max-w-[80%]"
+                style={{ 
+                  backgroundColor: config.primary.backgroundColor,
+                  color: config.primary.color,
+                  fontSize: `${config.primary.fontSize}px`,
+                  fontFamily: config.primary.fontFamily,
+                }}
+              >
+                {activeSubtitle.text}
+             </div>
           </div>
-        </div>
+
+          {/* Secondary Track Layer */}
+          {activeSubtitle.secondaryText && (
+            <div style={getPositionStyles(config.secondary)}>
+               <div 
+                  className="p-2 rounded shadow-lg text-center max-w-[80%]"
+                  style={{ 
+                    backgroundColor: config.secondary.backgroundColor,
+                    color: config.secondary.color,
+                    fontSize: `${config.secondary.fontSize}px`,
+                    fontFamily: config.secondary.fontFamily,
+                  }}
+                >
+                  {activeSubtitle.secondaryText}
+               </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
