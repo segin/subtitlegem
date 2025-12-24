@@ -88,8 +88,19 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
         } catch (e) {
           setError("Failed to parse response");
         }
+      } else if (xhr.status === 429) {
+        setError("Gemini API Rate Limit exceeded. Please wait a minute and try again.");
       } else {
-        setError(`Upload failed: ${xhr.statusText}`);
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (data.error && (data.error.includes("429") || data.error.includes("quota"))) {
+            setError("Gemini API Rate Limit exceeded. Please wait a minute and try again.");
+          } else {
+            setError(data.error || `Upload failed: ${xhr.statusText}`);
+          }
+        } catch (e) {
+          setError(`Upload failed: ${xhr.statusText}`);
+        }
       }
       setLoading(false);
     });

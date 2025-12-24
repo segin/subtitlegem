@@ -25,7 +25,7 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   return file;
 }
 
-export async function generateSubtitles(fileUri: string, mimeType: string, secondaryLanguage?: string) {
+export async function generateSubtitles(fileUri: string, mimeType: string, secondaryLanguage?: string, attempt = 1) {
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   
   const prompt = `
@@ -37,24 +37,37 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
     Ensure the timings are accurate.
   `;
 
-  const result = await model.generateContent([
-    {
-      fileData: {
-        mimeType: mimeType,
-        fileUri: fileUri,
+  try {
+    const result = await model.generateContent([
+      {
+        fileData: {
+          mimeType: mimeType,
+          fileUri: fileUri,
+        },
       },
-    },
-    { text: prompt },
-  ]);
+      { text: prompt },
+    ]);
 
-  const response = await result.response;
-  const text = response.text();
-  
-  // Try to parse JSON from the response
-  const jsonMatch = text.match(/\[[\s\S]*\]/);
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[0]);
+    const response = await result.response;
+    const text = response.text();
+    
+    // Try to parse JSON from the response
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    
+    throw new Error("Failed to parse subtitles from Gemini response: " + text);
+  } catch (error: any) {
+    if (error.status === 429 && attempt < 3) {
+      // Look for retry delay in error details
+      const delayMatch = error.message.match(/retry in ([\d.]+)s/);
+      const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
+      
+      console.log(`Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`);
+      await new Promise(resolve => setTimeout(resolve, Math.min(delaySeconds * 1000, 60000)));
+      return generateSubtitles(fileUri, mimeType, secondaryLanguage, attempt + 1);
+    }
+    throw error;
   }
-  
-  throw new Error("Failed to parse subtitles from Gemini response: " + text);
 }
