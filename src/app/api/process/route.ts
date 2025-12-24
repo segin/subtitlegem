@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
     let videoPath = "";
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";
+    let modelName = "gemini-2.5-flash";
     
     // Create a promise to handle the busboy parsing
     await new Promise<void>((resolve, reject) => {
@@ -53,6 +54,9 @@ export async function POST(req: NextRequest) {
       bb.on("field", (name, val) => {
         if (name === "secondaryLanguage") {
           secondaryLanguage = val;
+        }
+        if (name === "model") {
+          modelName = val;
         }
       });
 
@@ -140,7 +144,7 @@ export async function POST(req: NextRequest) {
     }
 
     const geminiFile = await uploadToGemini(processPath, mimeType);
-    const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage === "None" ? undefined : secondaryLanguage);
+    const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage === "None" ? undefined : secondaryLanguage, 1, modelName);
 
     // Clean up
     try {

@@ -25,13 +25,18 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   return file;
 }
 
-export async function generateSubtitles(fileUri: string, mimeType: string, secondaryLanguage?: string, attempt = 1) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+export async function generateSubtitles(fileUri: string, mimeType: string, secondaryLanguage?: string, attempt = 1, modelName: string = "gemini-2.5-flash") {
+  const model = genAI.getGenerativeModel({ model: modelName });
   
   const prompt = `
+    You are an expert subtitle generator.
     Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
     
-    You must output a strictly valid JSON array of objects. Do not output raw SRT text.
+    OUTPUT FORMAT:
+    You must output a strictly valid JSON array of objects. 
+    Do NOT output Markdown code blocks (like \`\`\`json).
+    Do NOT output any introductory text or explanations.
+    Just the raw JSON array.
     
     JSON Structure:
     [
@@ -46,7 +51,7 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
     2. ALWAYS include the Hour part, even if it is 00. Example: "00:01:30,500" is CORRECT. "01:30,500" is WRONG.
-    3. Use a comma (,) for milliseconds, not a dot or colon.
+    3. Use a comma (,) for milliseconds.
     4. Ensure timings are synchronized with the audio speech.
   `;
 
@@ -62,7 +67,10 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
     ]);
 
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
+    
+    // Cleanup potential markdown formatting if model ignores "No Markdown" instruction
+    text = text.replace(/```json\s*|\s*```/g, "").trim();
     
     // Try to parse JSON from the response
     const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -79,7 +87,7 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
       
       console.log(`Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`);
       await new Promise(resolve => setTimeout(resolve, Math.min(delaySeconds * 1000, 60000)));
-      return generateSubtitles(fileUri, mimeType, secondaryLanguage, attempt + 1);
+      return generateSubtitles(fileUri, mimeType, secondaryLanguage, attempt + 1, modelName);
     }
     throw error;
   }

@@ -8,6 +8,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
+  const [model, setModel] = useState("gemini-2.5-flash");
   
   // Progress tracking state
   const [progress, setProgress] = useState(0);
@@ -51,6 +52,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
     const formData = new FormData();
     formData.append("video", file);
     formData.append("secondaryLanguage", secondaryLanguage);
+    formData.append("model", model);
 
     const xhr = new XMLHttpRequest();
     
@@ -140,21 +142,35 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
 
       {file && (
         <div className="mt-6 w-full max-w-md space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Language</label>
-            <select
-              value={secondaryLanguage}
-              onChange={(e) => setSecondaryLanguage(e.target.value)}
-              disabled={loading}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              <option value="Simplified Chinese">Simplified Chinese</option>
-              <option value="Spanish">Spanish</option>
-              <option value="French">French</option>
-              <option value="Japanese">Japanese</option>
-              <option value="German">German</option>
-              <option value="None">None</option>
-            </select>
+           <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Model</label>
+              <select
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                disabled={loading}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Secondary Language</label>
+              <select
+                value={secondaryLanguage}
+                onChange={(e) => setSecondaryLanguage(e.target.value)}
+                disabled={loading}
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                <option value="Simplified Chinese">Simplified Chinese</option>
+                <option value="Spanish">Spanish</option>
+                <option value="French">French</option>
+                <option value="Japanese">Japanese</option>
+                <option value="German">German</option>
+                <option value="None">None</option>
+              </select>
+            </div>
           </div>
           
           {loading && (
