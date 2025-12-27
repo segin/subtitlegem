@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
     let processPath = videoPath;
     const stagingDir = tempDir; // Use tempDir as staging directory
     let useInlineData = false;
+    const INLINE_SIZE_LIMIT_MB = 9.8; // Guard band below 10MB Gemini inline limit
 
     if (fileSizeInMB > 400) {
       console.log("File > 400MB, extracting audio...");
@@ -123,37 +124,45 @@ export async function POST(req: NextRequest) {
             ext = "ogg";
             newMime = "audio/ogg";
             break;
-    let useInlineData = false;
-    const INLINE_SIZE_LIMIT_MB = 9.8; // Guard band below 10MB limit
-    const LARGE_FILE_THRESHOLD_MB = 400; // Extract audio for very large files
+          case "flac":
+            ext = "flac";
+            newMime = "audio/flac";
+            break;
+          default:
+            ext = "m4a";
+            newMime = "audio/mp4";
+        }
 
-    // For large files (>400MB), extract audio for Gemini
-    if (fileSizeInMB > LARGE_FILE_THRESHOLD_MB) {
-      const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.m4a`);
-      
-      await new Promise<void>((resolve, reject) => {
-        ffmpeg(videoPath)
-          .noVideo()
-          .audioCodec('copy')
-          .outputOptions('-movflags', 'faststart')
-          .on('end', () => {
-            console.log('Audio extraction complete (stream copy - no re-encoding)');
-            resolve();
-          })
-          .on('error', (err: any) => {
-            console.error('Audio extraction failed:', err);
-            reject(err);
-          })
-          .save(audioPath);
-      });
-      
-      processPath = audioPath;
-      
-      const audioStats = fs.statSync(audioPath);
-      const audioSizeInMB = audioStats.size / (1024 * 1024);
-      useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
-      
-      console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
+        const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.${ext}`);
+        
+        await new Promise<void>((resolve, reject) => {
+          ffmpeg(videoPath)
+            .noVideo()
+            .audioCodec('copy')
+            .outputOptions('-movflags', 'faststart')
+            .on('end', () => {
+              console.log('Audio extraction complete (stream copy - no re-encoding)');
+              resolve();
+            })
+            .on('error', (err: any) => {
+              console.error('Audio extraction failed:', err);
+              reject(err);
+            })
+            .save(audioPath);
+        });
+        
+        processPath = audioPath;
+        mimeType = newMime;
+        
+        const audioStats = fs.statSync(audioPath);
+        const audioSizeInMB = audioStats.size / (1024 * 1024);
+        useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
+        
+        console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
+      } catch (audioErr) {
+        console.error('Audio extraction failed, using original file:', audioErr);
+        // Fall back to original file if extraction fails
+      }
     } else {
       useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
     }
