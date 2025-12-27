@@ -87,7 +87,6 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
     return JSON.parse(text);
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
-      // Look for retry delay in error details
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
       
@@ -138,7 +137,6 @@ export async function generateSubtitlesInline(base64Data: string, mimeType: stri
     return JSON.parse(text);
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
-      // Look for retry delay in error details
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
       

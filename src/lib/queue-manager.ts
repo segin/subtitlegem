@@ -56,11 +56,9 @@ class QueueManager {
   };
 
   constructor() {
-    // Set persistence path to staging directory or temp
     const baseDir = process.env.STAGING_DIR || path.join(os.tmpdir(), 'subtitlegem');
     this.persistencePath = path.join(baseDir, 'queue-state.json');
     
-    // Register shutdown handlers to save state on exit
     if (typeof process !== 'undefined') {
       process.on('SIGINT', () => {
         console.log('[Queue] SIGINT received - saving state...');
@@ -79,7 +77,6 @@ class QueueManager {
         this.saveState();
       });
       
-      // Handle uncaught exceptions
       process.on('uncaughtException', (err) => {
         console.error('[Queue] Uncaught exception - saving state...', err);
         this.saveState();
@@ -101,7 +98,6 @@ class QueueManager {
         savedAt: Date.now(),
       };
       
-      // Ensure directory exists
       const dir = path.dirname(this.persistencePath);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
@@ -125,7 +121,6 @@ class QueueManager {
       const data = fs.readFileSync(this.persistencePath, 'utf-8');
       const state = JSON.parse(data);
       
-      // Restore queue items
       this.queue = new Map(state.items);
       this.processing = new Set(state.processing);
       this.paused = state.paused || false;
@@ -146,10 +141,8 @@ class QueueManager {
   async initialize(): Promise<void> {
     if (this.initialized) return;
     
-    // Load persisted state from disk
     this.loadState();
     
-    // Check for any items that were processing when server stopped
     const processingItems = Array.from(this.queue.values())
       .filter(item => item.status === 'processing');
     
@@ -158,7 +151,6 @@ class QueueManager {
     if (processingItems.length > 0) {
       console.log(`[Queue Recovery] Found ${processingItems.length} interrupted jobs`);
       
-      // Mark as failed with crash reason and requeue at top
       processingItems.forEach(item => {
         this.updateItem(item.id, {
           status: 'failed',
@@ -170,15 +162,12 @@ class QueueManager {
         
         this.processing.delete(item.id);
         
-        // Requeue at the top (will be processed first)
         this.requeueItem(item.id, true);
       });
       
       console.log('[Queue Recovery] Interrupted jobs requeued with crash status');
     }
     
-    // ALWAYS pause queue after any restart if there were jobs
-    // (whether shutdown was clean or crash)
     if (this.queue.size > 0) {
       this.paused = true;
       if (wasInterrupted) {
@@ -253,12 +242,10 @@ class QueueManager {
   removeItem(id: string, force: boolean = false): boolean {
     const item = this.queue.get(id);
     
-    // Don't remove if currently processing unless forced
     if (item?.status === 'processing' && !force) {
       return false;
     }
     
-    // If removing a processing item, remove from processing set
     if (item?.status === 'processing') {
       this.processing.delete(id);
       this.processNext(); // Start next item
@@ -310,7 +297,6 @@ class QueueManager {
       completedAt: undefined,
     });
     
-    // Auto-start if not paused
     if (!this.paused) {
       this.processNext();
     }
@@ -407,26 +393,22 @@ class QueueManager {
    * Process the next item(s) in the queue
    */
   private processNext(): void {
-    // Don't start new items if paused
     if (this.paused) {
       return;
     }
     
-    // Check if we can process more items
     const canProcessMore = this.processing.size < this.config.maxConcurrent;
     
     if (!canProcessMore) {
       return;
     }
     
-    // Get next pending item
     const pendingItems = this.getItemsByStatus('pending');
     
     if (pendingItems.length === 0) {
       return;
     }
     
-    // Take as many items as we can process concurrently
     const itemsToProcess = pendingItems.slice(0, this.config.maxConcurrent - this.processing.size);
     
     itemsToProcess.forEach(item => {
@@ -436,8 +418,6 @@ class QueueManager {
         startedAt: Date.now(),
       });
       
-      // The actual processing is handled externally via the API
-      // This just marks items as ready to process
     });
   }
 
@@ -461,7 +441,6 @@ class QueueManager {
    */
   failItem(id: string, error: string, retry: boolean = true, reason: QueueItem['failureReason'] = 'unknown'): void {
     if (retry) {
-      // Keep in queue as failed for retry
       const item = this.queue.get(id);
       const retryCount = (item?.retryCount || 0) + 1;
       
@@ -473,7 +452,6 @@ class QueueManager {
         retryCount,
       });
     } else {
-      // Mark as failed and remove from processing
       this.updateItem(id, {
         status: 'failed',
         error,
@@ -496,7 +474,6 @@ class QueueManager {
       return false;
     }
     
-    // Reset to pending state
     this.updateItem(id, {
       status: 'pending',
       progress: 0,
@@ -505,7 +482,6 @@ class QueueManager {
       startedAt: undefined,
     });
     
-    // If prioritizing (e.g., crash recovery), adjust creation time to be earliest
     if (prioritize) {
       const earliestTime = Math.min(
         ...Array.from(this.queue.values())
@@ -519,7 +495,6 @@ class QueueManager {
       });
     }
     
-    // Auto-start if not paused
     if (!this.paused) {
       this.processNext();
     }
@@ -572,7 +547,6 @@ class QueueManager {
       return null;
     }
     
-    // Calculate average processing time
     const avgTime = completedItems.reduce((sum, item) => {
       const duration = (item.completedAt || 0) - (item.startedAt || 0);
       return sum + duration;
@@ -581,12 +555,10 @@ class QueueManager {
     const pendingCount = this.getItemsByStatus('pending').length;
     const processingCount = this.processing.size;
     
-    // Estimate: (pending items * avg time) + (processing items * remaining avg time)
     const estimatedMs = (pendingCount * avgTime) + (processingCount * avgTime * 0.5);
     
     return estimatedMs;
   }
 }
 
-// Export singleton instance
 export const queueManager = new QueueManager();

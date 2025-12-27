@@ -41,7 +41,6 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'failed':
-        // Different icon for crash failures
         if (failureReason === 'crash') {
           return (
             <div title="Server crash during processing">
@@ -74,10 +73,8 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
   const completedItems = items.filter(i => i.status === 'completed');
 
   const handleDownload = async (item: QueueItem) => {
-    // Download the completed video
     if (!item.result) return;
     
-    // TODO: Implement download from /api/download/:jobId
     alert('Download feature coming soon! Job ID: ' + item.id);
   };
 
@@ -86,7 +83,6 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
       return;
     }
     
-    // Remove from queue and cleanup files
     await onRemove(id);
     
     // TODO: Call cleanup API to delete all associated files

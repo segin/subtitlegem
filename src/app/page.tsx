@@ -318,9 +318,40 @@ export default function Home() {
                 videoPath={videoPath}
                 config={config}
                 queueItems={queueItems}
-                onExport={(sampleDuration) => {
-                  // TODO: Implement export to queue
-                  console.log('Export with duration:', sampleDuration);
+                onExport={async (sampleDuration) => {
+                  if (!videoPath) return;
+                  
+                  try {
+                    // Add export job to queue
+                    const response = await fetch('/api/export', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        videoPath,
+                        subtitles,
+                        config,
+                        sampleDuration,
+                      }),
+                    });
+                    
+                    if (!response.ok) {
+                      const error = await response.json();
+                      alert(`Export failed: ${error.error || 'Unknown error'}`);
+                      return;
+                    }
+                    
+                    const result = await response.json();
+                    console.log('Export job added to queue:', result);
+                    
+                    // Refresh queue to show new job
+                    const queueRes = await fetch('/api/queue');
+                    if (queueRes.ok) {
+                      const data = await queueRes.json();
+                      setQueueItems(data.items);
+                    }
+                  } catch (err: any) {
+                    alert(`Export failed: ${err.message}`);
+                  }
                 }}
               />
               
