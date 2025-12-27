@@ -8,6 +8,7 @@ import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
 import { QueueSidebar } from "@/components/QueueSidebar";
+import { QueuePanel } from "@/components/QueuePanel";
 import { ExportControls } from "@/components/ExportControls";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
@@ -147,6 +148,24 @@ export default function Home() {
             <h1 className="text-xl font-medium text-[#e1e1e1] mb-2">Welcome to SubtitleGem</h1>
             <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
             <VideoUpload onUploadComplete={handleUploadComplete} />
+          </div>
+          
+          {/* Queue Display on Upload Screen */}
+          <div className="absolute bottom-4 right-4 w-80">
+            <QueuePanel
+              items={queueItems}
+              isPaused={queuePaused}
+              onPauseToggle={toggleQueuePause}
+              onRemove={async (id, force) => {
+                await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+              }}
+              onDownload={(item) => {
+                if (item.result?.videoPath) {
+                  window.open(`/api/export?id=${item.id}`, '_blank');
+                }
+              }}
+              className="shadow-lg"
+            />
           </div>
         </div>
       </main>
@@ -355,90 +374,20 @@ export default function Home() {
                 }}
               />
               
-              {/* Compact Queue Display with Controls */}
-              {queueItems.length > 0 && (
-                <div className="border-t border-[#333333] bg-[#1e1e1e]">
-                  {/* Queue Header with Controls */}
-                  <div className="flex items-center justify-between p-2 border-b border-[#333333]">
-                    <span className="text-[10px] text-[#888888] uppercase tracking-wider">
-                      Queue ({queueItems.length})
-                    </span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={async () => {
-                          await fetch('/api/queue', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: queuePaused ? 'resume' : 'pause' }),
-                          });
-                        }}
-                        className="text-[10px] px-2 py-1 rounded-sm bg-[#2d2d2d] hover:bg-[#3e3e42] text-[#cccccc] transition-colors"
-                      >
-                        {queuePaused ? '▶ Resume' : '⏸ Pause'}
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {/* Queue Items */}
-                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                    {queueItems.slice(0, 5).map(item => (
-                      <div key={item.id} className="p-2 border-b border-[#333333] text-xs text-[#cccccc] hover:bg-[#252526]">
-                        <div className="flex items-center justify-between">
-                          <span className="truncate flex-1 max-w-[180px]">{item.file.name}</span>
-                          <div className="flex items-center space-x-2">
-                            <span className={`text-[10px] ${
-                              item.status === 'completed' ? 'text-green-500' :
-                              item.status === 'failed' ? 'text-red-500' :
-                              item.status === 'processing' ? 'text-[#007acc]' :
-                              'text-[#666666]'
-                            }`}>
-                              {item.status === 'processing' ? `${item.progress}%` : item.status}
-                            </span>
-                            
-                            {/* Download button for completed */}
-                            {item.status === 'completed' && (
-                              <button
-                                onClick={() => window.open(`/api/export?id=${item.id}`, '_blank')}
-                                className="text-[10px] px-1.5 py-0.5 rounded-sm bg-[#2d5f2d] hover:bg-[#3e7f3e] text-white transition-colors"
-                                title="Download"
-                              >
-                                ↓
-                              </button>
-                            )}
-                            
-                            {/* Delete button */}
-                            <button
-                              onClick={async () => {
-                                const force = item.status === 'processing';
-                                await fetch(`/api/queue?id=${item.id}&force=${force}`, { method: 'DELETE' });
-                              }}
-                              className="text-[10px] px-1.5 py-0.5 rounded-sm bg-[#5f2d2d] hover:bg-[#7f3e3e] text-white transition-colors"
-                              title="Remove"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        </div>
-                        
-                        {/* Progress bar for processing items */}
-                        {item.status === 'processing' && (
-                          <div className="mt-1 h-1 bg-[#333333] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-[#007acc] transition-all duration-300"
-                              style={{ width: `${item.progress}%` }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    {queueItems.length > 5 && (
-                      <div className="p-2 text-center text-[10px] text-[#666666]">
-                        +{queueItems.length - 5} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+              {/* Queue Display using shared component */}
+              <QueuePanel
+                items={queueItems}
+                isPaused={queuePaused}
+                onPauseToggle={toggleQueuePause}
+                onRemove={async (id, force) => {
+                  await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+                }}
+                onDownload={(item) => {
+                  if (item.result?.videoPath) {
+                    window.open(`/api/export?id=${item.id}`, '_blank');
+                  }
+                }}
+              />
            </div>
         </div>
       </div>
