@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToGemini, generateSubtitles } from "@/lib/gemini";
+import { uploadToGemini, generateSubtitles, generateSubtitlesInline } from "@/lib/gemini";
 import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
 import fs from "fs";
 import path from "path";
@@ -8,6 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import ffmpeg from "fluent-ffmpeg";
 
 export const runtime = 'nodejs';
 
@@ -98,6 +99,8 @@ export async function POST(req: NextRequest) {
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
 
     let processPath = videoPath;
+    const stagingDir = tempDir; // Use tempDir as staging directory
+    let useInlineData = false;
 
     if (fileSizeInMB > 400) {
       console.log("File > 400MB, extracting audio...");
@@ -125,37 +128,75 @@ export async function POST(req: NextRequest) {
             ext = "ogg";
             newMime = "audio/ogg";
             break;
-          case "flac":
-            ext = "flac";
-            newMime = "audio/flac";
-            break;
-          case "pcm_s16le":
-          case "pcm_s24le":
-            ext = "wav";
-            newMime = "audio/wav";
-            break;
-          default:
-            console.warn(`Unknown/unmapped codec ${codec}, defaulting to m4a/mp4 container.`);
-            ext = "m4a";
-            newMime = "audio/mp4";
-        }
+    let useInlineData = false;
+    const INLINE_SIZE_LIMIT_MB = 9.8; // Guard band below 10MB limit
+    const LARGE_FILE_THRESHOLD_MB = 400; // Extract audio for very large files
 
-        const audioPath = path.join(tempDir, `${uuidv4()}.${ext}`); 
-        await extractAudio(videoPath, audioPath);
-        processPath = audioPath;
-        mimeType = newMime;
-      } catch (err) {
-        console.error("Failed to detect audio codec, falling back to m4a", err);
-        // Fallback
-        const audioPath = path.join(tempDir, `${uuidv4()}.m4a`); 
-        await extractAudio(videoPath, audioPath);
-        processPath = audioPath;
-        mimeType = "audio/mp4"; 
-      }
+    // For large files (>400MB), extract audio for Gemini
+    if (fileSizeInMB > LARGE_FILE_THRESHOLD_MB) {
+      console.log(`Large file detected (${fileSizeInMB.toFixed(2)} MB) - extracting audio`);
+      const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.mp3`);
+      
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(videoPath)
+          .noVideo()
+          .audioCodec('libmp3lame')
+          .audioBitrate('128k')
+          .on('end', () => {
+            console.log('Audio extraction complete');
+            resolve();
+          })
+          .on('error', (err: any) => {
+            console.error('Audio extraction failed:', err);
+            reject(err);
+          })
+          .save(audioPath);
+      });
+      
+      processPath = audioPath;
+      
+      // Check if extracted audio is small enough for inline
+      const audioStats = fs.statSync(audioPath);
+      const audioSizeInMB = audioStats.size / (1024 * 1024);
+      useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
+      
+      console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
+    } else {
+      // Small/medium video - check if we can send inline
+      useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
     }
 
-    const geminiFile = await uploadToGemini(processPath, mimeType);
-    const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage === "None" ? undefined : secondaryLanguage, 1, modelName);
+    // Generate subtitles using appropriate method
+    let subtitles;
+    
+    if (useInlineData) {
+      console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
+      
+      // Read file and encode as base64
+      const fileBuffer = fs.readFileSync(processPath);
+      const base64Data = fileBuffer.toString('base64');
+      
+      // Send inline to Gemini
+      subtitles = await generateSubtitlesInline(
+        base64Data,
+        mimeType,
+        secondaryLanguage === "None" ? undefined : secondaryLanguage,
+        1,
+        modelName
+      );
+    } else {
+      console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
+      
+      // Upload to Gemini Files API
+      const geminiFile = await uploadToGemini(processPath, mimeType);
+      subtitles = await generateSubtitles(
+        geminiFile.uri,
+        mimeType,
+        secondaryLanguage === "None" ? undefined : secondaryLanguage,
+        1,
+        modelName
+      );
+    }
 
     // Clean up - KEEP the original video, only delete extracted audio
     try {
