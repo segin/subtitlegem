@@ -8,6 +8,7 @@ import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
 import { QueueSidebar } from "@/components/QueueSidebar";
+import { ExportControls } from "@/components/ExportControls";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
@@ -265,38 +266,38 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Right Sidebar: Tools */}
-        <div className="w-80 border-l border-[#333333] bg-[#252526] flex flex-col shrink-0 z-10">
+        {/*  Right Sidebar: Tools */}
+        <div className="w-96 border-l border-[#333333] bg-[#252526] flex flex-col shrink-0 z-10 shadow-xl">
            {/* Sidebar Tabs */}
-           <div className="flex bg-[#2d2d2d] border-b border-[#333333]">
+           <div className="flex border-b border-[#333333]">
               <button
                 onClick={() => setActiveTab('list')}
-                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 text-xs font-medium uppercase tracking-wide transition-colors border-t-2 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 text-xs font-medium transition-colors border-b-2 ${ 
                   activeTab === 'list' 
-                    ? 'border-[#007acc] text-[#e1e1e1] bg-[#252526]' 
-                    : 'border-transparent text-[#888888] hover:bg-[#2d2d2d] hover:text-[#cccccc]'
+                    ? 'border-[#007acc] text-[#e1e1e1] bg-[#2d2d2d]' 
+                    : 'border-transparent text-[#888888] hover:text-[#cccccc] hover:bg-[#2a2a2a]'
                 }`}
               >
-                <List className="w-3 h-3" />
-                <span>Subs</span>
+                <List className="w-4 h-4" />
+                <span>Subtitles</span>
               </button>
               <button
                 onClick={() => setActiveTab('style')}
-                className={`flex-1 flex items-center justify-center space-x-1.5 py-2 text-xs font-medium uppercase tracking-wide transition-colors border-t-2 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-2 text-xs font-medium transition-colors border-b-2 ${ 
                   activeTab === 'style' 
-                    ? 'border-[#007acc] text-[#e1e1e1] bg-[#252526]' 
-                    : 'border-transparent text-[#888888] hover:bg-[#2d2d2d] hover:text-[#cccccc]'
+                    ? 'border-[#007acc] text-[#e1e1e1] bg-[#2d2d2d]' 
+                    : 'border-transparent text-[#888888] hover:text-[#cccccc] hover:bg-[#2a2a2a]'
                 }`}
               >
-                <Settings className="w-3 h-3" />
-                <span>Format</span>
+                <Settings className="w-4 h-4" />
+                <span>Styles</span>
               </button>
            </div>
 
            {/* Sidebar Content */}
-           <div className="flex-1 overflow-hidden relative">
+           <div className="flex-1 overflow-hidden relative flex flex-col">
               {activeTab === 'list' ? (
-                <div className="absolute inset-0">
+                <div className="flex-1 overflow-hidden">
                   <SubtitleList 
                     subtitles={subtitles} 
                     onUpdate={setSubtitles} 
@@ -306,19 +307,45 @@ export default function Home() {
                   />
                 </div>
               ) : (
-                <div className="absolute inset-0 overflow-y-auto custom-scrollbar">
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
                    <ConfigPanel config={config} onChange={setConfig} />
+                </div>
+              )}
+              
+              {/* Export Controls - Always visible at bottom */}
+              <ExportControls
+                subtitles={subtitles}
+                videoPath={videoPath}
+                config={config}
+                queueItems={queueItems}
+                onExport={(sampleDuration) => {
+                  // TODO: Implement export to queue
+                  console.log('Export with duration:', sampleDuration);
+                }}
+              />
+              
+              {/* Compact Queue Display - Collapsible */}
+              {queueItems.length > 0 && (
+                <div className="border-t border-[#333333] max-h-48 overflow-y-auto custom-scrollbar bg-[#1e1e1e]">
+                  {queueItems.slice(0, 3).map(item => (
+                    <div key={item.id} className="p-2 border-b border-[#333333] text-xs text-[#cccccc]">
+                      <div className="flex items-center justify-between">
+                        <span className="truncate flex-1">{item.file.name}</span>
+                        <span className="text-[10px] text-[#666666] ml-2">
+                          {item.status === 'processing' ? `${item.progress}%` : item.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {queueItems.length > 3 && (
+                    <div className="p-2 text-center text-[10px] text-[#666666]">
+                      +{queueItems.length - 3} more
+                    </div>
+                  )}
                 </div>
               )}
            </div>
         </div>
-
-        {/* Queue Sidebar */}
-        <QueueSidebar 
-          items={queueItems}
-          onEdit={handleEditFromQueue}
-          onRemove={handleRemoveFromQueue}
-        />
       </div>
 
       {showRawEditor && (

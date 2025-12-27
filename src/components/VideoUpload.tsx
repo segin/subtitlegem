@@ -13,7 +13,6 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
   const [model, setModel] = useState("gemini-2.5-flash");
-  const [sampleDuration, setSampleDuration] = useState<number | null>(null);
   
   const [progress, setProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
@@ -142,62 +141,6 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
               <option value="Ukrainian">Ukrainian</option>
             </select>
           </div>
-        </div>
-
-        {/* Sample Duration Selector */}
-        <div className="space-y-1">
-          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">Sample Mode (Testing)</label>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => setSampleDuration(null)}
-              disabled={loading}
-              className={`flex-1 py-2 text-xs font-medium rounded-sm transition-colors ${
-                sampleDuration === null
-                  ? 'bg-[#007acc] text-white'
-                  : 'bg-[#2d2d2d] text-[#888888] hover:bg-[#3e3e42] hover:text-[#cccccc]'
-              }`}
-            >
-              Full Video
-            </button>
-            <button
-              onClick={() => setSampleDuration(2)}
-              disabled={loading}
-              className={`flex-1 py-2 text-xs font-medium rounded-sm transition-colors ${
-                sampleDuration === 2
-                  ? 'bg-[#007acc] text-white'
-                  : 'bg-[#2d2d2d] text-[#888888] hover:bg-[#3e3e42] hover:text-[#cccccc]'
-              }`}
-            >
-              2 seconds
-            </button>
-            <button
-              onClick={() => setSampleDuration(5)}
-              disabled={loading}
-              className={`flex-1 py-2 text-xs font-medium rounded-sm transition-colors ${
-                sampleDuration === 5
-                  ? 'bg-[#007acc] text-white'
-                  : 'bg-[#2d2d2d] text-[#888888] hover:bg-[#3e3e42] hover:text-[#cccccc]'
-              }`}
-            >
-              5 seconds
-            </button>
-            <button
-              onClick={() => setSampleDuration(10)}
-              disabled={loading}
-              className={`flex-1 py-2 text-xs font-medium rounded-sm transition-colors ${
-                sampleDuration === 10
-                  ? 'bg-[#007acc] text-white'
-                  : 'bg-[#2d2d2d] text-[#888888] hover:bg-[#3e3e42] hover:text-[#cccccc]'
-              }`}
-            >
-              10 seconds
-            </button>
-          </div>
-          {sampleDuration !== null && (
-            <p className="text-[10px] text-[#d7ba7d] mt-1">
-              ⚠ Sample mode will only process the first {sampleDuration} seconds
-            </p>
-          )}
         </div>
       </div>
 
