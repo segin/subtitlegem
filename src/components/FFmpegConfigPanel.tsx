@@ -226,6 +226,8 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
               <>
                 <option value="aac">AAC</option>
                 <option value="libmp3lame">MP3</option>
+                <option value="flac">FLAC (Lossless)</option>
+                <option value="pcm_s16le">PCM 16-bit (Uncompressed)</option>
               </>
             )}
           </select>
