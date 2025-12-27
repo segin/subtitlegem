@@ -12,7 +12,6 @@ import ffmpeg from "fluent-ffmpeg";
 
 export const runtime = 'nodejs';
 
-// Add "None" or empty string to allowed
 const ALLOWED_LANGUAGES = [
   "Simplified Chinese", 
   "Traditional Chinese",
@@ -41,7 +40,6 @@ export async function POST(req: NextRequest) {
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-2.5-flash";
     
-    // Create a promise to handle the busboy parsing
     await new Promise<void>((resolve, reject) => {
       const bb = busboy({ headers: { "content-type": contentType } });
 
@@ -59,7 +57,7 @@ export async function POST(req: NextRequest) {
 
           writeStream.on("error", reject);
         } else {
-          file.resume(); // Skip other files
+          file.resume();
         }
       });
 
@@ -75,7 +73,6 @@ export async function POST(req: NextRequest) {
       bb.on("close", resolve);
       bb.on("error", reject);
 
-      // Convert Web Stream to Node Stream and pipe to busboy
       // @ts-ignore
       const nodeStream = Readable.fromWeb(req.body);
       nodeStream.pipe(bb);
@@ -85,7 +82,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "No video file provided" }, { status: 400 });
     }
     
-    // Validate Secondary Language (if present and not "None")
     if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
         // If it's empty, we treat it as no secondary language
         if (secondaryLanguage.trim() !== "") {
@@ -93,7 +89,6 @@ export async function POST(req: NextRequest) {
         }
     }
 
-    // Check file size on disk
     const stats = fs.statSync(videoPath);
     const fileSizeInMB = stats.size / (1024 * 1024);
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
@@ -134,14 +129,13 @@ export async function POST(req: NextRequest) {
 
     // For large files (>400MB), extract audio for Gemini
     if (fileSizeInMB > LARGE_FILE_THRESHOLD_MB) {
-      console.log(`Large file detected (${fileSizeInMB.toFixed(2)} MB) - extracting audio`);
       const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.m4a`);
       
       await new Promise<void>((resolve, reject) => {
         ffmpeg(videoPath)
           .noVideo()
-          .audioCodec('copy') // Stream copy - no re-encoding!
-          .outputOptions('-movflags', 'faststart') // Optimize for streaming
+          .audioCodec('copy')
+          .outputOptions('-movflags', 'faststart')
           .on('end', () => {
             console.log('Audio extraction complete (stream copy - no re-encoding)');
             resolve();
@@ -155,14 +149,12 @@ export async function POST(req: NextRequest) {
       
       processPath = audioPath;
       
-      // Check if extracted audio is small enough for inline
       const audioStats = fs.statSync(audioPath);
       const audioSizeInMB = audioStats.size / (1024 * 1024);
       useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
       
       console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
     } else {
-      // Small/medium video - check if we can send inline
       useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
     }
 
@@ -172,11 +164,8 @@ export async function POST(req: NextRequest) {
     if (useInlineData) {
       console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
       
-      // Read file and encode as base64
       const fileBuffer = fs.readFileSync(processPath);
       const base64Data = fileBuffer.toString('base64');
-      
-      // Send inline to Gemini
       subtitles = await generateSubtitlesInline(
         base64Data,
         mimeType,
@@ -187,7 +176,6 @@ export async function POST(req: NextRequest) {
     } else {
       console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
       
-      // Upload to Gemini Files API
       const geminiFile = await uploadToGemini(processPath, mimeType);
       subtitles = await generateSubtitles(
         geminiFile.uri,
@@ -198,17 +186,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Clean up - KEEP the original video, only delete extracted audio
     try {
-        // Only delete the audio extract if we created one
         if (processPath !== videoPath && fs.existsSync(processPath)) {
           fs.unlinkSync(processPath);
           console.log(`Cleaned up audio extract: ${processPath}`);
         }
-        // DO NOT delete videoPath - it's needed for preview and export
     } catch (e) { console.error("Cleanup error", e); }
 
-    // Return the path of the ORIGINAL video for preview/export
     return NextResponse.json({ subtitles, videoPath });
 
   } catch (error: any) {
