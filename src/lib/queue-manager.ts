@@ -1,6 +1,6 @@
 import { SubtitleLine } from '@/types/subtitle';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
+import * as queueDb from './queue-db';
 import path from 'path';
 import os from 'os';
 
@@ -9,16 +9,18 @@ export interface QueueItem {
   file: {
     name: string;
     size: number;
-    path: string; // Path in staging directory
+    path?: string; // Path in staging directory (optional for export jobs)
+    type?: string;
   };
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress: number;
-  model: string;
-  secondaryLanguage: string;
+  model?: string;
+  secondaryLanguage?: string;
   sampleDuration?: number; // Optional: 2, 5, or 10 seconds for sample jobs
   result?: {
-    subtitles: SubtitleLine[];
-    videoPath: string;
+    subtitles?: SubtitleLine[];
+    videoPath?: string;
+    srtPath?: string;
   };
   error?: string;
   failureReason?: 'crash' | 'api_error' | 'user_cancelled' | 'unknown'; // Type of failure
@@ -26,7 +28,10 @@ export interface QueueItem {
   startedAt?: number;
   completedAt?: number;
   retryCount?: number; // Number of times this job has been retried
+  metadata?: Record<string, any>; // Additional metadata
 }
+
+export type QueueItemStatus = QueueItem['status'];
 
 export interface QueueConfig {
   stagingDir: string;
@@ -47,7 +52,6 @@ class QueueManager {
   private processing: Set<string> = new Set();
   private paused: boolean = false;
   private initialized: boolean = false;
-  private persistencePath: string;
   
   private config: QueueConfig = {
     stagingDir: '',
@@ -56,82 +60,44 @@ class QueueManager {
   };
 
   constructor() {
-    const baseDir = process.env.STAGING_DIR || path.join(os.tmpdir(), 'subtitlegem');
-    this.persistencePath = path.join(baseDir, 'queue-state.json');
-    
     if (typeof process !== 'undefined') {
       process.on('SIGINT', () => {
-        console.log('[Queue] SIGINT received - saving state...');
-        this.saveState();
+        console.log('[Queue] SIGINT received - closing database...');
+        queueDb.close();
         process.exit(0);
       });
       
       process.on('SIGTERM', () => {
-        console.log('[Queue] SIGTERM received - saving state...');
-        this.saveState();
+        console.log('[Queue] SIGTERM received - closing database...');
+        queueDb.close();
         process.exit(0);
       });
-      
-      process.on('exit', () => {
-        console.log('[Queue] Process exiting - saving state...');
-        this.saveState();
-      });
-      
-      process.on('uncaughtException', (err) => {
-        console.error('[Queue] Uncaught exception - saving state...', err);
-        this.saveState();
-        process.exit(1);
-      });
     }
   }
 
   /**
-   * Save queue state to disk for crash recovery
+   * Save a single item to SQLite (replaces saveState for individual updates)
    */
-  private saveState(): void {
+  private persistItem(item: QueueItem): void {
     try {
-      const state = {
-        items: Array.from(this.queue.entries()),
-        processing: Array.from(this.processing),
-        paused: this.paused,
-        config: this.config,
-        savedAt: Date.now(),
-      };
-      
-      const dir = path.dirname(this.persistencePath);
-      if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-      }
-      
-      fs.writeFileSync(this.persistencePath, JSON.stringify(state, null, 2));
+      queueDb.saveItem(item);
     } catch (error) {
-      console.error('[Queue] Failed to save state:', error);
+      console.error('[Queue] Failed to persist item:', error);
     }
   }
 
   /**
-   * Load queue state from disk
+   * Load queue state from SQLite
    */
   private loadState(): void {
     try {
-      if (!fs.existsSync(this.persistencePath)) {
-        return;
-      }
+      const items = queueDb.loadAllItems();
+      this.queue = new Map(items.map(item => [item.id, item]));
+      this.paused = queueDb.isPaused();
       
-      const data = fs.readFileSync(this.persistencePath, 'utf-8');
-      const state = JSON.parse(data);
-      
-      this.queue = new Map(state.items);
-      this.processing = new Set(state.processing);
-      this.paused = state.paused || false;
-      
-      if (state.config) {
-        this.config = { ...this.config, ...state.config };
-      }
-      
-      console.log(`[Queue] Loaded ${this.queue.size} items from disk (saved at ${new Date(state.savedAt).toISOString()})`);
+      console.log(`[Queue] Loaded ${this.queue.size} items from SQLite`);
     } catch (error) {
-      console.error('[Queue] Failed to load state:', error);
+      console.error('[Queue] Failed to load state from SQLite:', error);
     }
   }
 
@@ -179,7 +145,7 @@ class QueueManager {
     }
     
     this.initialized = true;
-    this.saveState(); // Save after recovery
+    queueDb.setPaused(this.paused); // Persist paused state to SQLite
   }
 
   /**
@@ -195,7 +161,7 @@ class QueueManager {
     };
     
     this.queue.set(queueItem.id, queueItem);
-    this.saveState(); // Persist to disk
+    this.persistItem(queueItem); // Persist to SQLite
     
     if (this.config.autoStart && !this.paused) {
       this.processNext();
@@ -232,7 +198,7 @@ class QueueManager {
     const item = this.queue.get(id);
     if (item) {
       Object.assign(item, updates);
-      this.saveState(); // Persist to disk
+      this.persistItem(item); // Persist to SQLite
     }
   }
 
@@ -253,7 +219,7 @@ class QueueManager {
     
     const removed = this.queue.delete(id);
     if (removed) {
-      this.saveState(); // Persist to disk
+      queueDb.deleteItem(id); // Remove from SQLite
     }
     
     return removed;
@@ -356,7 +322,7 @@ class QueueManager {
    */
   async start(): Promise<void> {
     this.paused = false;
-    this.saveState(); // Persist pause state
+    queueDb.setPaused(false); // Persist pause state to SQLite
     this.processNext();
   }
 
@@ -365,7 +331,7 @@ class QueueManager {
    */
   pause(): void {
     this.paused = true;
-    this.saveState(); // Persist pause state
+    queueDb.setPaused(true); // Persist pause state to SQLite
   }
 
   /**
