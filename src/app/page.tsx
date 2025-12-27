@@ -71,7 +71,7 @@ export default function Home() {
     await fetch(`/api/queue?id=${item.id}`, { method: 'DELETE' });
     
     // If it has results, load them
-    if (item.result) {
+    if (item.result?.subtitles && item.result?.videoPath) {
       setSubtitles(item.result.subtitles);
       setVideoUrl(URL.createObjectURL(new File([], item.file.name)));
       setVideoPath(item.result.videoPath);
@@ -151,7 +151,7 @@ export default function Home() {
           }}
         />
         
-        <div className="w-full max-w-lg border border-[#333333] bg-[#252526] shadow-xl">
+        <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl mx-4">
           <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
             SubtitleGem - New Project
           </div>
@@ -230,8 +230,8 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Workspace */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* Main Workspace - Always horizontal layout */}
+      <div className="flex-1 flex flex-row overflow-hidden">
         
         {/* Left Stage: Preview & Timeline */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#1e1e1e] relative">
@@ -254,8 +254,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Timeline Area */}
-          <div className="h-64 border-t border-[#333333] bg-[#252526] flex flex-col shrink-0">
+          {/* Timeline Area - Smaller on mobile */}
+          <div className="h-40 lg:h-64 border-t border-[#333333] bg-[#252526] flex flex-col shrink-0">
              <div className="h-6 bg-[#2d2d2d] border-b border-[#333333] flex items-center justify-between px-2 select-none">
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-[#888888] uppercase tracking-wider">
                    <MonitorPlay className="w-3 h-3" />
@@ -277,8 +277,8 @@ export default function Home() {
           </div>
         </div>
 
-        {/*  Right Sidebar: Tools */}
-        <div className="w-96 border-l border-[#333333] bg-[#252526] flex flex-col shrink-0 z-10 shadow-xl">
+        {/*  Right Sidebar: Tools - Width adapts to screen */}
+        <div className="w-64 md:w-80 lg:w-96 xl:w-[28rem] border-l border-[#333333] bg-[#252526] flex flex-col shrink-0 z-10 shadow-xl">
            {/* Sidebar Tabs */}
            <div className="flex border-b border-[#333333]">
               <button
