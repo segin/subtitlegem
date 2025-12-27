@@ -217,6 +217,7 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
             disabled={loading}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >
+            <option value="copy">Copy Original (No Re-encode)</option>
             {capabilities?.audioEncoders.map(e => (
               <option key={e.name} value={e.name}>
                 {e.name} - {e.description}
