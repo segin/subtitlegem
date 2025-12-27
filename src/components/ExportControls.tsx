@@ -4,13 +4,14 @@ import React, { useState } from "react";
 import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { Download, Play, Loader2 } from "lucide-react";
+import { FFmpegConfigPanel, ExportConfig, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
 
 interface ExportControlsProps {
   subtitles: SubtitleLine[];
   videoPath: string | null;
   config: SubtitleConfig;
   queueItems: QueueItem[];
-  onExport: (sampleDuration: number | null) => void;
+  onExport: (sampleDuration: number | null, ffmpegConfig: ExportConfig) => void;
 }
 
 export function ExportControls({
@@ -22,13 +23,14 @@ export function ExportControls({
 }: ExportControlsProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [ffmpegConfig, setFfmpegConfig] = useState<ExportConfig>(DEFAULT_CONFIG);
 
   const handleExport = async (duration: number | null) => {
     setSelectedDuration(duration);
     setExporting(true);
     
     try {
-      await onExport(duration);
+      await onExport(duration, ffmpegConfig);
     } finally {
       setExporting(false);
       setSelectedDuration(null);
@@ -38,8 +40,8 @@ export function ExportControls({
   const processingCount = queueItems.filter(i => i.status === 'processing' || i.status === 'pending').length;
 
   return (
-    <div className="border-t border-[#333333] bg-[#252526] p-4">
-      <div className="flex items-center justify-between mb-3">
+    <div className="border-t border-[#333333] bg-[#252526] p-4 space-y-4">
+      <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold text-[#888888] uppercase tracking-wider">Export Video</h3>
         {processingCount > 0 && (
           <span className="text-[10px] text-[#007acc] font-mono">
@@ -47,6 +49,12 @@ export function ExportControls({
           </span>
         )}
       </div>
+
+      {/* FFmpeg Config Panel */}
+      <FFmpegConfigPanel
+        config={ffmpegConfig}
+        onChange={setFfmpegConfig}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         {/* Full Video Export */}
@@ -88,7 +96,7 @@ export function ExportControls({
         </div>
       </div>
 
-      <p className="text-[10px] text-[#666666] mt-3">
+      <p className="text-[10px] text-[#666666]">
         <span className="text-[#d7ba7d]">💡 Tip:</span> Use sample exports to test subtitle positioning before exporting the full video
       </p>
     </div>

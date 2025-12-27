@@ -329,7 +329,7 @@ export default function Home() {
                 videoPath={videoPath}
                 config={config}
                 queueItems={queueItems}
-                onExport={async (sampleDuration) => {
+                onExport={async (sampleDuration, ffmpegConfig) => {
                   if (!videoPath) return;
                   
                   try {
@@ -342,6 +342,7 @@ export default function Home() {
                         subtitles,
                         config,
                         sampleDuration,
+                        ffmpegConfig,
                       }),
                     });
                     
