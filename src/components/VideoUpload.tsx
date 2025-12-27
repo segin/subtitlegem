@@ -3,7 +3,11 @@
 import React, { useState, useRef } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2 } from "lucide-react";
 
-export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles: any[], videoUrl: string) => void }) {
+interface VideoUploadProps {
+  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string) => void;
+}
+
+export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,7 +72,7 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
         try {
           const data = JSON.parse(xhr.responseText);
           if (data.error) setError(data.error);
-          else onUploadComplete(data.subtitles, URL.createObjectURL(file));
+          else onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath);
         } catch (e) { setError("Failed to parse response"); }
       } else if (xhr.status === 429) {
         setError("Rate limit exceeded. Please wait.");
@@ -98,6 +102,46 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
         disabled={loading}
       />
       
+      {/* Model and Language Selection - Always visible */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">AI Model</label>
+          <select
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            disabled={loading}
+            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
+          >
+            <option value="gemini-3.0-flash">Gemini 3.0 Flash (Fastest)</option>
+            <option value="gemini-3.0-pro">Gemini 3.0 Pro (Advanced)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          </select>
+        </div>
+        
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">Secondary Language</label>
+          <select
+            value={secondaryLanguage}
+            onChange={(e) => setSecondaryLanguage(e.target.value)}
+            disabled={loading}
+            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
+          >
+            <option value="None">None</option>
+            <option value="Simplified Chinese">Simplified Chinese</option>
+            <option value="Traditional Chinese">Traditional Chinese</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="German">German</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Russian">Russian</option>
+            <option value="Arabic">Arabic</option>
+            <option value="Dutch">Dutch</option>
+            <option value="Ukrainian">Ukrainian</option>
+          </select>
+        </div>
+      </div>
+
       {!file ? (
         <label 
           htmlFor="video-input" 
@@ -108,7 +152,6 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
         </label>
       ) : (
         <div className="space-y-6">
-           {/* File Info */}
            <div className="flex items-center space-x-3 p-3 bg-[#2d2d2d] border border-[#3e3e42]">
               <FileVideo className="w-5 h-5 text-[#007acc]" />
               <div className="flex-1 min-w-0">
@@ -120,40 +163,6 @@ export function VideoUpload({ onUploadComplete }: { onUploadComplete: (subtitles
               )}
            </div>
 
-           {/* Config Grid */}
-           <div className="grid grid-cols-2 gap-4">
-             <div className="space-y-1">
-               <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">AI Model</label>
-               <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
-                  disabled={loading}
-                  className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
-                >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                  <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                </select>
-             </div>
-             
-             <div className="space-y-1">
-               <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">Target Lang</label>
-                <select
-                  value={secondaryLanguage}
-                  onChange={(e) => setSecondaryLanguage(e.target.value)}
-                  disabled={loading}
-                  className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
-                >
-                  <option value="Simplified Chinese">Simplified Chinese</option>
-                  <option value="Spanish">Spanish</option>
-                  <option value="French">French</option>
-                  <option value="Japanese">Japanese</option>
-                  <option value="German">German</option>
-                  <option value="None">None</option>
-                </select>
-             </div>
-           </div>
-
-           {/* Progress / Action */}
            {loading ? (
              <div className="space-y-2 bg-[#1e1e1e] p-3 border border-[#3e3e42]">
                 <div className="flex justify-between items-center text-xs">

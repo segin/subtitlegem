@@ -12,7 +12,18 @@ import { pipeline } from "stream/promises";
 export const runtime = 'nodejs';
 
 // Add "None" or empty string to allowed
-const ALLOWED_LANGUAGES = ["Simplified Chinese", "Spanish", "French", "Japanese", "German"];
+const ALLOWED_LANGUAGES = [
+  "Simplified Chinese", 
+  "Traditional Chinese",
+  "Spanish", 
+  "French", 
+  "Japanese", 
+  "German", 
+  "Russian", 
+  "Dutch", 
+  "Ukrainian", 
+  "Arabic"
+];
 
 export async function POST(req: NextRequest) {
   console.log("Processing POST request to /api/process (Streamed via Busboy)");
@@ -152,7 +163,8 @@ export async function POST(req: NextRequest) {
         if (processPath !== videoPath && fs.existsSync(processPath)) fs.unlinkSync(processPath);
     } catch (e) { console.error("Cleanup error", e); }
 
-    return NextResponse.json({ subtitles });
+    // Return the path of the ORIGINAL video, not the audio extract
+    return NextResponse.json({ subtitles, videoPath });
 
   } catch (error: any) {
     console.error("Error processing video:", error);
