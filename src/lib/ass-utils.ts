@@ -47,7 +47,26 @@ function sanitizeAssText(text: string): string {
 export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): string {
     const playResX = 1920;
     const playResY = 1080;
-// ...
+    
+    const scriptInfo = [
+        '[Script Info]',
+        'Title: SubtitleGem Export',
+        'ScriptType: v4.00+',
+        `PlayResX: ${playResX}`,
+        `PlayResY: ${playResY}`,
+        'WrapStyle: 0',
+        'ScaledBorderAndShadow: yes',
+        '',
+    ].join('\n');
+    
+    const styles = [
+        '[V4+ Styles]',
+        'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+        generateStyleLine('Primary', config.primary, playResX, playResY),
+        generateStyleLine('Secondary', config.secondary, playResX, playResY),
+        '',
+    ].join('\n');
+
     const events = [
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
