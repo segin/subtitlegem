@@ -7,8 +7,7 @@ import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
-import { QueueSidebar } from "@/components/QueueSidebar";
-import { QueuePanel } from "@/components/QueuePanel";
+import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
@@ -137,6 +136,21 @@ export default function Home() {
   if (!videoUrl) {
     return (
       <main className="min-h-screen bg-[#1e1e1e] flex flex-col items-center justify-center p-0 text-[#cccccc]">
+        {/* Global Queue Drawer */}
+        <QueueDrawer
+          items={queueItems}
+          isPaused={queuePaused}
+          onPauseToggle={toggleQueuePause}
+          onRemove={async (id: string, force?: boolean) => {
+            await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+          }}
+          onDownload={(item: QueueItem) => {
+            if (item.result?.videoPath) {
+              window.open(`/api/export?id=${item.id}`, '_blank');
+            }
+          }}
+        />
+        
         <div className="w-full max-w-lg border border-[#333333] bg-[#252526] shadow-xl">
           <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
             SubtitleGem - New Project
@@ -149,24 +163,6 @@ export default function Home() {
             <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
             <VideoUpload onUploadComplete={handleUploadComplete} />
           </div>
-          
-          {/* Queue Display on Upload Screen */}
-          <div className="absolute bottom-4 right-4 w-80">
-            <QueuePanel
-              items={queueItems}
-              isPaused={queuePaused}
-              onPauseToggle={toggleQueuePause}
-              onRemove={async (id, force) => {
-                await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-              }}
-              onDownload={(item) => {
-                if (item.result?.videoPath) {
-                  window.open(`/api/export?id=${item.id}`, '_blank');
-                }
-              }}
-              className="shadow-lg"
-            />
-          </div>
         </div>
       </main>
     );
@@ -174,6 +170,21 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] font-sans overflow-hidden">
+      {/* Global Queue Drawer */}
+      <QueueDrawer
+        items={queueItems}
+        isPaused={queuePaused}
+        onPauseToggle={toggleQueuePause}
+        onRemove={async (id: string, force?: boolean) => {
+          await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+        }}
+        onDownload={(item: QueueItem) => {
+          if (item.result?.videoPath) {
+            window.open(`/api/export?id=${item.id}`, '_blank');
+          }
+        }}
+      />
+
       {/* Top Menu Bar */}
       <header className="h-9 border-b border-[#333333] bg-[#2d2d2d] flex items-center justify-between px-3 shrink-0 select-none">
         <div className="flex items-center space-x-4">
@@ -186,26 +197,7 @@ export default function Home() {
           </nav>
         </div>
         
-        <div className="flex items-center space-x-2">
-          {/* Queue controls */}
-          {queueItems.length > 0 && (
-            <>
-              <button
-                onClick={toggleQueuePause}
-                className="flex items-center space-x-1.5 px-2 py-1 text-xs bg-[#3e3e42] hover:bg-[#4e4e52] border border-[#2d2d2d] hover:border-[#555555] rounded-sm transition-all"
-                title={queuePaused ? "Resume Processing" : "Pause Processing"}
-              >
-                {queuePaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
-                <span>{queuePaused ? "Resume" : "Pause"} Queue</span>
-              </button>
-              
-              <span className="text-[10px] text-[#888888] font-mono">
-                {queueItems.filter(i => i.status === 'pending').length} queued
-              </span>
-              
-              <div className="h-4 w-px bg-[#444444]" />
-            </>
-          )}
+        <div className="flex items-center space-x-2 mr-24"> {/* mr-24 gives space for queue button */}
           
           <button 
             onClick={() => setShowRawEditor(true)}
@@ -374,20 +366,7 @@ export default function Home() {
                 }}
               />
               
-              {/* Queue Display using shared component */}
-              <QueuePanel
-                items={queueItems}
-                isPaused={queuePaused}
-                onPauseToggle={toggleQueuePause}
-                onRemove={async (id, force) => {
-                  await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-                }}
-                onDownload={(item) => {
-                  if (item.result?.videoPath) {
-                    window.open(`/api/export?id=${item.id}`, '_blank');
-                  }
-                }}
-              />
+              {/* Queue is now handled by global QueueDrawer in top-right */}
            </div>
         </div>
       </div>
