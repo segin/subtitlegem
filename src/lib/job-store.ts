@@ -1,6 +1,3 @@
-// A simple in-memory store for tracking long-running job statuses.
-// For production, this should be replaced with a persistent store like Redis.
-
 export interface Job {
   id: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
@@ -39,11 +36,10 @@ export const getJob = (id: string): Job | undefined => {
   return jobs.get(id);
 };
 
-// Simple cleanup for old jobs (run periodically or on startup)
-export const cleanupJobs = () => {
+export function cleanupOldJobs(maxAgeMs: number = 3600000) {
     const now = Date.now();
     for (const [id, job] of jobs.entries()) {
-        if (now - job.createdAt > 1000 * 60 * 60 * 24) { // 24 hours
+        if (now - job.createdAt > maxAgeMs) {
             jobs.delete(id);
         }
     }
