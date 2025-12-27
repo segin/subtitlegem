@@ -6,15 +6,29 @@ export interface BurnOptions {
   hwaccel?: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
   preset?: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf?: number; // 0-51, 23 is default
-  onProgress?: (progress: number, details: any) => void;
+  sampleDuration?: number;
+  onProgress?: (progress: number, details?: any) => void;
 }
 
 export async function getAudioCodec(filePath: string): Promise<string> {
-  // ... existing code
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(filePath, (err, metadata) => {
+      if (err) return reject(err);
+      const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
+      resolve(audioStream?.codec_name || 'unknown');
+    });
+  });
 }
 
 export async function extractAudio(videoPath: string, outputPath: string): Promise<string> {
-  // ... existing code
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .noVideo()
+      .audioCodec('copy')
+      .on('end', () => resolve(outputPath))
+      .on('error', reject)
+      .save(outputPath);
+  });
 }
 
 // Overhauled burnSubtitles function
@@ -24,6 +38,7 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
       hwaccel = 'none', 
       preset = 'veryfast', 
       crf = 23, 
+      sampleDuration,
       onProgress 
     } = options;
 
@@ -55,6 +70,10 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
     }
 
     command.videoCodec(videoCodec);
+
+    if (sampleDuration && sampleDuration > 0) {
+      command.outputOptions([`-t ${sampleDuration}`]);
+    }
 
     if (videoCodec === 'libx264') {
       command.outputOptions([
