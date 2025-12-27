@@ -4,6 +4,9 @@ import { queueManager } from '@/lib/queue-manager';
 // GET /api/queue - Get current queue status
 export async function GET() {
   try {
+    // Initialize and recover from any crashes on first call
+    await queueManager.initialize();
+    
     const items = queueManager.getAllItems();
     const stats = queueManager.getStats();
     const config = queueManager.getConfig();

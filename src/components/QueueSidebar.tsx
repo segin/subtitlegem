@@ -2,7 +2,7 @@
 
 import React from "react";
 import { QueueItem } from "@/lib/queue-manager";
-import { Pencil, Trash2, Loader2, CheckCircle, XCircle, Clock, Download } from "lucide-react";
+import { Pencil, Trash2, Loader2, CheckCircle, XCircle, Clock, Download, AlertTriangle, RotateCcw } from "lucide-react";
 
 interface QueueSidebarProps {
   items: QueueItem[];
@@ -34,13 +34,21 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
     }
   };
 
-  const getStatusIcon = (status: QueueItem['status']) => {
+  const getStatusIcon = (status: QueueItem['status'], failureReason?: QueueItem['failureReason']) => {
     switch (status) {
       case 'processing':
         return <Loader2 className="w-4 h-4 text-[#007acc] animate-spin" />;
       case 'completed':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
       case 'failed':
+        // Different icon for crash failures
+        if (failureReason === 'crash') {
+          return (
+            <div title="Server crash during processing">
+              <AlertTriangle className="w-4 h-4 text-orange-500" />
+            </div>
+          );
+        }
         return <XCircle className="w-4 h-4 text-red-500" />;
       case 'pending':
         return <Clock className="w-4 h-4 text-[#888888]" />;
@@ -123,10 +131,20 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0 pr-2">
                       <div className="flex items-center space-x-2 mb-1">
-                        {getStatusIcon(item.status)}
+                        {getStatusIcon(item.status, item.failureReason)}
                         <span className="text-xs font-medium text-[#e1e1e1] truncate">
                           {item.file.name}
                         </span>
+                        {item.failureReason === 'crash' && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-orange-950/30 text-orange-400 border border-orange-900/50 rounded" title="Will retry - server crashed">
+                            CRASH
+                          </span>
+                        )}
+                        {item.retryCount && item.retryCount > 0 && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-[#2d2d2d] text-[#888888] border border-[#333333] rounded" title={`Retried ${item.retryCount} time(s)`}>
+                            ×{item.retryCount}
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-[#888888] font-mono">
                         {formatFileSize(item.file.size)}

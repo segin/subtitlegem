@@ -1,5 +1,8 @@
 import { SubtitleLine } from '@/types/subtitle';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export interface QueueItem {
   id: string;
@@ -18,9 +21,11 @@ export interface QueueItem {
     videoPath: string;
   };
   error?: string;
+  failureReason?: 'crash' | 'api_error' | 'user_cancelled' | 'unknown'; // Type of failure
   createdAt: number;
   startedAt?: number;
   completedAt?: number;
+  retryCount?: number; // Number of times this job has been retried
 }
 
 export interface QueueConfig {
@@ -41,12 +46,152 @@ class QueueManager {
   private queue: Map<string, QueueItem> = new Map();
   private processing: Set<string> = new Set();
   private paused: boolean = false;
+  private initialized: boolean = false;
+  private persistencePath: string;
   
   private config: QueueConfig = {
     stagingDir: '',
     maxConcurrent: 1, // Sequential by default
     autoStart: false,
   };
+
+  constructor() {
+    // Set persistence path to staging directory or temp
+    const baseDir = process.env.STAGING_DIR || path.join(os.tmpdir(), 'subtitlegem');
+    this.persistencePath = path.join(baseDir, 'queue-state.json');
+    
+    // Register shutdown handlers to save state on exit
+    if (typeof process !== 'undefined') {
+      process.on('SIGINT', () => {
+        console.log('[Queue] SIGINT received - saving state...');
+        this.saveState();
+        process.exit(0);
+      });
+      
+      process.on('SIGTERM', () => {
+        console.log('[Queue] SIGTERM received - saving state...');
+        this.saveState();
+        process.exit(0);
+      });
+      
+      process.on('exit', () => {
+        console.log('[Queue] Process exiting - saving state...');
+        this.saveState();
+      });
+      
+      // Handle uncaught exceptions
+      process.on('uncaughtException', (err) => {
+        console.error('[Queue] Uncaught exception - saving state...', err);
+        this.saveState();
+        process.exit(1);
+      });
+    }
+  }
+
+  /**
+   * Save queue state to disk for crash recovery
+   */
+  private saveState(): void {
+    try {
+      const state = {
+        items: Array.from(this.queue.entries()),
+        processing: Array.from(this.processing),
+        paused: this.paused,
+        config: this.config,
+        savedAt: Date.now(),
+      };
+      
+      // Ensure directory exists
+      const dir = path.dirname(this.persistencePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      
+      fs.writeFileSync(this.persistencePath, JSON.stringify(state, null, 2));
+    } catch (error) {
+      console.error('[Queue] Failed to save state:', error);
+    }
+  }
+
+  /**
+   * Load queue state from disk
+   */
+  private loadState(): void {
+    try {
+      if (!fs.existsSync(this.persistencePath)) {
+        return;
+      }
+      
+      const data = fs.readFileSync(this.persistencePath, 'utf-8');
+      const state = JSON.parse(data);
+      
+      // Restore queue items
+      this.queue = new Map(state.items);
+      this.processing = new Set(state.processing);
+      this.paused = state.paused || false;
+      
+      if (state.config) {
+        this.config = { ...this.config, ...state.config };
+      }
+      
+      console.log(`[Queue] Loaded ${this.queue.size} items from disk (saved at ${new Date(state.savedAt).toISOString()})`);
+    } catch (error) {
+      console.error('[Queue] Failed to load state:', error);
+    }
+  }
+
+  /**
+   * Initialize queue manager and recover from crashes
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+    
+    // Load persisted state from disk
+    this.loadState();
+    
+    // Check for any items that were processing when server stopped
+    const processingItems = Array.from(this.queue.values())
+      .filter(item => item.status === 'processing');
+    
+    let wasInterrupted = processingItems.length > 0;
+    
+    if (processingItems.length > 0) {
+      console.log(`[Queue Recovery] Found ${processingItems.length} interrupted jobs`);
+      
+      // Mark as failed with crash reason and requeue at top
+      processingItems.forEach(item => {
+        this.updateItem(item.id, {
+          status: 'failed',
+          error: 'Server was restarted during processing',
+          failureReason: 'crash',
+          progress: 0,
+          completedAt: Date.now(),
+        });
+        
+        this.processing.delete(item.id);
+        
+        // Requeue at the top (will be processed first)
+        this.requeueItem(item.id, true);
+      });
+      
+      console.log('[Queue Recovery] Interrupted jobs requeued with crash status');
+    }
+    
+    // ALWAYS pause queue after any restart if there were jobs
+    // (whether shutdown was clean or crash)
+    if (this.queue.size > 0) {
+      this.paused = true;
+      if (wasInterrupted) {
+        console.log('[Queue Recovery] Queue PAUSED - interrupted jobs detected');
+      } else {
+        console.log('[Queue Recovery] Queue PAUSED - server was restarted');
+      }
+      console.log('[Queue] User must manually resume processing');
+    }
+    
+    this.initialized = true;
+    this.saveState(); // Save after recovery
+  }
 
   /**
    * Add a new item to the queue
@@ -61,6 +206,7 @@ class QueueManager {
     };
     
     this.queue.set(queueItem.id, queueItem);
+    this.saveState(); // Persist to disk
     
     if (this.config.autoStart && !this.paused) {
       this.processNext();
@@ -97,6 +243,7 @@ class QueueManager {
     const item = this.queue.get(id);
     if (item) {
       Object.assign(item, updates);
+      this.saveState(); // Persist to disk
     }
   }
 
@@ -117,7 +264,12 @@ class QueueManager {
       this.processNext(); // Start next item
     }
     
-    return this.queue.delete(id);
+    const removed = this.queue.delete(id);
+    if (removed) {
+      this.saveState(); // Persist to disk
+    }
+    
+    return removed;
   }
 
   /**
@@ -218,6 +370,7 @@ class QueueManager {
    */
   async start(): Promise<void> {
     this.paused = false;
+    this.saveState(); // Persist pause state
     this.processNext();
   }
 
@@ -226,6 +379,7 @@ class QueueManager {
    */
   pause(): void {
     this.paused = true;
+    this.saveState(); // Persist pause state
   }
 
   /**
@@ -305,25 +459,72 @@ class QueueManager {
   /**
    * Mark an item as failed and optionally keep in queue for retry
    */
-  failItem(id: string, error: string, retry: boolean = true): void {
+  failItem(id: string, error: string, retry: boolean = true, reason: QueueItem['failureReason'] = 'unknown'): void {
     if (retry) {
       // Keep in queue as failed for retry
+      const item = this.queue.get(id);
+      const retryCount = (item?.retryCount || 0) + 1;
+      
       this.updateItem(id, {
         status: 'failed',
         error,
+        failureReason: reason,
         completedAt: Date.now(),
+        retryCount,
       });
     } else {
       // Mark as failed and remove from processing
       this.updateItem(id, {
         status: 'failed',
         error,
+        failureReason: reason,
         completedAt: Date.now(),
       });
     }
     
     this.processing.delete(id);
     this.processNext();
+  }
+
+  /**
+   * Requeue a failed item (optionally at the top for crash recovery)
+   */
+  requeueItem(id: string, prioritize: boolean = false): boolean {
+    const item = this.queue.get(id);
+    
+    if (!item || (item.status !== 'failed' && item.status !== 'pending')) {
+      return false;
+    }
+    
+    // Reset to pending state
+    this.updateItem(id, {
+      status: 'pending',
+      progress: 0,
+      error: undefined,
+      completedAt: undefined,
+      startedAt: undefined,
+    });
+    
+    // If prioritizing (e.g., crash recovery), adjust creation time to be earliest
+    if (prioritize) {
+      const earliestTime = Math.min(
+        ...Array.from(this.queue.values())
+          .filter(i => i.status === 'pending')
+          .map(i => i.createdAt),
+        Date.now()
+      );
+      
+      this.updateItem(id, {
+        createdAt: earliestTime - 1, // Ensure it's first
+      });
+    }
+    
+    // Auto-start if not paused
+    if (!this.paused) {
+      this.processNext();
+    }
+    
+    return true;
   }
 
   /**
