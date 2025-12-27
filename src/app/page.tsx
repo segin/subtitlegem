@@ -1,27 +1,55 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { VideoUpload } from "@/components/VideoUpload";
 import { SubtitleTimeline } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
+import { QueueSidebar } from "@/components/QueueSidebar";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
+import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { v4 as uuidv4 } from "uuid";
-import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo } from "lucide-react";
+import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo, Play, Pause } from "lucide-react";
 
 export default function Home() {
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoPath, setVideoPath] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [config, setConfig] = useState<SubtitleConfig>(DEFAULT_CONFIG);
   const [showRawEditor, setShowRawEditor] = useState(false);
   const [activeTab, setActiveTab] = useState<'list' | 'style'>('list');
+  
+  // Queue state
+  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
+  const [queuePaused, setQueuePaused] = useState(false);
+  
+  // Poll queue status
+  useEffect(() => {
+    const pollQueue = async () => {
+      try {
+        const res = await fetch('/api/queue');
+        if (res.ok) {
+          const data = await res.json();
+          setQueueItems(data.items);
+          setQueuePaused(data.isPaused);
+        }
+      } catch (err) {
+        console.error('Failed to poll queue:', err);
+      }
+    };
+    
+    pollQueue();
+    const interval = setInterval(pollQueue, 2000); // Poll every 2 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
 
-  const handleUploadComplete = (rawSubtitles: any[], url: string) => {
+  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string) => {
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
       startTime: parseSRTTime(s.startTime),
@@ -31,6 +59,51 @@ export default function Home() {
     }));
     setSubtitles(mapped);
     setVideoUrl(url);
+    setVideoPath(serverPath);
+  };
+  
+  const handleEditFromQueue = async (item: QueueItem) => {
+    // Load the queue item back into the editor
+    // User wants to edit before processing
+    
+    // Remove from queue
+    await fetch(`/api/queue?id=${item.id}`, { method: 'DELETE' });
+    
+    // If it has results, load them
+    if (item.result) {
+      setSubtitles(item.result.subtitles);
+      setVideoUrl(URL.createObjectURL(new File([], item.file.name)));
+      setVideoPath(item.result.videoPath);
+    }
+    
+    // Refresh queue
+    const res = await fetch('/api/queue');
+    if (res.ok) {
+      const data = await res.json();
+      setQueueItems(data.items);
+    }
+  };
+  
+  const handleRemoveFromQueue = async (id: string) => {
+    await fetch(`/api/queue?id=${id}`, { method: 'DELETE' });
+    
+    // Refresh queue
+    const res = await fetch('/api/queue');
+    if (res.ok) {
+      const data = await res.json();
+      setQueueItems(data.items);
+    }
+  };
+  
+  const toggleQueuePause = async () => {
+    const action = queuePaused ? 'resume' : 'pause';
+    await fetch('/api/queue', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action })
+    });
+    
+    setQueuePaused(!queuePaused);
   };
 
   const handleDownloadSRT = () => {
@@ -94,6 +167,26 @@ export default function Home() {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Queue controls */}
+          {queueItems.length > 0 && (
+            <>
+              <button
+                onClick={toggleQueuePause}
+                className="flex items-center space-x-1.5 px-2 py-1 text-xs bg-[#3e3e42] hover:bg-[#4e4e52] border border-[#2d2d2d] hover:border-[#555555] rounded-sm transition-all"
+                title={queuePaused ? "Resume Processing" : "Pause Processing"}
+              >
+                {queuePaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                <span>{queuePaused ? "Resume" : "Pause"} Queue</span>
+              </button>
+              
+              <span className="text-[10px] text-[#888888] font-mono">
+                {queueItems.filter(i => i.status === 'pending').length} queued
+              </span>
+              
+              <div className="h-4 w-px bg-[#444444]" />
+            </>
+          )}
+          
           <button 
             onClick={() => setShowRawEditor(true)}
             className="flex items-center space-x-1.5 px-2 py-1 text-xs bg-[#3e3e42] hover:bg-[#4e4e52] border border-[#2d2d2d] hover:border-[#555555] rounded-sm transition-all"
@@ -209,6 +302,7 @@ export default function Home() {
                     onUpdate={setSubtitles} 
                     currentTime={currentTime}
                     onSeek={setCurrentTime}
+                    secondaryLanguage="Simplified Chinese"
                   />
                 </div>
               ) : (
@@ -218,6 +312,13 @@ export default function Home() {
               )}
            </div>
         </div>
+
+        {/* Queue Sidebar */}
+        <QueueSidebar 
+          items={queueItems}
+          onEdit={handleEditFromQueue}
+          onRemove={handleRemoveFromQueue}
+        />
       </div>
 
       {showRawEditor && (

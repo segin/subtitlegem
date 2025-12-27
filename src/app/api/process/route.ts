@@ -157,13 +157,17 @@ export async function POST(req: NextRequest) {
     const geminiFile = await uploadToGemini(processPath, mimeType);
     const subtitles = await generateSubtitles(geminiFile.uri, mimeType, secondaryLanguage === "None" ? undefined : secondaryLanguage, 1, modelName);
 
-    // Clean up
+    // Clean up - KEEP the original video, only delete extracted audio
     try {
-        if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-        if (processPath !== videoPath && fs.existsSync(processPath)) fs.unlinkSync(processPath);
+        // Only delete the audio extract if we created one
+        if (processPath !== videoPath && fs.existsSync(processPath)) {
+          fs.unlinkSync(processPath);
+          console.log(`Cleaned up audio extract: ${processPath}`);
+        }
+        // DO NOT delete videoPath - it's needed for preview and export
     } catch (e) { console.error("Cleanup error", e); }
 
-    // Return the path of the ORIGINAL video, not the audio extract
+    // Return the path of the ORIGINAL video for preview/export
     return NextResponse.json({ subtitles, videoPath });
 
   } catch (error: any) {
