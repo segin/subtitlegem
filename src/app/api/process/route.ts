@@ -135,15 +135,15 @@ export async function POST(req: NextRequest) {
     // For large files (>400MB), extract audio for Gemini
     if (fileSizeInMB > LARGE_FILE_THRESHOLD_MB) {
       console.log(`Large file detected (${fileSizeInMB.toFixed(2)} MB) - extracting audio`);
-      const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.mp3`);
+      const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.m4a`);
       
       await new Promise<void>((resolve, reject) => {
         ffmpeg(videoPath)
           .noVideo()
-          .audioCodec('libmp3lame')
-          .audioBitrate('128k')
+          .audioCodec('copy') // Stream copy - no re-encoding!
+          .outputOptions('-movflags', 'faststart') // Optimize for streaming
           .on('end', () => {
-            console.log('Audio extraction complete');
+            console.log('Audio extraction complete (stream copy - no re-encoding)');
             resolve();
           })
           .on('error', (err: any) => {
