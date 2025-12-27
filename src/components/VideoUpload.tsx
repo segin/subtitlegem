@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2 } from "lucide-react";
 
 interface VideoUploadProps {
@@ -13,6 +13,7 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
   const [model, setModel] = useState("gemini-2.5-flash");
+  const [isDragging, setIsDragging] = useState(false);
   
   const [progress, setProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
@@ -20,6 +21,7 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [uploadSpeed, setUploadSpeed] = useState(0);
 
   const startTimeRef = useRef<number>(0);
+  const dragCounterRef = useRef(0);
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
@@ -30,13 +32,56 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+  const handleFileSelect = useCallback((selectedFile: File) => {
+    if (selectedFile.type.startsWith('video/')) {
+      setFile(selectedFile);
       setError(null);
       setProgress(0);
+    } else {
+      setError('Please select a video file');
+    }
+  }, []);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleFileSelect(e.target.files[0]);
     }
   };
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current--;
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFileSelect(e.dataTransfer.files[0]);
+      e.dataTransfer.clearData();
+    }
+  }, [handleFileSelect]);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -147,10 +192,27 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
       {!file ? (
         <label 
           htmlFor="video-input" 
-          className="group cursor-pointer flex flex-col items-center justify-center h-48 border border-dashed border-[#444444] bg-[#2d2d2d] hover:bg-[#333333] hover:border-[#666666] transition-all"
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className={`group cursor-pointer flex flex-col items-center justify-center h-48 border-2 border-dashed transition-all ${
+            isDragging 
+              ? 'border-[#007acc] bg-[#007acc]/10 scale-[1.02]' 
+              : 'border-[#444444] bg-[#2d2d2d] hover:bg-[#333333] hover:border-[#666666]'
+          }`}
         >
-          <Upload className="w-8 h-8 text-[#666666] group-hover:text-[#999999] mb-3" />
-          <span className="text-sm font-medium text-[#999999] group-hover:text-[#cccccc]">Import Media File</span>
+          <Upload className={`w-8 h-8 mb-3 transition-colors ${
+            isDragging ? 'text-[#007acc]' : 'text-[#666666] group-hover:text-[#999999]'
+          }`} />
+          <span className={`text-sm font-medium transition-colors ${
+            isDragging ? 'text-[#007acc]' : 'text-[#999999] group-hover:text-[#cccccc]'
+          }`}>
+            {isDragging ? 'Drop video here' : 'Import Media File'}
+          </span>
+          <span className="text-[10px] text-[#666666] mt-1">
+            or click to browse
+          </span>
         </label>
       ) : (
         <div className="space-y-6">
