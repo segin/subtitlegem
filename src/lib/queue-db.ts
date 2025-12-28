@@ -6,10 +6,9 @@
  */
 
 import Database from 'better-sqlite3';
-import * as path from 'path';
+import path from 'path';
+import { getStagingDir, ensureStagingStructure } from './storage-config';
 import { QueueItem, QueueItemStatus } from './queue-manager';
-
-const STAGING_DIR = process.env.STAGING_DIR || '/tmp/subtitlegem';
 
 let db: Database.Database | null = null;
 
@@ -19,7 +18,9 @@ let db: Database.Database | null = null;
 function getDb(): Database.Database {
   if (db) return db;
   
-  const dbPath = path.join(STAGING_DIR, 'queue.db');
+  const stagingDir = getStagingDir();
+  ensureStagingStructure(stagingDir);
+  const dbPath = path.join(stagingDir, 'queue.db');
   console.log(`[SQLite] Opening database at ${dbPath}`);
   
   db = new Database(dbPath);

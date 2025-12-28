@@ -3,9 +3,9 @@ import { queueManager } from "@/lib/queue-manager";
 import { burnSubtitles } from "@/lib/ffmpeg-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { SubtitleLine, SubtitleConfig, FFmpegConfig } from "@/types/subtitle";
-import fs from "fs";
-import path from "path";
-import os from "os";
+import * as fs from "fs";
+import * as path from "path";
+import { getStagingDir } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
 
 export const runtime = 'nodejs';
@@ -29,6 +29,7 @@ const exportMetadata = new Map<string, {
 export async function POST(req: NextRequest) {
   try {
     const { videoPath, subtitles, config, sampleDuration }: ExportRequest = await req.json();
+    const stagingDir = getStagingDir();
 
     if (!videoPath) {
       return NextResponse.json({ error: "Missing video path" }, { status: 400 });
@@ -38,38 +39,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video file not found" }, { status: 404 });
     }
 
-    if (!subtitles || subtitles.length === 0) {
-      return NextResponse.json({ error: "No subtitles to export" }, { status: 400 });
-    }
-
-    const stagingDir = process.env.STAGING_DIR || path.join(os.tmpdir(), 'subtitlegem');
-    if (!fs.existsSync(stagingDir)) {
-      fs.mkdirSync(stagingDir, { recursive: true });
-    }
-
+    // Generate unique ID for this export job
     const jobId = uuidv4();
-    const assPath = path.join(stagingDir, `${jobId}.ass`);
-    const fileName = path.basename(videoPath, path.extname(videoPath));
-    const suffix = sampleDuration ? `_sample_${sampleDuration}s` : '';
-    const outputPath = path.join(stagingDir, `${fileName}${suffix}_subtitled.mp4`);
+    const exportDir = path.join(stagingDir, "exports", jobId);
+    
+    if (!fs.existsSync(exportDir)) {
+      fs.mkdirSync(exportDir, { recursive: true });
+    }
 
-    // Generate ASS subtitle file
+    const assPath = path.join(exportDir, "subtitles.ass");
+    const outputName = `export_${path.basename(videoPath, path.extname(videoPath))}_${Date.now()}.mp4`;
+    const outputPath = path.join(exportDir, outputName);
+
+    // Generate ASS file
     const assContent = generateAss(subtitles, config);
-    fs.writeFileSync(assPath, assContent, 'utf-8');
-
-    // Get file info
-    const fileStats = fs.statSync(videoPath);
+    fs.writeFileSync(assPath, assContent);
 
     // Add to queue
     const queueItem = queueManager.addItem({
       file: {
-        name: `${fileName}${suffix}.mp4`,
-        size: fileStats.size,
-        path: videoPath,
+        name: `Export: ${path.basename(videoPath)}`,
+        size: fs.statSync(videoPath).size,
+        type: "video/mp4",
       },
-      model: 'export',
-      secondaryLanguage: 'export',
-      sampleDuration: sampleDuration || undefined,
     });
 
     // Store export metadata
@@ -87,31 +79,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       queueItemId: queueItem.id,
-      message: `Export job added${sampleDuration ? ` (${sampleDuration}s sample)` : ''}`,
+      message: `Export job added${sampleDuration ? ` (${sampleDuration}s sample)` : ''}`
     });
 
   } catch (error: any) {
-    console.error("Export error:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to create export job" },
-      { status: 500 }
-    );
+    console.error("[Export API] Error:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
 
-// Process export job in background
 async function processExportJob(queueItemId: string) {
   const metadata = exportMetadata.get(queueItemId);
   if (!metadata) {
-    queueManager.failItem(queueItemId, "Export metadata not found", false, 'unknown');
+    queueManager.failItem(queueItemId, "Missing export metadata", false);
     return;
   }
 
   try {
     queueManager.updateItem(queueItemId, {
-      status: 'processing',
-      progress: 0,
+      status: "processing",
       startedAt: Date.now(),
+      progress: 0
     });
 
     await burnSubtitles(metadata.videoPath, metadata.assPath, metadata.outputPath, {
@@ -119,64 +107,44 @@ async function processExportJob(queueItemId: string) {
       hwaccel: metadata.ffmpegConfig.hwaccel,
       preset: metadata.ffmpegConfig.preset,
       crf: metadata.ffmpegConfig.crf,
+      resolution: metadata.ffmpegConfig.resolution,
       onProgress: (percent: number) => {
-        queueManager.updateItem(queueItemId, {
-          progress: Math.round(percent),
-        });
+        queueManager.updateProgress(queueItemId, percent);
       },
     });
 
-    queueManager.completeItem(queueItemId, {
-      subtitles: [],
-      videoPath: metadata.outputPath,
+    // Complete the job
+    queueManager.completeItem(queueItemId, { 
+      videoPath: metadata.outputPath 
     });
-
-    // Cleanup ASS file
-    if (fs.existsSync(metadata.assPath)) {
-      fs.unlinkSync(metadata.assPath);
-    }
-
-    exportMetadata.delete(queueItemId);
-
+    
   } catch (error: any) {
-    console.error(`Export job ${queueItemId} failed:`, error);
-    queueManager.failItem(queueItemId, error.message || "Export failed", true, 'api_error');
+    console.error(`[Export Processor] Job ${queueItemId} failed:`, error);
+    queueManager.failItem(queueItemId, error.message || "Internal FFmpeg error", false);
   }
 }
 
-// GET endpoint to download completed export
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const jobId = searchParams.get('id');
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing ID" }, { status: 400 });
 
-  if (!jobId) {
-    return NextResponse.json({ error: "Missing job ID" }, { status: 400 });
+  const item = queueManager.getItem(id);
+  if (!item || !item.result?.videoPath) {
+    return NextResponse.json({ error: "Export result not found" }, { status: 404 });
   }
 
-  const items = queueManager.getAllItems();
-  const item = items.find(i => i.id === jobId);
-
-  if (!item) {
-    return NextResponse.json({ error: "Job not found" }, { status: 404 });
+  const filePath = item.result.videoPath;
+  if (!fs.existsSync(filePath)) {
+    return NextResponse.json({ error: "File vanished from storage" }, { status: 410 });
   }
 
-  if (item.status !== 'completed') {
-    return NextResponse.json({ error: "Job not completed" }, { status: 400 });
-  }
-
-  if (!item.result?.videoPath || !fs.existsSync(item.result.videoPath)) {
-    return NextResponse.json({ error: "Output file not found" }, { status: 404 });
-  }
-
-  // Stream the file
-  const fileBuffer = fs.readFileSync(item.result.videoPath);
-  const fileName = path.basename(item.result.videoPath);
+  const fileBuffer = fs.readFileSync(filePath);
+  const fileName = path.basename(filePath);
 
   return new NextResponse(fileBuffer, {
     headers: {
-      'Content-Type': 'video/mp4',
-      'Content-Disposition': `attachment; filename="${fileName}"`,
-      'Content-Length': fileBuffer.length.toString(),
+      "Content-Type": "video/mp4",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
     },
   });
 }

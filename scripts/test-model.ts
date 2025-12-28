@@ -15,22 +15,24 @@ async function testModel() {
   console.log("Using API Key:", apiKey.substring(0, 5) + "...");
   
   const ai = new GoogleGenAI({ apiKey });
-  const modelName = "gemini-2.5-flash";
 
   try {
-    console.log(`Testing model: ${modelName}...`);
-    const result = await ai.models.generateContent({
-      model: modelName,
-      contents: "Hello, are you there?",
-    });
-    console.log("Response:", result.text);
-    console.log("Model check PASSED.");
+    console.log("Listing available models...");
+    const pager = await ai.models.list();
+    for await (const model of pager) {
+      const name = model.name || "unknown";
+      if (name.includes("gemini-2.5-flash")) {
+        console.log(`- ${name}`);
+        console.log("Raw Model Keys:", Object.keys(model));
+        console.log("Full Object:", JSON.stringify(model, null, 2));
+        break;
+      }
+    }
+    
+    console.log("\nModel check complete.");
   } catch (error: any) {
     console.error("Model check FAILED:");
     console.error(error.message);
-    if (error.message.includes("404")) {
-      console.error("Hint: The model name might be incorrect.");
-    }
   }
 }
 

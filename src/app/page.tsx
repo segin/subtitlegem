@@ -14,6 +14,7 @@ import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
+import { generateAss } from "@/lib/ass-utils";
 import { v4 as uuidv4 } from "uuid";
 import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo, Play, Pause } from "lucide-react";
 
@@ -163,29 +164,42 @@ export default function Home() {
     setQueuePaused(!queuePaused);
   };
 
-  const handleDownloadSRT = () => {
-    const primaryContent = stringifySRT(subtitles, 'primary');
-    const primaryBlob = new Blob([primaryContent], { type: 'text/plain' });
-    const primaryUrl = URL.createObjectURL(primaryBlob);
-    
+  const handleExport = (format: 'ass' | 'srt' | 'txt') => {
+    let content = "";
+    let fileName = "subtitles";
+    let mimeType = "text/plain";
+
+    if (format === 'ass') {
+      content = generateAss(subtitles, config);
+      fileName = 'project.ass';
+    } else if (format === 'srt') {
+      content = stringifySRT(subtitles, 'primary');
+      fileName = 'subtitles_en.srt';
+    } else if (format === 'txt') {
+      content = subtitles.map(s => s.text).join('\n');
+      fileName = 'transcript.txt';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = primaryUrl;
-    a.download = 'subtitles_en.srt';
+    a.href = url;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
 
-    if (subtitles.some(s => s.secondaryText)) {
-        const secondaryContent = stringifySRT(subtitles, 'secondary');
-        const secondaryBlob = new Blob([secondaryContent], { type: 'text/plain' });
-        const secondaryUrl = URL.createObjectURL(secondaryBlob);
-        
-        const b = document.createElement('a');
-        b.href = secondaryUrl;
-        b.download = 'subtitles_secondary.srt';
-        document.body.appendChild(b);
-        b.click();
-        document.body.removeChild(b);
+    // If srt and has secondary, also download secondary
+    if (format === 'srt' && subtitles.some(s => s.secondaryText)) {
+      const secondaryContent = stringifySRT(subtitles, 'secondary');
+      const secondaryBlob = new Blob([secondaryContent], { type: 'text/plain' });
+      const secondaryUrl = URL.createObjectURL(secondaryBlob);
+      const b = document.createElement('a');
+      b.href = secondaryUrl;
+      b.download = 'subtitles_secondary.srt';
+      document.body.appendChild(b);
+      b.click();
+      document.body.removeChild(b);
     }
   };
 
@@ -248,7 +262,7 @@ export default function Home() {
                 setSubtitles([]);
               }
             }}
-            onExportSRT={handleDownloadSRT}
+            onExport={handleExport}
             onCloseProject={() => {
               if(confirm("Discard current project?")) {
                 setVideoUrl(null);
@@ -279,14 +293,6 @@ export default function Home() {
           >
             <LogOut className="w-3 h-3" />
             <span>Close</span>
-          </button>
-
-          <button 
-            onClick={handleDownloadSRT}
-            className="flex items-center space-x-1.5 px-3 py-1 text-xs font-semibold bg-[#007acc] hover:bg-[#0062a3] text-white rounded-sm border border-[#007acc] transition-colors"
-          >
-            <Download className="w-3 h-3" />
-            <span>Export SRT</span>
           </button>
         </div>
       </header>
@@ -390,6 +396,7 @@ export default function Home() {
                 videoPath={videoPath}
                 config={config}
                 queueItems={queueItems}
+                onChangeConfig={setConfig}
                 onExport={async (sampleDuration, ffmpegConfig) => {
                   if (!videoPath) return;
                   

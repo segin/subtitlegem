@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs';
+import path from 'path';
 import { 
   getStorageConfig, 
   validateStagingDir, 
@@ -7,9 +9,49 @@ import {
   ensureStagingStructure
 } from '@/lib/storage-config';
 
-// GET /api/storage - Get current storage configuration
-export async function GET() {
+// GET /api/storage - Get current storage configuration or serve a file
+export async function GET(req: NextRequest) {
   try {
+    const { searchParams } = new URL(req.url);
+    const filePath = searchParams.get('path');
+
+    if (filePath) {
+      // Security: Ensure path is within allowed directories
+      const config = getStorageConfig();
+      const stagingDir = config.stagingDir;
+      const absolutePath = path.resolve(filePath);
+      
+      const isAllowed = absolutePath.startsWith(stagingDir) || 
+                         absolutePath.startsWith('/tmp/') || 
+                         absolutePath.includes('subtitlegem');
+
+      if (!isAllowed) {
+        return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+      }
+
+      if (!fs.existsSync(absolutePath)) {
+        return NextResponse.json({ error: 'File not found' }, { status: 404 });
+      }
+
+      // Serve the file
+      const fileBuffer = fs.readFileSync(absolutePath);
+      const fileExtension = path.extname(absolutePath).toLowerCase();
+      
+      let contentType = 'application/octet-stream';
+      if (fileExtension === '.mp4') contentType = 'video/mp4';
+      else if (fileExtension === '.webm') contentType = 'video/webm';
+      else if (fileExtension === '.mkv') contentType = 'video/x-matroska';
+      else if (fileExtension === '.srt') contentType = 'text/plain';
+      else if (fileExtension === '.ass') contentType = 'text/plain';
+
+      return new NextResponse(fileBuffer, {
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': fileBuffer.length.toString(),
+        },
+      });
+    }
+
     const config = getStorageConfig();
     const validation = await validateStagingDir(config.stagingDir);
     const currentSizeGB = getStagingDirSize(config.stagingDir);

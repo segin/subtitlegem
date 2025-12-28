@@ -70,10 +70,16 @@ export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): 
     const events = [
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
-        ...subtitles.map(sub => `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Primary,,0,0,0,,${sanitizeAssText(sub.text)}`),
+        ...subtitles.map(sub => {
+            const colorTag = sub.primaryColor ? `{\\c${hexToAssColor(sub.primaryColor)}}` : '';
+            return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Primary,,0,0,0,,${colorTag}${sanitizeAssText(sub.text)}`;
+        }),
         ...subtitles
             .filter(sub => sub.secondaryText)
-            .map(sub => `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Secondary,,0,0,0,,${sanitizeAssText(sub.secondaryText!)}`),
+            .map(sub => {
+                const colorTag = sub.secondaryColor ? `{\\c${hexToAssColor(sub.secondaryColor)}}` : '';
+                return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Secondary,,0,0,0,,${colorTag}${sanitizeAssText(sub.secondaryText!)}`;
+            }),
     ].join('\n');
     
     return `${scriptInfo}${styles}${events}`;

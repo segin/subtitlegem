@@ -16,7 +16,7 @@ export interface StorageValidation {
 }
 
 const DEFAULT_CONFIG: StorageConfig = {
-  stagingDir: process.env.STAGING_DIR || path.join(os.tmpdir(), 'subtitlegem'),
+  stagingDir: process.env.STAGING_DIR || path.join(process.cwd(), 'storage'),
   autoCleanup: true,
   maxStorageUsageGB: 50,
 };

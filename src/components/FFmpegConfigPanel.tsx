@@ -26,13 +26,10 @@ interface FFmpegCapabilities {
 }
 
 export interface ExportConfig {
-  container: string;
-  videoEncoder: string;
-  audioEncoder: string;
-  videoBitrate: string;
-  audioBitrate: string;
-  resolution: string;
+  hwaccel: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
+  preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
+  resolution: string;
 }
 
 interface FFmpegConfigPanelProps {
@@ -41,13 +38,10 @@ interface FFmpegConfigPanelProps {
 }
 
 const DEFAULT_CONFIG: ExportConfig = {
-  container: 'mp4',
-  videoEncoder: 'libx264',
-  audioEncoder: 'aac',
-  videoBitrate: 'auto',
-  audioBitrate: '128k',
-  resolution: 'original',
+  hwaccel: 'none',
+  preset: 'veryfast',
   crf: 23,
+  resolution: 'original',
 };
 
 const RESOLUTIONS = [
@@ -154,89 +148,54 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
           </div>
         )}
 
-        {/* Container Format */}
+        {/* Hardware Acceleration */}
         <div className="space-y-1">
           <label className="flex items-center space-x-1 text-[10px] uppercase font-bold text-[#666666] tracking-wider">
-            <HardDrive className="w-3 h-3" />
-            <span>Container</span>
+            <Cpu className="w-3 h-3" />
+            <span>Hardware Acceleration</span>
           </label>
           <select
-            value={config.container}
-            onChange={(e) => update({ container: e.target.value })}
+            value={config.hwaccel}
+            onChange={(e) => update({ hwaccel: e.target.value as any })}
             disabled={loading}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >
-            {capabilities?.formats.map(f => (
-              <option key={f.name} value={f.name}>
-                {f.name.toUpperCase()} - {f.description}
-              </option>
-            )) || (
-              <>
-                <option value="mp4">MP4 - MPEG-4 Part 14</option>
-                <option value="matroska">MKV - Matroska</option>
-                <option value="webm">WebM</option>
-              </>
-            )}
+            <option value="none">None (CPU)</option>
+            {capabilities?.hwaccels.includes('nvenc') && <option value="nvenc">NVIDIA (NVENC)</option>}
+            {capabilities?.hwaccels.includes('qsv') && <option value="qsv">Intel (QuickSync)</option>}
+            {capabilities?.hwaccels.includes('videotoolbox') && <option value="videotoolbox">Apple (VideoToolbox)</option>}
           </select>
         </div>
 
-        {/* Video Encoder */}
+        {/* Preset */}
         <div className="space-y-1">
           <label className="flex items-center space-x-1 text-[10px] uppercase font-bold text-[#666666] tracking-wider">
-            <Film className="w-3 h-3" />
-            <span>Video Encoder</span>
+            <Settings className="w-3 h-3" />
+            <span>Preset</span>
           </label>
           <select
-            value={config.videoEncoder}
-            onChange={(e) => update({ videoEncoder: e.target.value })}
+            value={config.preset}
+            onChange={(e) => update({ preset: e.target.value as any })}
             disabled={loading}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >
-            {capabilities?.videoEncoders.map(e => (
-              <option key={e.name} value={e.name}>
-                {e.name} {e.isHardware ? '(HW)' : ''} - {e.description}
-              </option>
-            )) || (
-              <>
-                <option value="libx264">libx264 - H.264</option>
-                <option value="libx265">libx265 - H.265/HEVC</option>
-              </>
-            )}
-          </select>
-        </div>
-
-        {/* Audio Encoder */}
-        <div className="space-y-1">
-          <label className="flex items-center space-x-1 text-[10px] uppercase font-bold text-[#666666] tracking-wider">
-            <Volume2 className="w-3 h-3" />
-            <span>Audio Encoder</span>
-          </label>
-          <select
-            value={config.audioEncoder}
-            onChange={(e) => update({ audioEncoder: e.target.value })}
-            disabled={loading}
-            className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-          >
-            <option value="copy">Copy Original (No Re-encode)</option>
-            {capabilities?.audioEncoders.map(e => (
-              <option key={e.name} value={e.name}>
-                {e.name} - {e.description}
-              </option>
-            )) || (
-              <>
-                <option value="aac">AAC</option>
-                <option value="libmp3lame">MP3</option>
-                <option value="flac">FLAC (Lossless)</option>
-                <option value="pcm_s16le">PCM 16-bit (Uncompressed)</option>
-              </>
-            )}
+            <option value="ultrafast">Ultrafast</option>
+            <option value="superfast">Superfast</option>
+            <option value="veryfast">Veryfast</option>
+            <option value="faster">Faster</option>
+            <option value="fast">Fast</option>
+            <option value="medium">Medium</option>
+            <option value="slow">Slow</option>
+            <option value="slower">Slower</option>
+            <option value="veryslow">Veryslow</option>
           </select>
         </div>
 
         {/* Resolution */}
         <div className="space-y-1">
-          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">
-            Resolution
+          <label className="flex items-center space-x-1 text-[10px] uppercase font-bold text-[#666666] tracking-wider">
+            <Film className="w-3 h-3" />
+            <span>Resolution</span>
           </label>
           <select
             value={config.resolution}
@@ -266,24 +225,6 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
             <span>Lossless</span>
             <span>Smaller</span>
           </div>
-        </div>
-
-        {/* Audio Bitrate */}
-        <div className="space-y-1">
-          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">
-            Audio Bitrate
-          </label>
-          <select
-            value={config.audioBitrate}
-            onChange={(e) => update({ audioBitrate: e.target.value })}
-            className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-          >
-            <option value="64k">64 kbps (Low)</option>
-            <option value="128k">128 kbps (Standard)</option>
-            <option value="192k">192 kbps (High)</option>
-            <option value="256k">256 kbps (Very High)</option>
-            <option value="320k">320 kbps (Maximum)</option>
-          </select>
         </div>
       </div>
     </div>

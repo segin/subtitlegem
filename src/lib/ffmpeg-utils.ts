@@ -6,6 +6,7 @@ export interface BurnOptions {
   hwaccel?: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
   preset?: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf?: number; // 0-51, 23 is default
+  resolution?: string; // 'original' or 'WIDTHxHEIGHT'
   sampleDuration?: number;
   onProgress?: (progress: number, details?: any) => void;
 }
@@ -38,6 +39,7 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
       hwaccel = 'none', 
       preset = 'veryfast', 
       crf = 23, 
+      resolution = 'original',
       sampleDuration,
       onProgress 
     } = options;
@@ -52,11 +54,19 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
       command.inputOptions('-hwaccel qsv');
     }
 
-    // --- Video Filters ---
-    // ASS format supports more styling than SRT. We use SRT for simplicity, 
-    // but ffmpeg converts it to ASS internally.
-    const subtitlesFilter = `subtitles=${srtPath}`;
-    command.videoFilter(subtitlesFilter);
+    // Video Filters: Aspect Ratio Preservation
+    // ASS format supports more styling than SRT.
+    let videoFilters = [];
+
+    if (resolution && resolution !== 'original' && resolution.includes('x')) {
+      const [width, height] = resolution.split('x');
+      // Scale to fit within target and pad to maintain aspect ratio
+      videoFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
+      videoFilters.push(`pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`);
+    }
+
+    videoFilters.push(`subtitles=${srtPath}`);
+    command.videoFilter(videoFilters.join(','));
 
     // --- Encoding & Output Options ---
     let videoCodec = 'libx264'; // Default CPU encoder

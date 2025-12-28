@@ -12,6 +12,7 @@ interface ExportControlsProps {
   config: SubtitleConfig;
   queueItems: QueueItem[];
   onExport: (sampleDuration: number | null, ffmpegConfig: ExportConfig) => void;
+  onChangeConfig?: (config: SubtitleConfig) => void;
 }
 
 export function ExportControls({
@@ -20,17 +21,17 @@ export function ExportControls({
   config,
   queueItems,
   onExport,
+  onChangeConfig,
 }: ExportControlsProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [ffmpegConfig, setFfmpegConfig] = useState<ExportConfig>(DEFAULT_CONFIG);
 
   const handleExport = async (duration: number | null) => {
     setSelectedDuration(duration);
     setExporting(true);
     
     try {
-      await onExport(duration, ffmpegConfig);
+      await onExport(duration, config.ffmpeg);
     } finally {
       setExporting(false);
       setSelectedDuration(null);
@@ -52,8 +53,8 @@ export function ExportControls({
 
       {/* FFmpeg Config Panel */}
       <FFmpegConfigPanel
-        config={ffmpegConfig}
-        onChange={setFfmpegConfig}
+        config={config.ffmpeg}
+        onChange={(ffmpeg) => onChangeConfig?.({ ...config, ffmpeg })}
       />
 
       <div className="grid grid-cols-2 gap-3">

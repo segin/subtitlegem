@@ -13,7 +13,7 @@ interface ModelInfo {
   description?: string;
   inputTokenLimit?: number;
   outputTokenLimit?: number;
-  supportedGenerationMethods?: string[];
+  supportedActions?: string[];
 }
 
 /**
@@ -25,10 +25,11 @@ export async function GET(req: NextRequest) {
   
   try {
     if (testModel) {
-      // Test a specific model
+      // Test a specific model - prepend models/ if missing
+      const fullModelName = testModel.startsWith("models/") ? testModel : `models/${testModel}`;
       try {
         const response = await ai.models.generateContent({
-          model: testModel,
+          model: fullModelName,
           contents: "Hello, respond with just 'OK' if you can hear me.",
         });
         
@@ -55,14 +56,15 @@ export async function GET(req: NextRequest) {
     for await (const model of pager) {
       const modelName = model.name || "";
       // Only include generative models that support generateContent
-      if ((model as any).supportedGenerationMethods?.includes("generateContent")) {
+      const supportedActions = (model as any).supportedActions || [];
+      if (supportedActions.includes("generateContent")) {
         models.push({
-          name: modelName,
+          name: modelName.replace("models/", ""),
           displayName: model.displayName || modelName,
           description: model.description,
           inputTokenLimit: model.inputTokenLimit,
           outputTokenLimit: model.outputTokenLimit,
-          supportedGenerationMethods: (model as any).supportedGenerationMethods,
+          supportedActions: supportedActions,
         });
       }
     }

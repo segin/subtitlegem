@@ -10,15 +10,12 @@ import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
+import { getStagingDir, ensureStagingStructure } from './storage-config';
 
-const STAGING_DIR = process.env.STAGING_DIR || "/tmp/subtitlegem";
+const stagingDir = getStagingDir();
+ensureStagingStructure(stagingDir);
 
-// Ensure staging directory exists
-if (!fs.existsSync(STAGING_DIR)) {
-  fs.mkdirSync(STAGING_DIR, { recursive: true });
-}
-
-const dbPath = path.join(STAGING_DIR, "drafts.db");
+const dbPath = path.join(stagingDir, "drafts.db");
 const db = new Database(dbPath);
 
 // Enable WAL mode for better performance

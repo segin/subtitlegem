@@ -84,44 +84,55 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
   };
 
   const mergeSelectedSubtitles = () => {
-    if (selectedIds.length !== 2) return;
+    if (selectedIds.length < 2) return;
 
-    const sortedSelectedIds = [...selectedIds].sort((a, b) => {
-      const indexA = subtitles.findIndex(s => s.id === a);
-      const indexB = subtitles.findIndex(s => s.id === b);
-      return indexA - indexB;
-    });
+    // Sort selected indices to check for continuity
+    const selectedIndices = selectedIds
+      .map(id => subtitles.findIndex(s => s.id === id))
+      .sort((a, b) => a - b);
 
-    const index1 = subtitles.findIndex(s => s.id === sortedSelectedIds[0]);
-    const index2 = subtitles.findIndex(s => s.id === sortedSelectedIds[1]);
-
-    // Check for adjacency
-    if (index1 === -1 || index2 === -1 || index2 !== index1 + 1) {
-      alert("Please select two adjacent subtitles to merge.");
-      setSelectedIds([]); // Clear selection if not adjacent
-      return;
+    // Check for continuity
+    for (let i = 0; i < selectedIndices.length - 1; i++) {
+      if (selectedIndices[i] === -1 || selectedIndices[i+1] !== selectedIndices[i] + 1) {
+        alert("Please select sequential subtitles to merge.");
+        return;
+      }
     }
 
-    const sub1 = subtitles[index1];
-    const sub2 = subtitles[index2];
-
+    const firstIndex = selectedIndices[0];
+    const itemsToMerge = selectedIndices.map(idx => subtitles[idx]);
+    
     const mergedSubtitle: SubtitleLine = {
-      id: uuidv4(), // New ID for the merged line
-      startTime: sub1.startTime,
-      endTime: sub2.endTime,
-      text: `${sub1.text || ""}${sub1.text && sub2.text ? " " : ""}${sub2.text || ""}`.trim(),
-      secondaryText: `${sub1.secondaryText || ""}${sub1.secondaryText && sub2.secondaryText ? " " : ""}${sub2.secondaryText || ""}`.trim(),
+      id: uuidv4(),
+      startTime: itemsToMerge[0].startTime,
+      endTime: itemsToMerge[itemsToMerge.length - 1].endTime,
+      text: itemsToMerge.map(s => s.text || "").filter(t => t !== "").join(" "),
+      secondaryText: itemsToMerge.map(s => s.secondaryText || "").filter(t => t !== "").join(" "),
+      // Inherit overrides from first item if present
+      primaryColor: itemsToMerge[0].primaryColor,
+      secondaryColor: itemsToMerge[0].secondaryColor,
     };
 
-    const newSubtitles = subtitles.filter(s => s.id !== sub1.id && s.id !== sub2.id);
-    newSubtitles.splice(index1, 0, mergedSubtitle); // Insert merged subtitle at the first original index
+    const newSubtitles = [...subtitles];
+    newSubtitles.splice(firstIndex, selectedIndices.length, mergedSubtitle);
 
     onUpdate(newSubtitles);
-    setSelectedIds([]); // Clear selection after merging
+    setSelectedIds([]);
   };
 
-  const canMerge = selectedIds.length === 2 && 
-                  Math.abs(subtitles.findIndex(s => s.id === selectedIds[0]) - subtitles.findIndex(s => s.id === selectedIds[1])) === 1;
+  const getCanMerge = () => {
+    if (selectedIds.length < 2) return false;
+    const sortedIndices = selectedIds
+      .map(id => subtitles.findIndex(s => s.id === id))
+      .sort((a, b) => a - b);
+    
+    for (let i = 0; i < sortedIndices.length - 1; i++) {
+        if (sortedIndices[i] === -1 || sortedIndices[i+1] !== sortedIndices[i] + 1) return false;
+    }
+    return true;
+  };
+
+  const canMerge = getCanMerge();
 
   return (
     <div className="flex flex-col h-full bg-[#252526] text-[#cccccc]">
@@ -193,21 +204,76 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
               </div>
 
               <div className="space-y-1">
-                <textarea
-                  className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#cccccc] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
-                  rows={2}
-                  value={sub.text}
-                  onChange={(e) => handleTextChange(sub.id, 'text', e.target.value)}
-                  onBlur={() => handleTranslate(index)}
-                  placeholder="Primary Text..."
-                />
-                <textarea
-                  className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#d7ba7d] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
-                  rows={2}
-                  value={sub.secondaryText || ""}
-                  onChange={(e) => handleTextChange(sub.id, 'secondaryText', e.target.value)}
-                  placeholder="Translation..."
-                />
+                <div className="relative group/textarea">
+                  <textarea
+                    className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#cccccc] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
+                    style={sub.primaryColor ? { color: sub.primaryColor, borderColor: sub.primaryColor + '44' } : {}}
+                    rows={2}
+                    value={sub.text}
+                    onChange={(e) => handleTextChange(sub.id, 'text', e.target.value)}
+                    onBlur={() => handleTranslate(index)}
+                    placeholder="Primary Text..."
+                  />
+                  <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover/textarea:opacity-100 transition-opacity">
+                    <input 
+                      type="color" 
+                      value={sub.primaryColor || "#ffffff"} 
+                      onChange={(e) => {
+                        const updated = subtitles.map(s => s.id === sub.id ? { ...s, primaryColor: e.target.value } : s);
+                        onUpdate(updated);
+                      }}
+                      className="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer"
+                      title="Override Primary Color"
+                    />
+                    {sub.primaryColor && (
+                      <button 
+                        onClick={() => {
+                          const updated = subtitles.map(s => s.id === sub.id ? { ...s, primaryColor: undefined } : s);
+                          onUpdate(updated);
+                        }}
+                        className="text-[9px] bg-[#333] hover:bg-[#444] px-1 rounded text-white"
+                        title="Reset Color"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="relative group/textarea">
+                  <textarea
+                    className="w-full text-xs bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-[#d7ba7d] focus:border-[#007acc] outline-none resize-none transition-all placeholder:text-[#444444]"
+                    style={sub.secondaryColor ? { color: sub.secondaryColor, borderColor: sub.secondaryColor + '44' } : {}}
+                    rows={2}
+                    value={sub.secondaryText || ""}
+                    onChange={(e) => handleTextChange(sub.id, 'secondaryText', e.target.value)}
+                    placeholder="Translation..."
+                  />
+                  <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover/textarea:opacity-100 transition-opacity">
+                    <input 
+                      type="color" 
+                      value={sub.secondaryColor || "#fbbf24"} 
+                      onChange={(e) => {
+                        const updated = subtitles.map(s => s.id === sub.id ? { ...s, secondaryColor: e.target.value } : s);
+                        onUpdate(updated);
+                      }}
+                      className="w-4 h-4 p-0 border-0 bg-transparent cursor-pointer"
+                      title="Override Secondary Color"
+                    />
+                    {sub.secondaryColor && (
+                      <button 
+                        onClick={() => {
+                          const updated = subtitles.map(s => s.id === sub.id ? { ...s, secondaryColor: undefined } : s);
+                          onUpdate(updated);
+                        }}
+                        className="text-[9px] bg-[#333] hover:bg-[#444] px-1 rounded text-white"
+                        title="Reset Color"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           );

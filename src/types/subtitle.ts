@@ -4,6 +4,8 @@ export interface SubtitleLine {
   endTime: number;   // in seconds
   text: string;
   secondaryText?: string;
+  primaryColor?: string;   // Optional override (Hex #RRGGBB)
+  secondaryColor?: string; // Optional override (Hex #RRGGBB)
 }
 
 // FFmpeg ASS Alignment (numpad layout):
@@ -32,6 +34,7 @@ export interface FFmpegConfig {
   hwaccel: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
   preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
+  resolution: string; // 'original' or 'WIDTHxHEIGHT'
 }
 
 export interface SubtitleConfig {
@@ -69,6 +72,7 @@ export const DEFAULT_CONFIG: SubtitleConfig = {
     hwaccel: 'none',
     preset: 'veryfast',
     crf: 23,
+    resolution: 'original',
   }
 };
 

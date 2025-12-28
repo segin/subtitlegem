@@ -93,8 +93,7 @@ interface MenuBarProps {
   onNewProject?: () => void;
   onOpenDraft?: () => void;
   onSaveDraft?: () => void;
-  onExportSRT?: () => void;
-  onExportASS?: () => void;
+  onExport?: (format: 'ass' | 'srt' | 'txt') => void;
   onCloseProject?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -111,8 +110,7 @@ export function MenuBar({
   onNewProject,
   onOpenDraft,
   onSaveDraft,
-  onExportSRT,
-  onExportASS,
+  onExport,
   onCloseProject,
   onUndo,
   onRedo,
@@ -129,8 +127,9 @@ export function MenuBar({
     { label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenDraft },
     { label: "Save Draft", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveDraft },
     { divider: true },
-    { label: "Export SRT...", icon: <Download className="w-4 h-4" />, onClick: onExportSRT },
-    { label: "Export ASS...", icon: <Download className="w-4 h-4" />, onClick: onExportASS },
+    { label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass') },
+    { label: "Export Subtitles (.srt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('srt') },
+    { label: "Export Transcript (.txt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('txt') },
     { divider: true },
     { label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject },
   ];
