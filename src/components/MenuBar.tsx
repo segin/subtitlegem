@@ -104,6 +104,8 @@ interface MenuBarProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onShowShortcuts?: () => void;
+  onSaveProject?: () => void;
+  onOpenProject?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;
   secondaryLanguage?: string;
@@ -124,14 +126,19 @@ export function MenuBar({
   onZoomIn,
   onZoomOut,
   onShowShortcuts,
+  onSaveProject,
+  onOpenProject,
   hasSecondarySubtitles = false,
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
-    { label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenDraft },
-    { label: "Save Draft", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveDraft },
+    { label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenProject },
+    { label: "Save Project", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveProject },
+    { divider: true },
+    { label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenDraft },
+    { label: "Save Draft", icon: <Save className="w-4 h-4" />, onClick: onSaveDraft },
     { divider: true },
     { label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass') },
     

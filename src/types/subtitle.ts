@@ -92,3 +92,11 @@ export const ALIGNMENT_LABELS: Record<Alignment, string> = {
   8: 'Top Center',
   9: 'Top Right',
 };
+
+export interface ProjectState {
+  version: number;
+  timestamp: number;
+  videoPath: string | null;
+  subtitles: SubtitleLine[];
+  config: SubtitleConfig;
+}

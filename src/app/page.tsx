@@ -221,6 +221,56 @@ export default function Home() {
     document.body.removeChild(a);
   };
 
+  const handleSaveProject = () => {
+    const projectState = {
+      version: 1,
+      timestamp: Date.now(),
+      videoPath,
+      subtitles,
+      config,
+    };
+    
+    const blob = new Blob([JSON.stringify(projectState, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${videoPath?.split('/').pop()?.split('.')[0] || "project"}.sgproj`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleOpenProject = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        
+        // Basic validation
+        if (!json.version || !json.subtitles) {
+          throw new Error("Invalid project file format");
+        }
+        
+        if (confirm("Load project? Any unsaved changes will be lost.")) {
+          setSubtitles(json.subtitles || []);
+          setConfig(json.config || DEFAULT_CONFIG);
+          setVideoPath(json.videoPath || null);
+          setVideoUrl(json.videoPath ? `/api/storage?path=${encodeURIComponent(json.videoPath)}` : null);
+          setCurrentDraftId(null); // Treat as new session or find persistent draft logic later
+        }
+      } catch (err) {
+        alert("Failed to load project: " + err);
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    e.target.value = '';
+  };
+
   const handleCloseProject = () => {
     if(confirm("Discard current project?")) {
       setVideoUrl(null);
@@ -308,8 +358,18 @@ export default function Home() {
             primaryLanguage={config.primaryLanguage}
             secondaryLanguage={config.secondaryLanguage}
             onCloseProject={handleCloseProject}
+            onSaveProject={handleSaveProject}
+            onOpenProject={() => document.getElementById('project-upload')?.click()}
+          />
+          <input 
+            type="file" 
+            id="project-upload" 
+            className="hidden" 
+            accept=".sgproj,.json" 
+            onChange={handleOpenProject}
           />
         </div>
+
         
         <div className="flex items-center space-x-2 mr-24"> {/* mr-24 gives space for queue button */}
           
