@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 
@@ -14,20 +14,22 @@ async function testModel() {
 
   console.log("Using API Key:", apiKey.substring(0, 5) + "...");
   
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const ai = new GoogleGenAI({ apiKey });
   const modelName = "gemini-2.5-flash";
-  const model = genAI.getGenerativeModel({ model: modelName });
 
   try {
     console.log(`Testing model: ${modelName}...`);
-    const result = await model.generateContent("Hello, are you there?");
-    console.log("Response:", result.response.text());
+    const result = await ai.models.generateContent({
+      model: modelName,
+      contents: "Hello, are you there?",
+    });
+    console.log("Response:", result.text);
     console.log("Model check PASSED.");
   } catch (error: any) {
     console.error("Model check FAILED:");
     console.error(error.message);
     if (error.message.includes("404")) {
-        console.error("Hint: The model name might be incorrect.");
+      console.error("Hint: The model name might be incorrect.");
     }
   }
 }

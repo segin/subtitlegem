@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 export const runtime = 'nodejs';
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "");
+const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "" });
 
 const translationSchema = {
-  type: SchemaType.OBJECT,
+  type: "OBJECT",
   properties: {
     translation: {
-      type: SchemaType.STRING,
+      type: "STRING",
       description: "The translated text only",
     },
   },
@@ -24,14 +24,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing text or targetLanguage" }, { status: 400 });
     }
 
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-2.5-flash",
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: translationSchema as any,
-      }
-    });
-
     const prompt = `
       You are a professional subtitle translator.
       Translate the following line into ${targetLanguage}.
@@ -42,8 +34,16 @@ export async function POST(req: NextRequest) {
       Line to translate: "${text}"
     `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: translationSchema as any,
+      },
+    });
+
+    const responseText = response.text!;
     const data = JSON.parse(responseText);
 
     return NextResponse.json({ translation: data.translation });

@@ -187,7 +187,7 @@ export async function POST(req: NextRequest) {
       
       const geminiFile = await uploadToGemini(processPath, mimeType);
       subtitles = await generateSubtitles(
-        geminiFile.uri,
+        geminiFile.uri!,
         mimeType,
         secondaryLanguage === "None" ? undefined : secondaryLanguage,
         1,

@@ -1,30 +1,29 @@
-import { GoogleGenerativeAI, Part, SchemaType } from "@google/generative-ai";
-import { GoogleAIFileManager, FileState } from "@google/generative-ai/server";
+import { GoogleGenAI, FileState } from "@google/genai";
 import fs from "fs";
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "");
-const fileManager = new GoogleAIFileManager(process.env.GOOGLE_GENERATIVE_AI_API_KEY || "");
+const ai = new GoogleGenAI({
+  apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
+});
 
 const subtitleSchema = {
-  description: "List of subtitles with timestamps and text",
-  type: SchemaType.ARRAY,
+  type: "ARRAY",
   items: {
-    type: SchemaType.OBJECT,
+    type: "OBJECT",
     properties: {
       startTime: {
-        type: SchemaType.STRING,
+        type: "STRING",
         description: "Timestamp in HH:MM:SS,mmm format",
       },
       endTime: {
-        type: SchemaType.STRING,
+        type: "STRING",
         description: "Timestamp in HH:MM:SS,mmm format",
       },
       text: {
-        type: SchemaType.STRING,
+        type: "STRING",
         description: "English subtitle text",
       },
       secondaryText: {
-        type: SchemaType.STRING,
+        type: "STRING",
         description: "Secondary language subtitle text",
       },
     },
@@ -33,31 +32,42 @@ const subtitleSchema = {
 };
 
 export async function uploadToGemini(filePath: string, mimeType: string) {
-  const uploadResult = await fileManager.uploadFile(filePath, {
-    mimeType,
-    displayName: filePath.split("/").pop(),
+  // Upload file using new SDK
+  const uploadResult = await ai.files.upload({
+    file: filePath,
+    config: {
+      mimeType,
+      displayName: filePath.split("/").pop(),
+    },
   });
 
-  let file = await fileManager.getFile(uploadResult.file.name);
+  const fileName = uploadResult.name!;
+  let file = await ai.files.get({ name: fileName });
   let retryCount = 0;
   const maxRetries = 5;
-  
+
+  // Wait for file to be processed
   while (file.state === FileState.PROCESSING) {
     process.stdout.write(".");
     await new Promise((resolve) => setTimeout(resolve, 10_000));
-    
+
     // Retry with exponential backoff on transient errors
     try {
-      file = await fileManager.getFile(uploadResult.file.name);
+      file = await ai.files.get({ name: fileName });
       retryCount = 0; // Reset on success
     } catch (error: any) {
       retryCount++;
-      console.error(`\n[Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`, error.message);
-      
+      console.error(
+        `\n[Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`,
+        error.message
+      );
+
       if (retryCount >= maxRetries) {
-        throw new Error(`Failed to get file status after ${maxRetries} attempts: ${error.message}`);
+        throw new Error(
+          `Failed to get file status after ${maxRetries} attempts: ${error.message}`
+        );
       }
-      
+
       // Exponential backoff: 5s, 10s, 20s, 40s, 80s
       const backoffMs = 5000 * Math.pow(2, retryCount - 1);
       console.log(`[Gemini] Retrying in ${backoffMs / 1000}s...`);
@@ -72,15 +82,13 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   return file;
 }
 
-export async function generateSubtitles(fileUri: string, mimeType: string, secondaryLanguage?: string, attempt = 1, modelName: string = "gemini-2.5-flash") {
-  const model = genAI.getGenerativeModel({ 
-    model: modelName,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: subtitleSchema as any,
-    },
-  });
-  
+export async function generateSubtitles(
+  fileUri: string,
+  mimeType: string,
+  secondaryLanguage?: string,
+  attempt = 1,
+  modelName: string = "gemini-2.5-flash"
+) {
   const prompt = `
     Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
     
@@ -92,27 +100,48 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
   `;
 
   try {
-    const result = await model.generateContent([
-      {
-          fileData: {
-            mimeType: mimeType,
-            fileUri: fileUri,
-          },
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              fileData: {
+                mimeType: mimeType,
+                fileUri: fileUri,
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: subtitleSchema as any,
       },
-      { text: prompt },
-    ]);
+    });
 
-    const response = await result.response;
-    const text = response.text();
+    const text = response.text!;
     return JSON.parse(text);
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
-      
-      console.log(`Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`);
-      await new Promise(resolve => setTimeout(resolve, Math.min(delaySeconds * 1000, 60000)));
-      return generateSubtitles(fileUri, mimeType, secondaryLanguage, attempt + 1, modelName);
+
+      console.log(
+        `Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
+      );
+      return generateSubtitles(
+        fileUri,
+        mimeType,
+        secondaryLanguage,
+        attempt + 1,
+        modelName
+      );
     }
     throw error;
   }
@@ -122,15 +151,13 @@ export async function generateSubtitles(fileUri: string, mimeType: string, secon
  * Generate subtitles using inline data (for files < 9.8MB)
  * Avoids Files API overhead for small files
  */
-export async function generateSubtitlesInline(base64Data: string, mimeType: string, secondaryLanguage?: string, attempt = 1, modelName: string = "gemini-2.5-flash") {
-  const model = genAI.getGenerativeModel({ 
-    model: modelName,
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: subtitleSchema as any,
-    },
-  });
-  
+export async function generateSubtitlesInline(
+  base64Data: string,
+  mimeType: string,
+  secondaryLanguage?: string,
+  attempt = 1,
+  modelName: string = "gemini-2.5-flash"
+) {
   const prompt = `
     Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
     
@@ -142,27 +169,48 @@ export async function generateSubtitlesInline(base64Data: string, mimeType: stri
   `;
 
   try {
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Data,
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Data,
+              },
+            },
+            { text: prompt },
+          ],
         },
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: subtitleSchema as any,
       },
-      { text: prompt },
-    ]);
+    });
 
-    const response = await result.response;
-    const text = response.text();
+    const text = response.text!;
     return JSON.parse(text);
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
-      
-      console.log(`Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`);
-      await new Promise(resolve => setTimeout(resolve, Math.min(delaySeconds * 1000, 60000)));
-      return generateSubtitlesInline(base64Data, mimeType, secondaryLanguage, attempt + 1, modelName);
+
+      console.log(
+        `Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
+      );
+      return generateSubtitlesInline(
+        base64Data,
+        mimeType,
+        secondaryLanguage,
+        attempt + 1,
+        modelName
+      );
     }
     throw error;
   }
