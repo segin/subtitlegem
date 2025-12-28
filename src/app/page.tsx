@@ -253,6 +253,19 @@ export default function Home() {
           onPauseToggle={toggleQueuePause}
           onRemove={async (id: string, force?: boolean) => {
             await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+            // Immediate re-fetch fallback
+            const res = await fetch('/api/queue');
+            if (res.ok) {
+               const data = await res.json();
+               setQueueItems(data.items);
+            }
+          }}
+          onRefresh={async () => {
+             const res = await fetch('/api/queue');
+             if (res.ok) {
+                const data = await res.json();
+                setQueueItems(data.items);
+             }
           }}
           onDownload={(item: QueueItem) => {
             if (item.result?.videoPath) {
@@ -466,6 +479,19 @@ export default function Home() {
           onPauseToggle={toggleQueuePause}
           onRemove={async (id: string, force?: boolean) => {
             await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+            // Immediate re-fetch fallback
+            const res = await fetch('/api/queue');
+            if (res.ok) {
+               const data = await res.json();
+               setQueueItems(data.items);
+            }
+          }}
+          onRefresh={async () => {
+             const res = await fetch('/api/queue');
+             if (res.ok) {
+                const data = await res.json();
+                setQueueItems(data.items);
+             }
           }}
           onDownload={(item: QueueItem) => {
             if (item.result?.videoPath) {
