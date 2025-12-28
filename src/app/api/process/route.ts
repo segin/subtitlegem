@@ -22,7 +22,11 @@ const ALLOWED_LANGUAGES = [
   "Russian", 
   "Dutch", 
   "Ukrainian", 
-  "Arabic"
+  "Arabic",
+  "English",
+  "Korean",
+  "Italian",
+  "Portuguese"
 ];
 
 export async function POST(req: NextRequest) {
@@ -83,10 +87,11 @@ export async function POST(req: NextRequest) {
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-2.5-flash";
     
-    await new Promise<void>((resolve, reject) => {
-      const bb = busboy({ headers: { "content-type": contentType } });
+    // We need to wait for BOTH busboy to finish parsing AND the file write stream to finish writing.
+    const fileWritePromise = new Promise<void>((resolve, reject) => {
+       const bb = busboy({ headers: { "content-type": contentType } });
 
-      bb.on("file", (name, file, info) => {
+       bb.on("file", (name, file, info) => {
         if (name === "video") {
           const { filename, mimeType: fileMime } = info;
           mimeType = fileMime;
@@ -99,30 +104,39 @@ export async function POST(req: NextRequest) {
           file.pipe(writeStream);
 
           writeStream.on("error", reject);
+          writeStream.on("finish", () => {
+             console.log("Write stream finished.");
+             resolve();
+          });
         } else {
           file.resume();
         }
       });
 
       bb.on("field", (name, val) => {
-        if (name === "secondaryLanguage") {
-          secondaryLanguage = val;
-        }
-        if (name === "model") {
-          modelName = val;
-        }
+        if (name === "secondaryLanguage") secondaryLanguage = val;
+        if (name === "model") modelName = val;
       });
-
-      bb.on("close", resolve);
+      
+      // If busboy finishes but we never got a file, we might hang if we rely only on writeStream.finish
+      // ensuring we handle errors properly.
       bb.on("error", reject);
-
+      
       // @ts-ignore
       const nodeStream = Readable.fromWeb(req.body);
       nodeStream.pipe(bb);
     });
+    
+    await fileWritePromise;
 
     if (!videoPath) {
         return NextResponse.json({ error: "No video file provided" }, { status: 400 });
+    }
+    
+    // Safety Check: Verify file exists and has size > 0
+    if (!fs.existsSync(videoPath) || fs.statSync(videoPath).size === 0) {
+         console.error(`File upload failed: ${videoPath} is empty or missing.`);
+         return NextResponse.json({ error: "File upload failed (empty file)" }, { status: 400 });
     }
     
     if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {

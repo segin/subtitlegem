@@ -1,9 +1,16 @@
-import { GoogleGenAI, FileState } from "@google/genai";
+import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import fs from "fs";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
 });
+
+const safetySettings = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+];
 
 const subtitleSchema = {
   type: "OBJECT",
@@ -255,7 +262,10 @@ export async function translateSubtitles(
     const response = await ai.models.generateContent({
       model: modelName,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { responseMimeType: "application/json" },
+      config: { 
+        responseMimeType: "application/json",
+        safetySettings,
+      },
     });
 
     const text = response.text!;
