@@ -335,7 +335,10 @@ export default function Home() {
             onNewProject={() => {
               if(confirm("Discard current project and start new?")) {
                 setVideoUrl(null);
+                setVideoPath(null);
                 setSubtitles([]);
+                setConfig(DEFAULT_CONFIG);
+                setCurrentDraftId(null);
               }
             }}
             onExport={handleExport}
@@ -568,7 +571,7 @@ export default function Home() {
         onClose={() => setShowProjectSettings(false)}
         config={config}
         onUpdateConfig={(updates) => setConfig(prev => ({ ...prev, ...updates }))}
-        onReprocess={async (lang) => {
+        onReprocess={async (lang, model) => {
             const res = await fetch('/api/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -576,21 +579,23 @@ export default function Home() {
                     mode: 'reprocess',
                     fileUri: config.geminiFileUri,
                     language: lang,
-                    secondaryLanguage: config.secondaryLanguage
+                    secondaryLanguage: config.secondaryLanguage,
+                    model: model 
                 })
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
             setSubtitles(data.subtitles);
         }}
-        onRetranslate={async (secLang) => {
+        onRetranslate={async (secLang, model) => {
             const res = await fetch('/api/process', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     mode: 'translate',
                     subtitles: subtitles,
-                    secondaryLanguage: secLang
+                    secondaryLanguage: secLang,
+                    model: model
                 })
             });
             const data = await res.json();

@@ -14,8 +14,8 @@ interface ProjectSettingsDialogProps {
     geminiFileExpiration?: string | null;
   };
   onUpdateConfig: (newConfig: any) => void;
-  onReprocess: (language: string) => Promise<void>;
-  onRetranslate: (language: string) => Promise<void>;
+  onReprocess: (language: string, model: string) => Promise<void>;
+  onRetranslate: (language: string, model: string) => Promise<void>;
 }
 
 export function ProjectSettingsDialog({
@@ -28,15 +28,31 @@ export function ProjectSettingsDialog({
 }: ProjectSettingsDialogProps) {
   const [primaryLang, setPrimaryLang] = useState(config.primaryLanguage || "English");
   const [secondaryLang, setSecondaryLang] = useState(config.secondaryLanguage || "Secondary");
+  const [model, setModel] = useState("gemini-2.5-flash");
+  const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (isOpen) {
+        setLoadingModels(true);
+        fetch('/api/models')
+            .then(res => res.json())
+            .then(data => {
+                if (data.models) setAvailableModels(data.models);
+            })
+            .catch(err => console.error("Failed to fetch models", err))
+            .finally(() => setLoadingModels(false));
+    }
+  }, [isOpen]);
 
   const handleReprocess = async () => {
     if (!confirm("This will replace all current subtitles with a new transcription. Continue?")) return;
     try {
       setIsProcessing(true);
       setStatus("Reprocessing video...");
-      await onReprocess(primaryLang);
+      await onReprocess(primaryLang, model);
       onUpdateConfig({ primaryLanguage: primaryLang });
       setStatus("Completed!");
       setTimeout(() => setStatus(null), 2000);
@@ -52,7 +68,7 @@ export function ProjectSettingsDialog({
     try {
       setIsProcessing(true);
       setStatus("Translating subtitles...");
-      await onRetranslate(secondaryLang);
+      await onRetranslate(secondaryLang, model);
       onUpdateConfig({ secondaryLanguage: secondaryLang });
       setStatus("Completed!");
       setTimeout(() => setStatus(null), 2000);
