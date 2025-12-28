@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { VideoUpload } from "@/components/VideoUpload";
 import { SubtitleTimeline } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
@@ -37,6 +37,13 @@ export default function Home() {
   
   // Draft state
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+  
+  // Shift key tracking for Open Project
+  const openShiftKeyRef = useRef(false);
+  
+  // Home screen restore state
+  const [showRestoreOption, setShowRestoreOption] = useState(false);
+  const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
@@ -210,7 +217,6 @@ export default function Home() {
     const projectState = {
       version: 1,
       timestamp: Date.now(),
-      videoPath,
       subtitles,
       config,
     };
@@ -219,7 +225,7 @@ export default function Home() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${videoPath?.split('/').pop()?.split('.')[0] || "project"}.sgproj`;
+    a.download = `subtitles_${Date.now()}.sgproj`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -236,34 +242,35 @@ export default function Home() {
         const json = JSON.parse(event.target?.result as string);
         
         // Basic validation
-        if (!json.version || !json.subtitles) {
+        if (!json.subtitles) {
           throw new Error("Invalid project file format");
         }
         
-        if (confirm("Load project? Any unsaved changes will be lost.")) {
-          setSubtitles(json.subtitles || []);
-          setConfig(json.config || DEFAULT_CONFIG);
-          setVideoPath(json.videoPath || null);
-          setVideoUrl(json.videoPath ? `/api/storage?path=${encodeURIComponent(json.videoPath)}` : null);
-          setCurrentDraftId(null); // Treat as new session or find persistent draft logic later
+        // Confirm unless shift was held
+        if (!openShiftKeyRef.current && subtitles.length > 0) {
+          if (!confirm("Replace existing subtitles with imported project?")) {
+            return;
+          }
         }
+        
+        setSubtitles(json.subtitles || []);
+        setConfig(json.config || DEFAULT_CONFIG);
       } catch (err) {
         alert("Failed to load project: " + err);
       }
     };
     reader.readAsText(file);
-    // Reset input
+    // Reset input and shift state
     e.target.value = '';
+    openShiftKeyRef.current = false;
   };
 
   const handleCloseProject = () => {
-    if(confirm("Discard current project?")) {
-      setVideoUrl(null);
-      setVideoPath(null);
-      setSubtitles([]);
-      setCurrentDraftId(null);
-      setConfig(DEFAULT_CONFIG);
-    }
+    setVideoUrl(null);
+    setVideoPath(null);
+    setSubtitles([]);
+    setCurrentDraftId(null);
+    setConfig(DEFAULT_CONFIG);
   };
 
   if (!videoUrl) {
@@ -286,7 +293,44 @@ export default function Home() {
               </div>
               <h1 className="text-xl font-medium text-[#e1e1e1] mb-2">Welcome to SubtitleGem</h1>
               <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
-              <VideoUpload onUploadComplete={handleUploadComplete} />
+              <VideoUpload 
+                onUploadComplete={handleUploadComplete} 
+                pendingProjectFile={pendingProjectFile}
+              />
+              
+              {/* Restore existing project option */}
+              <div className="mt-6 w-full max-w-sm">
+                <label className="flex items-center gap-2 text-sm text-[#888888] cursor-pointer hover:text-[#cccccc] transition-colors">
+                  <input 
+                    type="checkbox" 
+                    checked={showRestoreOption}
+                    onChange={(e) => {
+                      setShowRestoreOption(e.target.checked);
+                      if (!e.target.checked) setPendingProjectFile(null);
+                    }}
+                    className="accent-[#0e639c]"
+                  />
+                  Restore existing project export
+                </label>
+                
+                {showRestoreOption && (
+                  <div className="mt-3 p-3 bg-[#1e1e1e] border border-[#333333] rounded">
+                    <p className="text-xs text-[#666666] mb-2">Select a .sgproj file to restore subtitles after video upload:</p>
+                    <input 
+                      type="file" 
+                      accept=".sgproj,.json"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        setPendingProjectFile(file || null);
+                      }}
+                      className="text-xs text-[#888888] file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-[#3e3e42] file:text-[#cccccc] file:cursor-pointer hover:file:bg-[#4e4e52]"
+                    />
+                    {pendingProjectFile && (
+                      <p className="mt-2 text-xs text-green-400">✓ {pendingProjectFile.name}</p>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -333,13 +377,11 @@ export default function Home() {
           <div className="h-4 w-px bg-[#444444]" />
           <MenuBar
             onNewProject={() => {
-              if(confirm("Discard current project and start new?")) {
-                setVideoUrl(null);
-                setVideoPath(null);
-                setSubtitles([]);
-                setConfig(DEFAULT_CONFIG);
-                setCurrentDraftId(null);
-              }
+              setVideoUrl(null);
+              setVideoPath(null);
+              setSubtitles([]);
+              setConfig(DEFAULT_CONFIG);
+              setCurrentDraftId(null);
             }}
             onExport={handleExport}
             hasSecondarySubtitles={subtitles.some(s => !!s.secondaryText)}
@@ -347,7 +389,10 @@ export default function Home() {
             secondaryLanguage={config.secondaryLanguage}
             onCloseProject={handleCloseProject}
             onSaveProject={handleSaveProject}
-            onOpenProject={() => document.getElementById('project-upload')?.click()}
+            onOpenProject={(e?: React.MouseEvent) => {
+              openShiftKeyRef.current = e?.shiftKey || false;
+              document.getElementById('project-upload')?.click();
+            }}
             onProjectSettings={() => setShowProjectSettings(true)}
           />
           <input 
@@ -372,10 +417,8 @@ export default function Home() {
           
           <button 
             onClick={() => {
-              if(confirm("Discard current project?")) {
-                setVideoUrl(null);
-                setSubtitles([]);
-              }
+              setVideoUrl(null);
+              setSubtitles([]);
             }}
             className="flex items-center space-x-1.5 px-2 py-1 text-xs hover:bg-[#3e3e42] hover:text-white rounded-sm transition-colors text-[#aaaaaa]"
           >

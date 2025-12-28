@@ -5,9 +5,10 @@ import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Che
 
 interface VideoUploadProps {
   onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => void;
+  pendingProjectFile?: File | null;
 }
 
-export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
+export function VideoUpload({ onUploadComplete, pendingProjectFile }: VideoUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -210,14 +211,45 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
         try {
           const data = JSON.parse(xhr.responseText);
           if (data.error) setError(data.error);
-          else onUploadComplete(
-            data.subtitles, 
-            URL.createObjectURL(file), 
-            secondaryLanguage, 
-            data.videoPath,
-            data.detectedLanguage,
-            data.originalFilename
-          );
+          else {
+            // If a pending project file exists, parse and use its subtitles
+            if (pendingProjectFile) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                try {
+                  const projectData = JSON.parse(e.target?.result as string);
+                  onUploadComplete(
+                    projectData.subtitles || data.subtitles,
+                    URL.createObjectURL(file),
+                    secondaryLanguage,
+                    data.videoPath,
+                    data.detectedLanguage,
+                    data.originalFilename
+                  );
+                } catch {
+                  // Fall back to generated subtitles
+                  onUploadComplete(
+                    data.subtitles,
+                    URL.createObjectURL(file),
+                    secondaryLanguage,
+                    data.videoPath,
+                    data.detectedLanguage,
+                    data.originalFilename
+                  );
+                }
+              };
+              reader.readAsText(pendingProjectFile);
+            } else {
+              onUploadComplete(
+                data.subtitles, 
+                URL.createObjectURL(file), 
+                secondaryLanguage, 
+                data.videoPath,
+                data.detectedLanguage,
+                data.originalFilename
+              );
+            }
+          }
         } catch (e) { setError("Failed to parse response"); }
       } else if (xhr.status === 429) {
         setError("Rate limit exceeded. Please wait.");

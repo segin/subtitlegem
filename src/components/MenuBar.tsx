@@ -12,7 +12,7 @@ interface MenuItemBase {
   label: string;
   icon?: React.ReactNode;
   shortcut?: string;
-  onClick?: () => void;
+  onClick?: (e?: React.MouseEvent) => void;
   disabled?: boolean;
 }
 
@@ -60,9 +60,9 @@ function Menu({ label, items }: MenuProps) {
             ) : (
               <button
                 key={index}
-                onClick={() => {
+                onClick={(e) => {
                   if (!item.disabled && item.onClick) {
-                    item.onClick();
+                    item.onClick(e);
                     setIsOpen(false);
                   }
                 }}
@@ -105,7 +105,7 @@ interface MenuBarProps {
   onZoomOut?: () => void;
   onShowShortcuts?: () => void;
   onSaveProject?: () => void;
-  onOpenProject?: () => void;
+  onOpenProject?: (e?: React.MouseEvent) => void;
   onProjectSettings?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;

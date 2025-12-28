@@ -140,7 +140,7 @@ class QueueManager extends EventEmitter {
       console.log('[Queue Recovery] Interrupted jobs requeued with crash status');
     }
     
-    }
+
     
     // Count pending and processing items (actives)
     let activeCount = 0;
