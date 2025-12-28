@@ -237,7 +237,7 @@ export function QueueDrawer({
               onClick={async () => {
                 try {
                   await fetch('/api/queue?action=clear_completed', { method: 'DELETE' });
-                  // No need to manually update state, SSE will handle it
+                  onRefresh?.(); // Force immediate refresh
                 } catch (e) {
                   console.error("Failed to clear completed items", e);
                 }

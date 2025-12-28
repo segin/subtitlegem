@@ -89,20 +89,20 @@ export default function Home() {
   }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
   
   // Real-time queue updates via Polling (Robust Fallback)
-  useEffect(() => {
-    const fetchQueue = async () => {
-      try {
-        const res = await fetch('/api/queue');
-        if (res.ok) {
-           const data = await res.json();
-           setQueueItems(data.items);
-           setQueuePaused(data.paused);
-        }
-      } catch (error) {
-        console.error("Queue poll failed:", error);
+  const fetchQueue = useCallback(async () => {
+    try {
+      const res = await fetch('/api/queue');
+      if (res.ok) {
+         const data = await res.json();
+         setQueueItems(data.items);
+         setQueuePaused(data.paused);
       }
-    };
+    } catch (error) {
+      console.error("Queue poll failed:", error);
+    }
+  }, []);
 
+  useEffect(() => {
     // Initial fetch
     fetchQueue();
 
@@ -110,7 +110,7 @@ export default function Home() {
     const interval = setInterval(fetchQueue, 1000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchQueue]);
 
   const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string) => {
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
