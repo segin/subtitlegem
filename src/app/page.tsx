@@ -170,20 +170,7 @@ export default function Home() {
 
   return (
     <div className="h-screen flex flex-col bg-[#1e1e1e] text-[#cccccc] font-sans overflow-hidden">
-      {/* Global Queue Drawer */}
-      <QueueDrawer
-        items={queueItems}
-        isPaused={queuePaused}
-        onPauseToggle={toggleQueuePause}
-        onRemove={async (id: string, force?: boolean) => {
-          await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-        }}
-        onDownload={(item: QueueItem) => {
-          if (item.result?.videoPath) {
-            window.open(`/api/export?id=${item.id}`, '_blank');
-          }
-        }}
-      />
+
 
       {/* Top Menu Bar */}
       <header className="h-9 border-b border-[#333333] bg-[#2d2d2d] flex items-center justify-between px-3 shrink-0 select-none">
@@ -367,9 +354,23 @@ export default function Home() {
                 }}
               />
               
-              {/* Queue is now handled by global QueueDrawer in top-right */}
            </div>
         </div>
+
+        {/* Queue Panel - Inline on desktop, slide-out on mobile */}
+        <QueueDrawer
+          items={queueItems}
+          isPaused={queuePaused}
+          onPauseToggle={toggleQueuePause}
+          onRemove={async (id: string, force?: boolean) => {
+            await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+          }}
+          onDownload={(item: QueueItem) => {
+            if (item.result?.videoPath) {
+              window.open(`/api/export?id=${item.id}`, '_blank');
+            }
+          }}
+        />
       </div>
 
       {showRawEditor && (

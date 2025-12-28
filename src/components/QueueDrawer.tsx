@@ -250,9 +250,9 @@ export function QueueDrawer({
         />
       )}
 
-      {/* DESKTOP: Fixed Panel - Always visible */}
+      {/* DESKTOP: Inline Panel - Part of document flow */}
       {isDesktop && (
-        <div className="fixed top-0 right-0 h-full w-72 xl:w-80 bg-[#1e1e1e] border-l border-[#333333] shadow-2xl z-30 flex flex-col">
+        <div className="h-full w-72 xl:w-80 bg-[#1e1e1e] border-l border-[#333333] flex flex-col shrink-0 order-last">
           {renderPanelContent(false)}
         </div>
       )}
