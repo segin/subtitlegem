@@ -9,6 +9,7 @@ import { SubtitleList } from "@/components/SubtitleList";
 import { RawEditor } from "@/components/RawEditor";
 import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
+import { MenuBar } from "@/components/MenuBar";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
@@ -177,11 +178,21 @@ export default function Home() {
         <div className="flex items-center space-x-4">
           <span className="font-bold text-sm text-[#e1e1e1] tracking-wide">SUBTITLEGEM</span>
           <div className="h-4 w-px bg-[#444444]" />
-          <nav className="flex space-x-1">
-            <button className="px-2 py-0.5 text-xs hover:bg-[#3e3e42] rounded-sm transition-colors">File</button>
-            <button className="px-2 py-0.5 text-xs hover:bg-[#3e3e42] rounded-sm transition-colors">Edit</button>
-            <button className="px-2 py-0.5 text-xs hover:bg-[#3e3e42] rounded-sm transition-colors">View</button>
-          </nav>
+          <MenuBar
+            onNewProject={() => {
+              if(confirm("Discard current project and start new?")) {
+                setVideoUrl(null);
+                setSubtitles([]);
+              }
+            }}
+            onExportSRT={handleDownloadSRT}
+            onCloseProject={() => {
+              if(confirm("Discard current project?")) {
+                setVideoUrl(null);
+                setSubtitles([]);
+              }
+            }}
+          />
         </div>
         
         <div className="flex items-center space-x-2 mr-24"> {/* mr-24 gives space for queue button */}
