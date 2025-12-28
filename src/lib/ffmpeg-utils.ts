@@ -100,7 +100,7 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
     
     command
       .on('start', (commandLine) => {
-        console.log('Spawning Ffmpeg with command: ' + commandLine);
+        console.log(`[${new Date().toISOString()}] Spawning Ffmpeg with command: ` + commandLine);
       })
       .on('codecData', (data) => {
         // Get total duration of video
@@ -114,11 +114,11 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
         }
       })
       .on('end', (stdout, stderr) => {
-        console.log('Ffmpeg finished successfully.');
+        console.log(`[${new Date().toISOString()}] Ffmpeg finished successfully.`);
         resolve(outputPath);
       })
       .on('error', (err, stdout, stderr) => {
-        console.error('Ffmpeg error:', err.message);
+        console.error(`[${new Date().toISOString()}] Ffmpeg error:`, err.message);
         console.error('ffmpeg stderr:', stderr);
         reject(new Error(`Ffmpeg failed: ${err.message}`));
       });

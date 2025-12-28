@@ -11,7 +11,7 @@ export async function processJob(
   item: QueueItem,
   onProgress: (progress: number) => void
 ): Promise<{ videoPath: string; srtPath?: string }> {
-  console.log(`[JobProcessor] Starting job ${item.id} (${item.model})`);
+  console.log(`[${new Date().toISOString()}] [JobProcessor] Starting job ${item.id} (${item.model})`);
 
   if (!item.metadata) {
     throw new Error('Job metadata missing. cannot process.');
@@ -53,7 +53,7 @@ export async function processJob(
        }
      );
 
-     console.log(`[JobProcessor] Job ${item.id} completed successfully`);
+     console.log(`[${new Date().toISOString()}] [JobProcessor] Job ${item.id} completed successfully`);
      
      return {
        videoPath: resultPath,
@@ -61,7 +61,7 @@ export async function processJob(
      };
 
   } catch (error: any) {
-    console.error(`[JobProcessor] Job ${item.id} failed:`, error);
+    console.error(`[${new Date().toISOString()}] [JobProcessor] Job ${item.id} failed:`, error);
     throw error;
   }
 }

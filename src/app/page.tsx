@@ -88,46 +88,28 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
   
-  // Real-time queue updates via SSE
+  // Real-time queue updates via Polling (Robust Fallback)
   useEffect(() => {
-    let eventSource: EventSource | null = null;
-    let retryTimeout: NodeJS.Timeout;
-
-    const connect = () => {
-      eventSource = new EventSource('/api/queue/events');
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          // Handle 'initial' or 'update' types
-          if (data.type === 'initial' || data.type === 'update') {
-            setQueueItems(data.items);
-            setQueuePaused(data.paused);
-          }
-        } catch (error) {
-          console.error('Error parsing queue event:', error);
+    const fetchQueue = async () => {
+      try {
+        const res = await fetch('/api/queue');
+        if (res.ok) {
+           const data = await res.json();
+           setQueueItems(data.items);
+           setQueuePaused(data.paused);
         }
-      };
-
-      eventSource.onerror = (error) => {
-        console.error('SSE connection error:', error);
-        if (eventSource) {
-          eventSource.close();
-          eventSource = null;
-        }
-        // Retry connection after 5 seconds
-        retryTimeout = setTimeout(connect, 5000);
-      };
-    };
-
-    connect();
-
-    return () => {
-      if (eventSource) {
-        eventSource.close();
+      } catch (error) {
+        console.error("Queue poll failed:", error);
       }
-      clearTimeout(retryTimeout);
     };
+
+    // Initial fetch
+    fetchQueue();
+
+    // Poll every 1 second
+    const interval = setInterval(fetchQueue, 1000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string) => {
