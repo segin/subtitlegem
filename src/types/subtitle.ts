@@ -109,3 +109,37 @@ export interface ProjectState {
   subtitles: SubtitleLine[];
   config: SubtitleConfig;
 }
+
+/** Global application settings (persisted across sessions) */
+export interface GlobalSettings {
+  // Default style settings (percentage-based)
+  defaultPrimaryFontSize: number;
+  defaultSecondaryFontSize: number;
+  defaultMarginV: number;
+  defaultMarginH: number;
+  
+  // Default languages
+  defaultPrimaryLanguage: string;
+  defaultSecondaryLanguage: string;
+  
+  // Default FFmpeg settings
+  defaultHwaccel: string;
+  defaultPreset: string;
+  defaultCrf: number;
+  
+  // Default Gemini model
+  defaultGeminiModel: string;
+}
+
+export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
+  defaultPrimaryFontSize: 2.22,
+  defaultSecondaryFontSize: 1.85,
+  defaultMarginV: 2.78,
+  defaultMarginH: 1.04,
+  defaultPrimaryLanguage: 'English',
+  defaultSecondaryLanguage: 'Simplified Chinese',
+  defaultHwaccel: 'none',
+  defaultPreset: 'veryfast',
+  defaultCrf: 23,
+  defaultGeminiModel: 'gemini-2.0-flash',
+};

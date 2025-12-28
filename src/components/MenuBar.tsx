@@ -110,9 +110,11 @@ interface MenuBarProps {
   onOpenProject?: (e?: React.MouseEvent) => void;
   onProjectSettings?: () => void;
   onReprocessVideo?: () => void;
+  onGlobalSettings?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;
   secondaryLanguage?: string;
+  isUploadScreen?: boolean;
 }
 
 export function MenuBar({
@@ -136,9 +138,11 @@ export function MenuBar({
   onOpenProject,
   onProjectSettings,
   onReprocessVideo,
+  onGlobalSettings,
   hasSecondarySubtitles = false,
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
+  isUploadScreen = false,
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
@@ -169,8 +173,8 @@ export function MenuBar({
   ];
 
   const editItems: MenuItem[] = [
-    { label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo },
-    { label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo },
+    { label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo || isUploadScreen },
+    { label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo || isUploadScreen },
     { divider: true },
     { label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", disabled: true },
     { label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true },
@@ -182,7 +186,9 @@ export function MenuBar({
     { label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true },
     { label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: true },
     { divider: true },
-    { label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings },
+    { label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings, disabled: isUploadScreen },
+    { divider: true },
+    { label: "Global Settings...", icon: <Settings className="w-4 h-4" />, onClick: onGlobalSettings },
   ];
 
   const viewItems: MenuItem[] = [

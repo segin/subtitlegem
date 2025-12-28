@@ -11,6 +11,7 @@ import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
+import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
@@ -53,6 +54,9 @@ export default function Home() {
   // Multi-selection state (shared between timeline and list)
   const [selectedSubtitleIds, setSelectedSubtitleIds] = useState<string[]>([]);
   const lastSelectedIdRef = useRef<string | null>(null);
+  
+  // Global settings dialog
+  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
@@ -393,14 +397,29 @@ export default function Home() {
 
   if (!videoUrl) {
     return (
-      <main className="min-h-screen h-screen bg-[#1e1e1e] flex text-[#cccccc] overflow-hidden">
-        {/* Draft Projects Sidebar - Left side */}
-        <DraftsSidebar 
-          onLoadDraft={handleLoadDraft}
-        />
+      <main className="min-h-screen h-screen bg-[#1e1e1e] flex flex-col text-[#cccccc] overflow-hidden">
+        {/* Top Header Bar with Menu and App Name */}
+        <div className="h-8 bg-[#333333] border-b border-[#252526] flex items-center px-2 shrink-0">
+          <MenuBar 
+            isUploadScreen={true}
+            onGlobalSettings={() => setShowGlobalSettings(true)}
+          />
+          <div className="flex-1" />
+          <div className="flex items-center gap-2 text-xs font-semibold text-[#cccccc]">
+            <Sparkles className="w-3.5 h-3.5 text-[#d7ba7d]" />
+            <span>SubtitleGem</span>
+          </div>
+        </div>
+        
+        {/* Main Content Row */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Draft Projects Sidebar - Left side */}
+          <DraftsSidebar 
+            onLoadDraft={handleLoadDraft}
+          />
 
-        {/* Main Upload Area - Center */}
-        <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-auto">
+          {/* Main Upload Area - Center */}
+          <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-auto">
           <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
             <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
               SubtitleGem - New Project
@@ -480,6 +499,12 @@ export default function Home() {
             }
           }}
         />
+        </div>
+        
+        <GlobalSettingsDialog
+          isOpen={showGlobalSettings}
+          onClose={() => setShowGlobalSettings(false)}
+        />
       </main>
     );
   }
@@ -513,6 +538,7 @@ export default function Home() {
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
             onReprocessVideo={() => setShowProjectSettings(true)}
+            onGlobalSettings={() => setShowGlobalSettings(true)}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -781,6 +807,11 @@ export default function Home() {
           }
         }}
         canReset={initialSubtitles !== null && initialSubtitles.length > 0}
+      />
+      
+      <GlobalSettingsDialog
+        isOpen={showGlobalSettings}
+        onClose={() => setShowGlobalSettings(false)}
       />
     </div>
   );
