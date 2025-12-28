@@ -18,13 +18,7 @@ interface ExportRequest {
 }
 
 // Metadata store for export jobs (extends queue items with export-specific data)
-const exportMetadata = new Map<string, {
-  assPath: string;
-  outputPath: string;
-  videoPath: string;
-  sampleDuration?: number;
-  ffmpegConfig: FFmpegConfig;
-}>();
+// REMOVED: exportMetadata - now using queue item metadata (SQLite)
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,26 +49,30 @@ export async function POST(req: NextRequest) {
     const assContent = generateAss(subtitles, config);
     fs.writeFileSync(assPath, assContent);
 
-    // Add to queue
+    // Add to queue with persistent metadata
     const queueItem = queueManager.addItem({
       file: {
         name: `Export: ${path.basename(videoPath)}`,
         size: fs.statSync(videoPath).size,
         type: "video/mp4",
       },
+      model: 'ffmpeg-burn', // Identify the type of job
+      metadata: {
+        assPath,
+        outputPath,
+        videoPath,
+        sampleDuration: sampleDuration || undefined,
+        ffmpegConfig: config.ffmpeg,
+      }
     });
 
-    // Store export metadata
-    exportMetadata.set(queueItem.id, {
-      assPath,
-      outputPath,
-      videoPath,
-      sampleDuration: sampleDuration || undefined,
-      ffmpegConfig: config.ffmpeg,
-    });
-
-    // Start processing the job
-    processExportJob(queueItem.id);
+    // We don't need to manually start processing here anymore.
+    // QueueManager's addItem triggers processNext() if autoStart is on, 
+    // or if the queue is already running.
+    // However, to ensure it starts if this is the first item:
+    if (!queueManager.isProcessing() && !queueManager.getPausedState()) {
+      queueManager.resume(); // Starts processing
+    }
 
     return NextResponse.json({
       success: true,
@@ -85,42 +83,6 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[Export API] Error:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-}
-
-async function processExportJob(queueItemId: string) {
-  const metadata = exportMetadata.get(queueItemId);
-  if (!metadata) {
-    queueManager.failItem(queueItemId, "Missing export metadata", false);
-    return;
-  }
-
-  try {
-    queueManager.updateItem(queueItemId, {
-      status: "processing",
-      startedAt: Date.now(),
-      progress: 0
-    });
-
-    await burnSubtitles(metadata.videoPath, metadata.assPath, metadata.outputPath, {
-      sampleDuration: metadata.sampleDuration,
-      hwaccel: metadata.ffmpegConfig.hwaccel,
-      preset: metadata.ffmpegConfig.preset,
-      crf: metadata.ffmpegConfig.crf,
-      resolution: metadata.ffmpegConfig.resolution,
-      onProgress: (percent: number) => {
-        queueManager.updateProgress(queueItemId, percent);
-      },
-    });
-
-    // Complete the job
-    queueManager.completeItem(queueItemId, { 
-      videoPath: metadata.outputPath 
-    });
-    
-  } catch (error: any) {
-    console.error(`[Export Processor] Job ${queueItemId} failed:`, error);
-    queueManager.failItem(queueItemId, error.message || "Internal FFmpeg error", false);
   }
 }
 

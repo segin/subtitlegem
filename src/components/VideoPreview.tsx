@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { SubtitleLine, SubtitleConfig, TrackStyle, Alignment } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, TrackStyle } from "@/types/subtitle";
 
 interface PreviewProps {
   videoUrl: string;
@@ -16,7 +16,6 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeSubtitle, setActiveSubtitle] = useState<SubtitleLine | null>(null);
-  const [aspectRatio, setAspectRatio] = useState<number>(16/9);
   const [containerHeight, setContainerHeight] = useState<number>(0);
 
   useEffect(() => {
@@ -38,7 +37,7 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
 
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [videoUrl]);
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
@@ -48,10 +47,6 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
 
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
-      const { videoWidth, videoHeight } = videoRef.current;
-      if (videoWidth && videoHeight) {
-        setAspectRatio(videoWidth / videoHeight);
-      }
       onDurationChange(videoRef.current.duration);
     }
   };
@@ -85,10 +80,10 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
       pointerEvents: 'none' as const,
       justifyContent,
       alignItems,
-      paddingTop: `${scaledMarginV}px`,
-      paddingBottom: `${scaledMarginV}px`,
-      paddingLeft: `${scaledMarginH}px`,
-      paddingRight: `${scaledMarginH}px`,
+      paddingTop: `${scaledMarginV || 0}px`,
+      paddingBottom: `${scaledMarginV || 0}px`,
+      paddingLeft: `${scaledMarginH || 0}px`,
+      paddingRight: `${scaledMarginH || 0}px`,
     };
   };
 
@@ -99,23 +94,22 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
   };
 
   return (
-    <div className="relative w-full aspect-video bg-[#000000] flex items-center justify-center overflow-hidden border border-[#333333] shadow-lg">
+    <div className="w-full bg-[#000000] flex items-center justify-center overflow-hidden border border-[#333333] shadow-lg p-4">
       <div 
         ref={containerRef}
-        className="relative h-full max-w-full"
-        style={{ aspectRatio: `${aspectRatio}` }}
+        className="relative inline-block"
       >
         <video
           ref={videoRef}
           src={videoUrl}
-          className="w-full h-full object-cover"
+          className="max-h-[65vh] max-w-full object-contain block"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           controls
         />
         
         {activeSubtitle && (
-          <>
+          <div className="absolute inset-0 pointer-events-none">
             {/* Primary Track Layer */}
             <div style={getPositionStyles(config.primary)}>
                <div 
@@ -151,7 +145,7 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
                  </div>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

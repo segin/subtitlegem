@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as queueDb from './queue-db';
 import path from 'path';
 import os from 'os';
+import { processJob } from './job-processor';
 
 export interface QueueItem {
   id: string;
@@ -358,11 +359,30 @@ class QueueManager {
   /**
    * Process the next item(s) in the queue
    */
+
+  /**
+   * execute a job using the centralized processor
+   */
+  private async runJob(item: QueueItem) {
+    try {
+      const result = await processJob(item, (progress) => {
+        this.updateProgress(item.id, progress);
+      });
+      this.completeItem(item.id, result);
+    } catch (error: any) {
+      this.failItem(item.id, error.message || String(error));
+    }
+  }
+
+  /**
+   * Process the next item(s) in the queue
+   */
   private processNext(): void {
     if (this.paused) {
       return;
     }
     
+    // Check if we can process more
     const canProcessMore = this.processing.size < this.config.maxConcurrent;
     
     if (!canProcessMore) {
@@ -384,6 +404,8 @@ class QueueManager {
         startedAt: Date.now(),
       });
       
+      // Execute the job
+      this.runJob(item);
     });
   }
 
