@@ -231,3 +231,41 @@ export async function generateSubtitlesInline(
     throw error;
   }
 }
+
+export async function translateSubtitles(
+  subtitles: any[],
+  targetLanguage: string,
+  modelName: string = "gemini-2.5-flash"
+) {
+  const prompt = `
+    You are an expert translator.
+    Translate the 'text' field of the following JSON subtitles into ${targetLanguage}.
+    Put the translated text into the 'secondaryText' field.
+    
+    Rules:
+    1. PRESERVE 'startTime' and 'endTime' EXACTLY.
+    2. PRESERVE the number of objects and their order.
+    3. Output JSON ONLY.
+    
+    Input JSON:
+    ${JSON.stringify(subtitles)}
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: { responseMimeType: "application/json" },
+    });
+
+    const text = response.text!;
+    const result = JSON.parse(text);
+    
+    if (Array.isArray(result)) return result;
+    if (result.subtitles) return result.subtitles;
+    return result; 
+  } catch (error) {
+    console.error("Translation error:", error);
+    throw error;
+  }
+}

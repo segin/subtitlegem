@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadToGemini, generateSubtitles, generateSubtitlesInline } from "@/lib/gemini";
+import { uploadToGemini, generateSubtitles, generateSubtitlesInline, translateSubtitles } from "@/lib/gemini";
 import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
 import fs from "fs";
 import path from "path";
@@ -26,6 +26,46 @@ const ALLOWED_LANGUAGES = [
 ];
 
 export async function POST(req: NextRequest) {
+  // Handle JSON requests for Reprocessing/Translation
+  if (req.headers.get("content-type")?.includes("application/json")) {
+    try {
+      const { mode, fileUri, language, secondaryLanguage, subtitles, model } = await req.json();
+      const modelName = model || "gemini-2.5-flash";
+
+      if (mode === 'reprocess') {
+         if (!fileUri) return NextResponse.json({ error: "No fileUri provided" }, { status: 400 });
+         
+         console.log(`Reprocessing with file: ${fileUri}, Lang: ${language}`);
+         const result = await generateSubtitles(
+            fileUri, 
+            "video/mp4", // In reprocess mode we assume video uri is valid and type is generic enough or known
+            secondaryLanguage === "None" ? undefined : secondaryLanguage,
+            1,
+            modelName
+         );
+         
+         // Override detected language if we forced it? No, keep AI detection or allow user override hint?
+         // For now, return result.
+         return NextResponse.json(result);
+      
+      } else if (mode === 'translate') {
+         if (!subtitles) return NextResponse.json({ error: "No subtitles provided" }, { status: 400 });
+         
+         console.log(`Retranslating to: ${secondaryLanguage}`);
+         const translated = await translateSubtitles(subtitles, secondaryLanguage, modelName);
+         
+         return NextResponse.json({ subtitles: translated });
+      }
+      
+      return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
+
+    } catch (e: any) {
+      console.error("API Error:", e);
+      return NextResponse.json({ error: e.message }, { status: 500 });
+    }
+  }
+
+  // Handle Multipart Upload (Existing Logic + Meta Return)
   console.log("Processing POST request to /api/process (Streamed via Busboy)");
 
   try {
@@ -86,7 +126,6 @@ export async function POST(req: NextRequest) {
     }
     
     if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
-        // If it's empty, we treat it as no secondary language
         if (secondaryLanguage.trim() !== "") {
              return NextResponse.json({ error: "Invalid secondary language" }, { status: 400 });
         }
@@ -97,9 +136,9 @@ export async function POST(req: NextRequest) {
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
 
     let processPath = videoPath;
-    const stagingDir = tempDir; // Use tempDir as staging directory
+    const stagingDir = tempDir; 
     let useInlineData = false;
-    const INLINE_SIZE_LIMIT_MB = 9.8; // Guard band below 10MB Gemini inline limit
+    const INLINE_SIZE_LIMIT_MB = 9.8; 
 
     if (fileSizeInMB > 400) {
       console.log("File > 400MB, extracting audio...");
@@ -111,29 +150,12 @@ export async function POST(req: NextRequest) {
         let newMime = "audio/mp4";
 
         switch (codec) {
-          case "aac":
-            ext = "m4a";
-            newMime = "audio/mp4";
-            break;
-          case "mp3":
-            ext = "mp3";
-            newMime = "audio/mpeg";
-            break;
-          case "opus":
-            ext = "ogg";
-            newMime = "audio/ogg";
-            break;
-          case "vorbis":
-            ext = "ogg";
-            newMime = "audio/ogg";
-            break;
-          case "flac":
-            ext = "flac";
-            newMime = "audio/flac";
-            break;
-          default:
-            ext = "m4a";
-            newMime = "audio/mp4";
+          case "aac": ext = "m4a"; newMime = "audio/mp4"; break;
+          case "mp3": ext = "mp3"; newMime = "audio/mpeg"; break;
+          case "opus": ext = "ogg"; newMime = "audio/ogg"; break;
+          case "vorbis": ext = "ogg"; newMime = "audio/ogg"; break;
+          case "flac": ext = "flac"; newMime = "audio/flac"; break;
+          default: ext = "m4a"; newMime = "audio/mp4";
         }
 
         const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.${ext}`);
@@ -144,7 +166,7 @@ export async function POST(req: NextRequest) {
             .audioCodec('copy')
             .outputOptions('-movflags', 'faststart')
             .on('end', () => {
-              console.log('Audio extraction complete (stream copy - no re-encoding)');
+              console.log('Audio extraction complete');
               resolve();
             })
             .on('error', (err: any) => {
@@ -164,14 +186,16 @@ export async function POST(req: NextRequest) {
         console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
       } catch (audioErr) {
         console.error('Audio extraction failed, using original file:', audioErr);
-        // Fall back to original file if extraction fails
       }
     } else {
       useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
     }
 
-    // Generate subtitles using appropriate method
+    // Generate subtitles
     let result;
+    let geminiFileUri: string | null = null;
+    let geminiFileExpiration: string | null = null;
+    let fileId: string | null = null;
     
     if (useInlineData) {
       console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
@@ -189,6 +213,10 @@ export async function POST(req: NextRequest) {
       console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
       
       const geminiFile = await uploadToGemini(processPath, mimeType);
+      geminiFileUri = geminiFile.uri || null;
+      geminiFileExpiration = geminiFile.expirationTime || null;
+      fileId = geminiFile.name || null;
+      
       result = await generateSubtitles(
         geminiFile.uri!,
         mimeType,
@@ -198,7 +226,6 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // Result now contains { detectedLanguage, subtitles }
     const { subtitles, detectedLanguage } = result;
 
     try {
@@ -208,7 +235,14 @@ export async function POST(req: NextRequest) {
         }
     } catch (e) { console.error("Cleanup error", e); }
 
-    return NextResponse.json({ subtitles, videoPath, detectedLanguage });
+    return NextResponse.json({ 
+      subtitles, 
+      videoPath, 
+      detectedLanguage,
+      geminiFileUri,
+      geminiFileExpiration,
+      fileId
+    });
 
   } catch (error: any) {
     console.error("Error processing video:", error);

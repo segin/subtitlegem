@@ -43,6 +43,9 @@ export interface SubtitleConfig {
   ffmpeg: FFmpegConfig;
   primaryLanguage?: string;
   secondaryLanguage?: string;
+  geminiFileUri?: string | null;
+  geminiFileExpiration?: string | null;
+  fileId?: string | null;
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {

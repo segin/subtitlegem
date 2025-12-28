@@ -5,7 +5,7 @@ import {
   FileVideo, FolderOpen, Save, Download, X, 
   Undo2, Redo2, Scissors, Copy, ClipboardPaste, Search, 
   Merge, Split, Clock, PanelLeft, PanelBottom, 
-  ZoomIn, Palette, Keyboard 
+  ZoomIn, Palette, Keyboard, Settings 
 } from "lucide-react";
 
 interface MenuItemBase {
@@ -106,6 +106,7 @@ interface MenuBarProps {
   onShowShortcuts?: () => void;
   onSaveProject?: () => void;
   onOpenProject?: () => void;
+  onProjectSettings?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;
   secondaryLanguage?: string;
@@ -128,6 +129,7 @@ export function MenuBar({
   onShowShortcuts,
   onSaveProject,
   onOpenProject,
+  onProjectSettings,
   hasSecondarySubtitles = false,
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
@@ -172,6 +174,8 @@ export function MenuBar({
     { label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, disabled: true },
     { label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true },
     { label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: true },
+    { divider: true },
+    { label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings },
   ];
 
   const viewItems: MenuItem[] = [

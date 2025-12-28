@@ -18,6 +18,8 @@ import { generateAss } from "@/lib/ass-utils";
 import { v4 as uuidv4 } from "uuid";
 import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo, Play, Pause } from "lucide-react";
 
+import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+
 export default function Home() {
   const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -26,6 +28,7 @@ export default function Home() {
   const [currentTime, setCurrentTime] = useState(0);
   const [config, setConfig] = useState<SubtitleConfig>(DEFAULT_CONFIG);
   const [showRawEditor, setShowRawEditor] = useState(false);
+  const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'list' | 'style'>('list');
   
   // Queue state
@@ -360,6 +363,7 @@ export default function Home() {
             onCloseProject={handleCloseProject}
             onSaveProject={handleSaveProject}
             onOpenProject={() => document.getElementById('project-upload')?.click()}
+            onProjectSettings={() => setShowProjectSettings(true)}
           />
           <input 
             type="file" 
@@ -576,6 +580,42 @@ export default function Home() {
           onCancel={() => setShowRawEditor(false)} 
         />
       )}
+      
+      <ProjectSettingsDialog
+        isOpen={showProjectSettings}
+        onClose={() => setShowProjectSettings(false)}
+        config={config}
+        onUpdateConfig={(updates) => setConfig(prev => ({ ...prev, ...updates }))}
+        onReprocess={async (lang) => {
+            const res = await fetch('/api/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: 'reprocess',
+                    fileUri: config.geminiFileUri,
+                    language: lang,
+                    secondaryLanguage: config.secondaryLanguage
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setSubtitles(data.subtitles);
+        }}
+        onRetranslate={async (secLang) => {
+            const res = await fetch('/api/process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    mode: 'translate',
+                    subtitles: subtitles,
+                    secondaryLanguage: secLang
+                })
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            setSubtitles(data.subtitles);
+        }}
+      />
     </div>
   );
 }
