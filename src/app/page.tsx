@@ -127,7 +127,7 @@ export default function Home() {
     };
   }, []);
 
-  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string) => {
+  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string) => {
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
       startTime: parseSRTTime(s.startTime),
@@ -139,6 +139,13 @@ export default function Home() {
     setVideoUrl(url);
     setVideoPath(serverPath);
     setCurrentDraftId(null); // Reset for new uploads
+    
+    // Auto-set detected language
+    setConfig(prev => ({
+      ...prev,
+      primaryLanguage: detectedLanguage || "English",
+      secondaryLanguage: lang === "None" ? "Secondary" : lang
+    }));
   };
   
   const handleEditFromQueue = async (item: QueueItem) => {

@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X } from "lucide-react";
 
 interface VideoUploadProps {
-  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string) => void;
+  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string) => void;
 }
 
 export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
@@ -210,7 +210,13 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
         try {
           const data = JSON.parse(xhr.responseText);
           if (data.error) setError(data.error);
-          else onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath);
+          else onUploadComplete(
+            data.subtitles, 
+            URL.createObjectURL(file), 
+            secondaryLanguage, 
+            data.videoPath,
+            data.detectedLanguage
+          );
         } catch (e) { setError("Failed to parse response"); }
       } else if (xhr.status === 429) {
         setError("Rate limit exceeded. Please wait.");

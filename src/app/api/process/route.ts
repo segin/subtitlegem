@@ -168,14 +168,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate subtitles using appropriate method
-    let subtitles;
+    let result;
     
     if (useInlineData) {
       console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
       
       const fileBuffer = fs.readFileSync(processPath);
       const base64Data = fileBuffer.toString('base64');
-      subtitles = await generateSubtitlesInline(
+      result = await generateSubtitlesInline(
         base64Data,
         mimeType,
         secondaryLanguage === "None" ? undefined : secondaryLanguage,
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
       console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
       
       const geminiFile = await uploadToGemini(processPath, mimeType);
-      subtitles = await generateSubtitles(
+      result = await generateSubtitles(
         geminiFile.uri!,
         mimeType,
         secondaryLanguage === "None" ? undefined : secondaryLanguage,
@@ -194,6 +194,9 @@ export async function POST(req: NextRequest) {
         modelName
       );
     }
+    
+    // Result now contains { detectedLanguage, subtitles }
+    const { subtitles, detectedLanguage } = result;
 
     try {
         if (processPath !== videoPath && fs.existsSync(processPath)) {
@@ -202,7 +205,7 @@ export async function POST(req: NextRequest) {
         }
     } catch (e) { console.error("Cleanup error", e); }
 
-    return NextResponse.json({ subtitles, videoPath });
+    return NextResponse.json({ subtitles, videoPath, detectedLanguage });
 
   } catch (error: any) {
     console.error("Error processing video:", error);

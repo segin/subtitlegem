@@ -6,29 +6,39 @@ const ai = new GoogleGenAI({
 });
 
 const subtitleSchema = {
-  type: "ARRAY",
-  items: {
-    type: "OBJECT",
-    properties: {
-      startTime: {
-        type: "STRING",
-        description: "Timestamp in HH:MM:SS,mmm format",
-      },
-      endTime: {
-        type: "STRING",
-        description: "Timestamp in HH:MM:SS,mmm format",
-      },
-      text: {
-        type: "STRING",
-        description: "English subtitle text",
-      },
-      secondaryText: {
-        type: "STRING",
-        description: "Secondary language subtitle text",
+  type: "OBJECT",
+  properties: {
+    detectedLanguage: {
+      type: "STRING",
+      description: "The primary language detected in the video audio (e.g. 'English', 'Spanish', 'Japanese').",
+    },
+    subtitles: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          startTime: {
+            type: "STRING",
+            description: "Timestamp in HH:MM:SS,mmm format",
+          },
+          endTime: {
+            type: "STRING",
+            description: "Timestamp in HH:MM:SS,mmm format",
+          },
+          text: {
+            type: "STRING",
+            description: "Primary language subtitle text (transcribed)",
+          },
+          secondaryText: {
+            type: "STRING",
+            description: "Secondary language translation (if requested)",
+          },
+        },
+        required: ["startTime", "endTime", "text"],
       },
     },
-    required: ["startTime", "endTime", "text"],
   },
+  required: ["detectedLanguage", "subtitles"],
 };
 
 export async function uploadToGemini(filePath: string, mimeType: string) {
@@ -90,7 +100,10 @@ export async function generateSubtitles(
   modelName: string = "gemini-2.5-flash"
 ) {
   const prompt = `
-    Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
+    Analyze the audio in this video.
+    1. Detect the primary spoken language.
+    2. Generate subtitles in that detected primary language.
+    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field.` : ""}
     
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
@@ -159,7 +172,10 @@ export async function generateSubtitlesInline(
   modelName: string = "gemini-2.5-flash"
 ) {
   const prompt = `
-    Generate subtitles for this video in English${secondaryLanguage ? ` and ${secondaryLanguage}` : ""}.
+    Analyze the audio in this video.
+    1. Detect the primary spoken language.
+    2. Generate subtitles in that detected primary language.
+    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field.` : ""}
     
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
