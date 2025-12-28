@@ -185,7 +185,7 @@ export default function Home() {
     setQueuePaused(!queuePaused);
   };
 
-  const handleExport = (format: 'ass' | 'srt' | 'txt') => {
+  const handleExport = (format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
     let content = "";
     let fileName = "subtitles";
     let mimeType = "text/plain";
@@ -193,9 +193,12 @@ export default function Home() {
     if (format === 'ass') {
       content = generateAss(subtitles, config);
       fileName = 'project.ass';
-    } else if (format === 'srt') {
+    } else if (format === 'srt' || format === 'srt-primary') {
       content = stringifySRT(subtitles, 'primary');
       fileName = 'subtitles_en.srt';
+    } else if (format === 'srt-secondary') {
+      content = stringifySRT(subtitles, 'secondary');
+      fileName = 'subtitles_secondary.srt';
     } else if (format === 'txt') {
       content = subtitles.map(s => s.text).join('\n');
       fileName = 'transcript.txt';
@@ -209,19 +212,6 @@ export default function Home() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-
-    // If srt and has secondary, also download secondary
-    if (format === 'srt' && subtitles.some(s => s.secondaryText)) {
-      const secondaryContent = stringifySRT(subtitles, 'secondary');
-      const secondaryBlob = new Blob([secondaryContent], { type: 'text/plain' });
-      const secondaryUrl = URL.createObjectURL(secondaryBlob);
-      const b = document.createElement('a');
-      b.href = secondaryUrl;
-      b.download = 'subtitles_secondary.srt';
-      document.body.appendChild(b);
-      b.click();
-      document.body.removeChild(b);
-    }
   };
 
   if (!videoUrl) {
@@ -284,6 +274,7 @@ export default function Home() {
               }
             }}
             onExport={handleExport}
+            hasSecondarySubtitles={subtitles.some(s => !!s.secondaryText)}
             onCloseProject={() => {
               if(confirm("Discard current project?")) {
                 setVideoUrl(null);

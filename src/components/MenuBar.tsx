@@ -93,7 +93,7 @@ interface MenuBarProps {
   onNewProject?: () => void;
   onOpenDraft?: () => void;
   onSaveDraft?: () => void;
-  onExport?: (format: 'ass' | 'srt' | 'txt') => void;
+  onExport?: (format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => void;
   onCloseProject?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
@@ -104,6 +104,7 @@ interface MenuBarProps {
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onShowShortcuts?: () => void;
+  hasSecondarySubtitles?: boolean;
 }
 
 export function MenuBar({
@@ -121,6 +122,7 @@ export function MenuBar({
   onZoomIn,
   onZoomOut,
   onShowShortcuts,
+  hasSecondarySubtitles = false,
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
@@ -128,7 +130,19 @@ export function MenuBar({
     { label: "Save Draft", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveDraft },
     { divider: true },
     { label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass') },
-    { label: "Export Subtitles (.srt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('srt') },
+    
+    // Split SRT Export
+    { 
+      label: hasSecondarySubtitles ? "Export Primary (.srt)" : "Export Subtitles (.srt)", 
+      icon: <Download className="w-4 h-4" />, 
+      onClick: () => onExport?.(hasSecondarySubtitles ? 'srt-primary' : 'srt') 
+    },
+    ...(hasSecondarySubtitles ? [{
+      label: "Export Secondary (.srt)", 
+      icon: <Download className="w-4 h-4" />, 
+      onClick: () => onExport?.('srt-secondary') 
+    }] : []),
+
     { label: "Export Transcript (.txt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('txt') },
     { divider: true },
     { label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject },
