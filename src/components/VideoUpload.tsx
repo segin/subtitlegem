@@ -371,23 +371,45 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
               ) : (
                 <div className="grid grid-cols-1 gap-2">
                   {availableModels.map(m => (
-                    <button
-                      key={m.name}
-                      onClick={() => {
-                        setModel(m.name);
-                        setShowModelChooser(false);
-                        setTestResult(null);
-                      }}
-                      className={`flex flex-col p-3 text-left border rounded transition-colors ${
-                        model === m.name
-                          ? "bg-[#094771] border-[#007acc] text-white"
-                          : "bg-[#1e1e1e] border-[#3e3e42] text-[#cccccc] hover:bg-[#2a2d2e]"
-                      }`}
-                      type="button"
-                    >
-                      <div className="text-sm font-medium">{m.displayName}</div>
-                      <div className="text-[10px] opacity-60 font-mono mt-1">{m.name}</div>
-                    </button>
+                    <div key={m.name} className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          setModel(m.name);
+                          setShowModelChooser(false);
+                          setTestResult(null);
+                        }}
+                        className={`flex-1 flex flex-col p-3 text-left border rounded transition-colors ${
+                          model === m.name
+                            ? "bg-[#094771] border-[#007acc] text-white"
+                            : "bg-[#1e1e1e] border-[#3e3e42] text-[#cccccc] hover:bg-[#2a2d2e]"
+                        }`}
+                        type="button"
+                      >
+                        <div className="text-sm font-medium">{m.displayName}</div>
+                        <div className="text-[10px] opacity-60 font-mono mt-1">{m.name}</div>
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setTesting(true);
+                          setTestResult(null);
+                          try {
+                            const res = await fetch(`/api/models?test=${encodeURIComponent(m.name)}`);
+                            const data = await res.json();
+                            alert(data.success ? `Model ${m.name} is OK!` : `Error: ${data.error || 'Model not accessible'}`);
+                          } catch (err: any) {
+                            alert(`Test failed: ${err.message}`);
+                          } finally {
+                            setTesting(false);
+                          }
+                        }}
+                        disabled={testing || loading}
+                        className="px-3 bg-[#333333] hover:bg-[#454545] text-[#cccccc] rounded border border-[#454545] transition-colors"
+                        title="Test this model"
+                        type="button"
+                      >
+                        {testing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   ))}
                   {availableModels.length === 0 && (
                     <div className="text-center py-8 text-[#666666]">

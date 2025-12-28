@@ -31,6 +31,59 @@ export default function Home() {
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [queuePaused, setQueuePaused] = useState(false);
   
+  // Draft state
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
+
+  // Load draft functionality
+  const handleLoadDraft = async (draft: any) => {
+    try {
+      const res = await fetch(`/api/drafts?id=${draft.id}`);
+      const data = await res.json();
+      
+      if (data.id) {
+        setSubtitles(data.subtitles || []);
+        setVideoPath(data.videoPath || null);
+        setVideoUrl(data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null);
+        setCurrentDraftId(data.id);
+        if (data.config) setConfig(data.config);
+      }
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+    }
+  };
+
+  // Auto-save debounced
+  useEffect(() => {
+    if (!videoUrl || !videoPath || subtitles.length === 0) return;
+
+    const timeoutId = setTimeout(async () => {
+      try {
+        const body = {
+          id: currentDraftId || undefined,
+          name: videoPath.split('/').pop() || "Untitled Project",
+          videoPath,
+          subtitles,
+          config,
+        };
+        
+        const res = await fetch('/api/drafts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        
+        const data = await res.json();
+        if (data.id && !currentDraftId) {
+          setCurrentDraftId(data.id);
+        }
+      } catch (err) {
+        console.error("Auto-save failed:", err);
+      }
+    }, 5000); // 5 second debounce for auto-save
+
+    return () => clearTimeout(timeoutId);
+  }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
+  
   // Poll queue status
   useEffect(() => {
     const pollQueue = async () => {
@@ -63,6 +116,7 @@ export default function Home() {
     setSubtitles(mapped);
     setVideoUrl(url);
     setVideoPath(serverPath);
+    setCurrentDraftId(null); // Reset for new uploads
   };
   
   const handleEditFromQueue = async (item: QueueItem) => {
@@ -140,10 +194,7 @@ export default function Home() {
       <main className="min-h-screen h-screen bg-[#1e1e1e] flex text-[#cccccc] overflow-hidden">
         {/* Draft Projects Sidebar - Left side */}
         <DraftsSidebar 
-          onLoadDraft={(draft) => {
-            // TODO: Load draft project
-            console.log('Load draft:', draft.id);
-          }}
+          onLoadDraft={handleLoadDraft}
         />
 
         {/* Main Upload Area - Center */}

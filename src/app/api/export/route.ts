@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queueManager } from "@/lib/queue-manager";
 import { burnSubtitles } from "@/lib/ffmpeg-utils";
 import { generateAss } from "@/lib/ass-utils";
-import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, FFmpegConfig } from "@/types/subtitle";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -23,6 +23,7 @@ const exportMetadata = new Map<string, {
   outputPath: string;
   videoPath: string;
   sampleDuration?: number;
+  ffmpegConfig: FFmpegConfig;
 }>();
 
 export async function POST(req: NextRequest) {
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
       outputPath,
       videoPath,
       sampleDuration: sampleDuration || undefined,
+      ffmpegConfig: config.ffmpeg,
     });
 
     // Start processing the job
@@ -114,6 +116,9 @@ async function processExportJob(queueItemId: string) {
 
     await burnSubtitles(metadata.videoPath, metadata.assPath, metadata.outputPath, {
       sampleDuration: metadata.sampleDuration,
+      hwaccel: metadata.ffmpegConfig.hwaccel,
+      preset: metadata.ffmpegConfig.preset,
+      crf: metadata.ffmpegConfig.crf,
       onProgress: (percent: number) => {
         queueManager.updateItem(queueItemId, {
           progress: Math.round(percent),

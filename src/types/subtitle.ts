@@ -28,9 +28,16 @@ export interface TrackStyle {
   shadowDistance?: number; // Optional shadow offset
 }
 
+export interface FFmpegConfig {
+  hwaccel: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
+  preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
+  crf: number;
+}
+
 export interface SubtitleConfig {
   primary: TrackStyle;
   secondary: TrackStyle;
+  ffmpeg: FFmpegConfig;
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {
@@ -57,6 +64,11 @@ export const DEFAULT_CONFIG: SubtitleConfig = {
     outlineColor: '#000000',
     outlineWidth: 2,
     shadowDistance: 1,
+  },
+  ffmpeg: {
+    hwaccel: 'none',
+    preset: 'veryfast',
+    crf: 23,
   }
 };
 

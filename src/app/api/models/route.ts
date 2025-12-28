@@ -55,11 +55,7 @@ export async function GET(req: NextRequest) {
     for await (const model of pager) {
       const modelName = model.name || "";
       // Only include generative models that support generateContent
-      // and are NOT retired (2.0 and earlier, including all 1.x models)
-      const isGenerative = (model as any).supportedGenerationMethods?.includes("generateContent");
-      const isRetired = /gemini-(1\.|2\.0)/.test(modelName) || modelName.includes("pro-vision");
-
-      if (isGenerative && !isRetired) {
+      if ((model as any).supportedGenerationMethods?.includes("generateContent")) {
         models.push({
           name: modelName,
           displayName: model.displayName || modelName,
