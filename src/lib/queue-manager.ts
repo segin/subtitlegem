@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as queueDb from './queue-db';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 import { processJob } from './job-processor';
 import { EventEmitter } from 'events';
 
@@ -210,6 +211,33 @@ class QueueManager extends EventEmitter {
   }
 
    /**
+   * Helper to delete physical files associated with a queue item
+   */
+  private cleanupFiles(item: QueueItem): void {
+    try {
+      // 1. Delete original upload (staging)
+      if (item.file.path && fs.existsSync(item.file.path)) {
+        fs.unlinkSync(item.file.path);
+        console.log(`[Queue Cleanup] Deleted source file: ${item.file.path}`);
+      }
+      
+      // 2. Delete result files (video, srt)
+      if (item.result?.videoPath && fs.existsSync(item.result.videoPath)) {
+        fs.unlinkSync(item.result.videoPath);
+        console.log(`[Queue Cleanup] Deleted output video: ${item.result.videoPath}`);
+      }
+      
+      if (item.result?.srtPath && fs.existsSync(item.result.srtPath)) {
+        fs.unlinkSync(item.result.srtPath);
+        console.log(`[Queue Cleanup] Deleted output SRT: ${item.result.srtPath}`);
+      }
+      
+    } catch (error) {
+      console.error(`[Queue Cleanup] Failed to delete files for item ${item.id}:`, error);
+    }
+  }
+
+  /**
    * Remove an item from the queue (allow removing even if processing)
    */
   removeItem(id: string, force: boolean = false): boolean {
@@ -225,8 +253,9 @@ class QueueManager extends EventEmitter {
     }
     
     const removed = this.queue.delete(id);
-    if (removed) {
+    if (removed && item) {
       queueDb.deleteItem(id); // Remove from SQLite
+      this.cleanupFiles(item); // Clean up physical files
       this.emit('update');
     }
     
@@ -284,11 +313,27 @@ class QueueManager extends EventEmitter {
   clearCompleted(): number {
     let count = 0;
     
+    // Create a snapshot of IDs to avoid modification iterator issues
+    const idsToRemove: string[] = [];
+    
     for (const [id, item] of this.queue.entries()) {
       if (item.status === 'completed' || item.status === 'failed') {
+        idsToRemove.push(id);
+      }
+    }
+    
+    idsToRemove.forEach(id => {
+      const item = this.queue.get(id);
+      if (item) {
         this.queue.delete(id);
+        queueDb.deleteItem(id);
+        this.cleanupFiles(item);
         count++;
       }
+    });
+    
+    if (count > 0) {
+      this.emit('update');
     }
     
     return count;
@@ -300,11 +345,26 @@ class QueueManager extends EventEmitter {
   clearAll(): number {
     let count = 0;
     
+    const idsToRemove: string[] = [];
+    
     for (const [id, item] of this.queue.entries()) {
       if (item.status !== 'processing') {
-        this.queue.delete(id);
-        count++;
+        idsToRemove.push(id);
       }
+    }
+    
+    idsToRemove.forEach(id => {
+       const item = this.queue.get(id);
+       if (item) {
+         this.queue.delete(id);
+         queueDb.deleteItem(id);
+         this.cleanupFiles(item);
+         count++;
+       }
+    });
+    
+    if (count > 0) {
+      this.emit('update');
     }
     
     return count;

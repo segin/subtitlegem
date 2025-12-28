@@ -62,13 +62,21 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE /api/queue?id=:id - Remove item from queue
+// DELETE /api/queue - Remove item from queue or clear completed
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
+    const action = searchParams.get('action');
     const id = searchParams.get('id');
     const force = searchParams.get('force') === 'true';
     
+    // Handle clear completed
+    if (action === 'clear_completed') {
+      const count = queueManager.clearCompleted();
+      return NextResponse.json({ success: true, count });
+    }
+    
+    // Handle single item delete
     if (!id) {
       return NextResponse.json(
         { error: 'Missing queue item ID' },

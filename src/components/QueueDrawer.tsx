@@ -180,7 +180,14 @@ export function QueueDrawer({
           </span>
           {completedItems.length > 0 && (
             <button
-              onClick={() => completedItems.forEach(i => onRemove(i.id))}
+              onClick={async () => {
+                try {
+                  await fetch('/api/queue?action=clear_completed', { method: 'DELETE' });
+                  // No need to manually update state, SSE will handle it
+                } catch (e) {
+                  console.error("Failed to clear completed items", e);
+                }
+              }}
               className="text-[9px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#888888] transition-colors"
             >
               Clear All
