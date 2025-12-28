@@ -9,6 +9,10 @@ export async function GET(request: NextRequest) {
   
   const stream = new ReadableStream({
     start(controller) {
+      // Send padding to flush proxy buffers (~2KB)
+      const padding = ': ' + ' '.repeat(2048) + '\n\n';
+      controller.enqueue(encoder.encode(padding));
+
       // Send initial state immediately
       const initialState = {
         type: 'initial',
@@ -35,7 +39,7 @@ export async function GET(request: NextRequest) {
       // Subscribe to updates
       queueManager.on('update', onUpdate);
 
-      // Heartbeat to keep connection alive (every 15s)
+      // Heartbeat to keep connection alive (every 2s for proxies)
       const heartbeat = setInterval(() => {
         try {
           controller.enqueue(encoder.encode(': heartbeat\n\n'));
@@ -43,7 +47,7 @@ export async function GET(request: NextRequest) {
           clearInterval(heartbeat);
           queueManager.off('update', onUpdate);
         }
-      }, 15000);
+      }, 2000);
 
       // Cleanup on close
       request.signal.addEventListener('abort', () => {
