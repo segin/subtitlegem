@@ -298,12 +298,25 @@ export default function Home() {
     openShiftKeyRef.current = false;
   };
 
-  const handleCloseProject = () => {
+  const handleCloseProject = async () => {
+    // If there's a saved draft, offer to delete it
+    if (currentDraftId) {
+      const shouldDelete = confirm("Delete this project from Recent Projects?");
+      if (shouldDelete) {
+        try {
+          await fetch(`/api/drafts?id=${currentDraftId}`, { method: 'DELETE' });
+        } catch (err) {
+          console.error("Failed to delete draft:", err);
+        }
+      }
+    }
+    
     setVideoUrl(null);
     setVideoPath(null);
-    setSubtitles([]);
+    resetHistory([]);
     setCurrentDraftId(null);
     setConfig(DEFAULT_CONFIG);
+    setInitialSubtitles(null);
   };
 
   if (!videoUrl) {
