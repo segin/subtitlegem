@@ -53,11 +53,16 @@ export async function GET(req: NextRequest) {
     const pager = await ai.models.list();
     
     for await (const model of pager) {
+      const modelName = model.name || "";
       // Only include generative models that support generateContent
-      if ((model as any).supportedGenerationMethods?.includes("generateContent")) {
+      // and are NOT retired (2.0 and earlier, including all 1.x models)
+      const isGenerative = (model as any).supportedGenerationMethods?.includes("generateContent");
+      const isRetired = /gemini-(1\.|2\.0)/.test(modelName) || modelName.includes("pro-vision");
+
+      if (isGenerative && !isRetired) {
         models.push({
-          name: model.name || "",
-          displayName: model.displayName || model.name || "",
+          name: modelName,
+          displayName: model.displayName || modelName,
           description: model.description,
           inputTokenLimit: model.inputTokenLimit,
           outputTokenLimit: model.outputTokenLimit,

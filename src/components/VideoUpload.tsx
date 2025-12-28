@@ -12,7 +12,7 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
-  const [model, setModel] = useState("gemini-2.5-flash");
+  const [model, setModel] = useState("gemini-3.0-flash");
   const [isDragging, setIsDragging] = useState(false);
   
   const [progress, setProgress] = useState(0);
@@ -218,13 +218,12 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
                 disabled={loading}
                 className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
               >
+                <option value="gemini-3.0-flash">Gemini 3.0 Flash (Fastest)</option>
+                <option value="gemini-3.0-pro">Gemini 3.0 Pro (Advanced)</option>
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
                 {/* Show current model if it's not in the main list */}
-                {!['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-pro'].includes(model) && (
+                {!['gemini-3.0-flash','gemini-3.0-pro','gemini-2.5-flash','gemini-2.5-pro'].includes(model) && (
                   <option value={model}>{model}</option>
                 )}
                 <option value="...">... (Choose other model)</option>
