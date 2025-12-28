@@ -15,6 +15,7 @@ interface ExportRequest {
   subtitles: SubtitleLine[];
   config: SubtitleConfig;
   sampleDuration?: number | null;
+  filename?: string;
 }
 
 // Metadata store for export jobs (extends queue items with export-specific data)
@@ -22,7 +23,7 @@ interface ExportRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    const { videoPath, subtitles, config, sampleDuration }: ExportRequest = await req.json();
+    const { videoPath, subtitles, config, sampleDuration, filename }: ExportRequest = await req.json();
     const stagingDir = getStagingDir();
 
     if (!videoPath) {
@@ -42,7 +43,17 @@ export async function POST(req: NextRequest) {
     }
 
     const assPath = path.join(exportDir, "subtitles.ass");
-    const outputName = `export_${path.basename(videoPath, path.extname(videoPath))}_${Date.now()}.mp4`;
+    
+    // Construct readable output filename
+    // Fallback to basename if no original filename provided
+    const baseName = filename 
+        ? path.basename(filename, path.extname(filename)) 
+        : path.basename(videoPath, path.extname(videoPath));
+        
+    // Clean string (alphanumeric + safe chars) to prevent FS issues
+    const safeBaseName = baseName.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    
+    const outputName = `${safeBaseName}_export_${Date.now()}.mp4`; // Unique output name
     const outputPath = path.join(exportDir, outputName);
 
     // Generate ASS file
@@ -52,11 +63,11 @@ export async function POST(req: NextRequest) {
     // Add to queue with persistent metadata
     const queueItem = queueManager.addItem({
       file: {
-        name: `Export: ${path.basename(videoPath)}`,
+        name: `Export: ${filename || path.basename(videoPath)}`,
         size: fs.statSync(videoPath).size,
         type: "video/mp4",
       },
-      model: 'ffmpeg-burn', // Identify the type of job
+      model: `Export: ${filename || 'Video'}`, // Readable display name for Queue
       metadata: {
         assPath,
         outputPath,

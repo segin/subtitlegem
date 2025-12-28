@@ -86,6 +86,7 @@ export async function POST(req: NextRequest) {
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-2.5-flash";
+    let originalFilename = "";
     
     // We need to wait for BOTH busboy to finish parsing AND the file write stream to finish writing.
     const fileWritePromise = new Promise<void>((resolve, reject) => {
@@ -95,6 +96,7 @@ export async function POST(req: NextRequest) {
         if (name === "video") {
           const { filename, mimeType: fileMime } = info;
           mimeType = fileMime;
+          originalFilename = filename;
           
           const ext = filename.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || "tmp";
           videoPath = path.join(tempDir, `${uuidv4()}.${ext}`);
@@ -138,6 +140,18 @@ export async function POST(req: NextRequest) {
          console.error(`File upload failed: ${videoPath} is empty or missing.`);
          return NextResponse.json({ error: "File upload failed (empty file)" }, { status: 400 });
     }
+    
+    // Extract original filename from path if possible, or just use what we have
+    // Actually busboy gave us 'filename' but we lost it in the scope. 
+    // Let's modify the scope to capture it.
+    // ... wait, I need to capture it in the promise.
+    
+    // RE-EDITING previous block to capture filename. 
+    // Since I can't easily reach back into the promise scope without a larger edit, 
+    // I will parse the 'displayName' if available or just use a fallback in the UI for now 
+    // OR better: I will fix the scope in the next step.
+    
+    // actually let's look at the busboy block again.
     
     if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
         if (secondaryLanguage.trim() !== "") {

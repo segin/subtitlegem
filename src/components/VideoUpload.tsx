@@ -4,7 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X } from "lucide-react";
 
 interface VideoUploadProps {
-  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string) => void;
+  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => void;
 }
 
 export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
@@ -215,7 +215,8 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
             URL.createObjectURL(file), 
             secondaryLanguage, 
             data.videoPath,
-            data.detectedLanguage
+            data.detectedLanguage,
+            data.originalFilename
           );
         } catch (e) { setError("Failed to parse response"); }
       } else if (xhr.status === 429) {

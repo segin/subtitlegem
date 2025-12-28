@@ -46,6 +46,7 @@ export interface SubtitleConfig {
   geminiFileUri?: string | null;
   geminiFileExpiration?: string | null;
   fileId?: string | null;
+  originalFilename?: string | null;
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {
