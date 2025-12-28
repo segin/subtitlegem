@@ -71,7 +71,7 @@ export default function Home() {
       try {
         const body = {
           id: currentDraftId || undefined,
-          name: videoPath.split('/').pop() || "Untitled Project",
+          name: config.originalFilename || videoPath.split('/').pop() || "Untitled Project",
           videoPath,
           subtitles,
           config,
@@ -119,7 +119,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [fetchQueue]);
 
-  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string) => {
+  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => {
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
       startTime: parseSRTTime(s.startTime),
@@ -132,11 +132,12 @@ export default function Home() {
     setVideoPath(serverPath);
     setCurrentDraftId(null); // Reset for new uploads
     
-    // Auto-set detected language
+    // Auto-set detected language and original filename
     setConfig(prev => ({
       ...prev,
       primaryLanguage: detectedLanguage || "English",
-      secondaryLanguage: lang === "None" ? "Secondary" : lang
+      secondaryLanguage: lang === "None" ? "Secondary" : lang,
+      originalFilename: originalFilename || null
     }));
   };
   
