@@ -303,15 +303,29 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
               className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none rounded-sm"
             >
               <option value="None">None</option>
+              <option value="English">English</option>
               <option value="Simplified Chinese">Simplified Chinese</option>
               <option value="Traditional Chinese">Traditional Chinese</option>
               <option value="Spanish">Spanish</option>
               <option value="French">French</option>
               <option value="German">German</option>
-              <option value="Japanese">Japanese</option>
-              <option value="Russian">Russian</option>
-              <option value="Arabic">Arabic</option>
+              <option value="Italian">Italian</option>
+              <option value="Portuguese">Portuguese</option>
               <option value="Dutch">Dutch</option>
+              <option value="Polish">Polish</option>
+              <option value="Russian">Russian</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Korean">Korean</option>
+              <option value="Arabic">Arabic</option>
+              <option value="Turkish">Turkish</option>
+              <option value="Swedish">Swedish</option>
+              <option value="Danish">Danish</option>
+              <option value="Norwegian">Norwegian</option>
+              <option value="Finnish">Finnish</option>
+              <option value="Greek">Greek</option>
+              <option value="Czech">Czech</option>
+              <option value="Hungarian">Hungarian</option>
+              <option value="Romanian">Romanian</option>
               <option value="Ukrainian">Ukrainian</option>
             </select>
           </div>
