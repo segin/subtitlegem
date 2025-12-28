@@ -22,7 +22,6 @@ export async function GET(req: NextRequest) {
       const absolutePath = path.resolve(filePath);
       
       const isAllowed = absolutePath.startsWith(stagingDir) || 
-                         absolutePath.startsWith('/tmp/') || 
                          absolutePath.includes('subtitlegem');
 
       if (!isAllowed) {

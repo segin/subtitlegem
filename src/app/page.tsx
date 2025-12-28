@@ -221,6 +221,16 @@ export default function Home() {
     document.body.removeChild(a);
   };
 
+  const handleCloseProject = () => {
+    if(confirm("Discard current project?")) {
+      setVideoUrl(null);
+      setVideoPath(null);
+      setSubtitles([]);
+      setCurrentDraftId(null);
+      setConfig(DEFAULT_CONFIG);
+    }
+  };
+
   if (!videoUrl) {
     return (
       <main className="min-h-screen h-screen bg-[#1e1e1e] flex text-[#cccccc] overflow-hidden">
@@ -297,12 +307,7 @@ export default function Home() {
             hasSecondarySubtitles={subtitles.some(s => !!s.secondaryText)}
             primaryLanguage={config.primaryLanguage}
             secondaryLanguage={config.secondaryLanguage}
-            onCloseProject={() => {
-              if(confirm("Discard current project?")) {
-                setVideoUrl(null);
-                setSubtitles([]);
-              }
-            }}
+            onCloseProject={handleCloseProject}
           />
         </div>
         

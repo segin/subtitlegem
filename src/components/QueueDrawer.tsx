@@ -9,6 +9,7 @@ interface QueueDrawerProps {
   isPaused: boolean;
   onPauseToggle: () => void;
   onRemove: (id: string, force?: boolean) => void;
+  onRefresh?: () => void;
   onDownload: (item: QueueItem) => void;
 }
 
@@ -33,6 +34,7 @@ export function QueueDrawer({
   isPaused,
   onPauseToggle,
   onRemove,
+  onRefresh,
   onDownload,
 }: QueueDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -196,12 +198,21 @@ export function QueueDrawer({
           <span className="text-[10px] font-bold text-[#888888] uppercase tracking-wider">
             Queue ({queueItems.length})
           </span>
-          <button
-            onClick={onPauseToggle}
-            className="text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
-          >
-            {isPaused ? '▶ Resume' : '⏸ Pause'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onRefresh}
+              className="text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
+              title="Refresh Queue"
+            >
+              ↻
+            </button>
+            <button
+              onClick={onPauseToggle}
+              className="text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
+            >
+              {isPaused ? '▶ Resume' : '⏸ Pause'}
+            </button>
+          </div>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#1e1e1e]">

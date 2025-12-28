@@ -161,6 +161,7 @@ export function ensureStagingStructure(stagingDir: string): void {
   const dirs = [
     path.join(stagingDir, 'videos'),
     path.join(stagingDir, 'exports'),
+    path.join(stagingDir, 'temp'),
   ];
   
   dirs.forEach(dir => {

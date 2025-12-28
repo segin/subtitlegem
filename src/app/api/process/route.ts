@@ -3,7 +3,7 @@ import { uploadToGemini, generateSubtitles, generateSubtitlesInline } from "@/li
 import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
 import fs from "fs";
 import path from "path";
-import os from "os";
+import { getStorageConfig } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
@@ -34,7 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Content-Type must be multipart/form-data" }, { status: 400 });
     }
 
-    const tempDir = os.tmpdir();
+    const config = getStorageConfig();
+    const tempDir = path.join(config.stagingDir, 'temp');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    
     let videoPath = "";
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-import os from "os";
+import { getStorageConfig } from "@/lib/storage-config";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
 
   // --- Security Check ---
   // Ensure the path is within the temporary directory to prevent path traversal attacks.
-  const tempDir = os.tmpdir();
+  const config = getStorageConfig();
+  const tempDir = path.join(config.stagingDir, 'temp');
   const safePath = path.join(tempDir, path.basename(filePath));
 
   if (!safePath.startsWith(tempDir) || !fs.existsSync(safePath)) {

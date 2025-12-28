@@ -103,7 +103,7 @@ export async function generateSubtitles(
     Analyze the audio in this video.
     1. Detect the primary spoken language.
     2. Generate subtitles in that detected primary language.
-    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field.` : ""}
+    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field. If the detected primary language is already ${secondaryLanguage}, simply copy the primary text into 'secondaryText'.` : ""}
     
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
@@ -175,7 +175,7 @@ export async function generateSubtitlesInline(
     Analyze the audio in this video.
     1. Detect the primary spoken language.
     2. Generate subtitles in that detected primary language.
-    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field.` : ""}
+    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field. If the detected primary language is already ${secondaryLanguage}, simply copy the primary text into 'secondaryText'.` : ""}
     
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
