@@ -58,54 +58,96 @@ export function QueueDrawer({
   const processingCount = items.filter(i => i.status === 'processing').length;
   const failedCount = items.filter(i => i.status === 'failed').length;
 
-  const renderItem = (item: QueueItem, isCompleted: boolean = false) => (
+  // Helper: Calculate ETA
+  const getEta = (item: QueueItem) => {
+    if (item.status !== 'processing' || !item.startedAt || !item.progress || item.progress < 5) return null;
+    
+    const elapsed = Date.now() - item.startedAt;
+    const rate = item.progress / elapsed; // progress per ms
+    const remainingProgress = 100 - item.progress;
+    const remainingMs = remainingProgress / rate;
+    
+    if (!isFinite(remainingMs)) return null;
+    
+    // Format duration
+    const seconds = Math.floor(remainingMs / 1000);
+    if (seconds < 60) return `${seconds}s left`;
+    return `${Math.floor(seconds / 60)}m ${seconds % 60}s left`;
+  };
+
+  const renderItem = (item: QueueItem, isCompleted: boolean = false) => {
+    // Determine status label
+    let statusLabel = item.status === 'pending' ? 'Queued' : 
+                      item.status === 'processing' ? 'Processing...' : 
+                      item.status === 'failed' ? 'Failed' : 'Completed';
+    
+    // Override label for progress
+    if (item.status === 'processing') {
+       if (item.progress > 0) statusLabel = 'Encoding...';
+       else statusLabel = 'Starting...';
+    }
+
+    const eta = getEta(item);
+
+    return (
     <div 
       key={item.id} 
       className="p-2 border-b border-[#333333] text-xs text-[#cccccc] hover:bg-[#2d2d2d] transition-colors"
     >
-      <div className="flex items-center justify-between">
-        <span className="truncate flex-1 max-w-[160px]" title={item.file.name}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate flex-1 min-w-0" title={item.file.name}>
           {item.file.name}
         </span>
-        <div className="flex items-center space-x-1.5">
-          {/* Status indicator */}
-          <span className={`text-[10px] font-medium ${
-            item.status === 'processing' ? 'text-green-400' :
-            item.status === 'completed' ? 'text-green-500' :
-            item.status === 'failed' ? 'text-red-500' :
-            'text-[#007acc]' // pending = blue
-          }`}>
-            {item.status === 'processing' ? `${item.progress}%` : 
-             item.status === 'completed' ? '✓' :
-             item.status === 'failed' ? '✕' : 'pending'}
-          </span>
-          
-          {/* Retry badge */}
-          {item.retryCount && item.retryCount > 0 && (
-            <span className="text-[9px] px-1 py-0.5 bg-[#d97706] text-white rounded-sm">
-              ×{item.retryCount}
+        <div className="flex items-center space-x-2 shrink-0">
+          {/* Status Text + Percentage */}
+          <div className="flex flex-col items-end">
+            <span className={`text-[10px] font-medium ${
+              item.status === 'processing' ? 'text-green-400' :
+              item.status === 'completed' ? 'text-green-500' :
+              item.status === 'failed' ? 'text-red-500' :
+              'text-[#007acc]' 
+            }`}>
+              {/* Show Rounded Percentage only if processing/completed */}
+              {item.status === 'processing' 
+                ? `${Math.round(item.progress || 0)}%` 
+                : statusLabel}
             </span>
-          )}
+            {eta && (
+               <span className="text-[9px] text-[#666666] font-mono">
+                 {eta}
+               </span>
+            )}
+          </div>
           
-          {/* Download for completed */}
-          {isCompleted && (
+          {/* Action Buttons */}
+          <div className="flex items-center space-x-1">
+            {/* Retry badge */}
+            {item.retryCount && item.retryCount > 0 && (
+              <span className="text-[9px] px-1 py-0.5 bg-[#d97706] text-white rounded-sm">
+                ×{item.retryCount}
+              </span>
+            )}
+            
+            {/* Download for completed */}
+            {isCompleted && (
+              <button
+                onClick={() => onDownload(item)}
+                className="p-1 rounded-sm bg-[#2d5f2d] hover:bg-[#3e7f3e] text-white transition-colors"
+                title="Download"
+              >
+                <Download className="w-3 h-3" />
+              </button>
+            )}
+            
+            {/* Delete */}
             <button
-              onClick={() => onDownload(item)}
-              className="p-1 rounded-sm bg-[#2d5f2d] hover:bg-[#3e7f3e] text-white transition-colors"
-              title="Download"
+              onClick={() => onRemove(item.id, item.status === 'processing')}
+              className="p-1 rounded-sm bg-[#5f2d2d] hover:bg-[#7f3e3e] text-white transition-colors"
+              title="Remove"
             >
-              <Download className="w-3 h-3" />
+              <Trash2 className="w-3 h-3" />
             </button>
-          )}
-          
-          {/* Delete */}
-          <button
-            onClick={() => onRemove(item.id, item.status === 'processing')}
-            className="p-1 rounded-sm bg-[#5f2d2d] hover:bg-[#7f3e3e] text-white transition-colors"
-            title="Remove"
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+          </div>
         </div>
       </div>
       
@@ -113,8 +155,8 @@ export function QueueDrawer({
       {item.status === 'processing' && (
         <div className="mt-1.5 h-1 bg-[#333333] rounded-full overflow-hidden">
           <div 
-            className="h-full bg-green-500 transition-all duration-300"
-            style={{ width: `${item.progress}%` }}
+            className="h-full bg-green-500 transition-all duration-300 ease-out"
+            style={{ width: `${Math.round(item.progress || 0)}%` }}
           />
         </div>
       )}
@@ -127,6 +169,7 @@ export function QueueDrawer({
       )}
     </div>
   );
+  };
 
   // Shared panel content component
   const renderPanelContent = (showCloseButton: boolean = false) => (
