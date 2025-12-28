@@ -20,6 +20,7 @@ interface TimelineProps {
 export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, onSeek }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
+  const [isScrubbing, setIsScrubbing] = useState(false);
 
   const handleDrag = (id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
     const deltaSeconds = deltaX / pixelsPerSecond;
@@ -40,15 +41,50 @@ export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, o
     onUpdate(newSubtitles);
   };
 
+  // Seek to position based on mouse X
+  const seekFromEvent = (e: React.MouseEvent | MouseEvent, rect: DOMRect) => {
+    const x = (e as MouseEvent).clientX - rect.left;
+    const time = Math.max(0, Math.min(duration, x / pixelsPerSecond));
+    onSeek(time);
+  };
+
+  // Handle scrubbing globally
+  React.useEffect(() => {
+    if (!isScrubbing) return;
+
+    const timelineEl = containerRef.current?.querySelector('[data-timeline-bg]') as HTMLElement;
+    if (!timelineEl) return;
+
+    const rect = timelineEl.getBoundingClientRect();
+
+    const handleMouseMove = (e: MouseEvent) => {
+      seekFromEvent(e, rect);
+    };
+
+    const handleMouseUp = () => {
+      setIsScrubbing(false);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isScrubbing, pixelsPerSecond, duration, onSeek]);
+
   return (
-    <div className="w-full h-full bg-[#1e1e1e] overflow-x-auto relative custom-scrollbar select-none">
+    <div ref={containerRef} className="w-full h-full bg-[#1e1e1e] overflow-x-auto relative custom-scrollbar select-none">
       <div 
-        className="relative h-full min-w-full" 
+        data-timeline-bg
+        className="relative h-full min-w-full cursor-pointer" 
         style={{ width: `${Math.max(duration * pixelsPerSecond, 1000)}px` }}
-        onClick={(e) => {
+        onMouseDown={(e) => {
+          // Only start scrubbing if not clicking on a bubble
+          if ((e.target as HTMLElement).closest('[data-bubble]')) return;
           const rect = e.currentTarget.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          onSeek(x / pixelsPerSecond);
+          seekFromEvent(e, rect);
+          setIsScrubbing(true);
         }}
       >
         {/* Time Ruler */}
@@ -136,6 +172,7 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active }: {
 
   return (
     <div 
+      data-bubble
       className={cn(
         "absolute top-2 h-10 cursor-move flex flex-col justify-center px-2 overflow-hidden select-none group transition-colors border-l-2 border-r-2",
         active 
