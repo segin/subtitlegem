@@ -29,12 +29,23 @@ export interface FFmpegFormat {
   canDemux: boolean;
 }
 
+/** Detailed hardware encoder availability per platform */
+export interface HWEncoderInfo {
+  platform: string;        // e.g., 'nvenc', 'amf', 'qsv'
+  displayName: string;     // e.g., 'NVIDIA NVENC'
+  h264: string | null;     // Encoder name if available, e.g., 'h264_nvenc'
+  h265: string | null;     // Encoder name if available, e.g., 'hevc_nvenc'
+  av1: string | null;      // Encoder name if available, e.g., 'av1_nvenc'
+  vp9: string | null;      // Encoder name if available, e.g., 'vp9_qsv' (Intel Tiger Lake+, Arc, VAAPI)
+}
+
 export interface FFmpegCapabilities {
   version: string;
   videoEncoders: FFmpegEncoder[];
   audioEncoders: FFmpegEncoder[];
   formats: FFmpegFormat[];
-  hwaccels: string[];
+  hwaccels: string[];           // Legacy: list of platform names
+  hwEncoders: HWEncoderInfo[];  // New: detailed encoder availability
   probedAt: number;
 }
 
@@ -129,103 +140,154 @@ async function parseFormats(): Promise<FFmpegFormat[]> {
 }
 
 /**
- * Get available hardware acceleration methods by testing actual encoder availability.
- * Simply listing hwaccels isn't enough - we need to verify the encoders work.
+ * Broad-spectrum hardware encoder probe.
+ * Tests all codecs (H.264, H.265, AV1, VP9) across all platforms in parallel.
+ * Returns detailed availability info for each platform+codec combination.
  */
-async function parseHwaccels(): Promise<string[]> {
-  const ENCODER_TEST_TIMEOUT = 8000; // 8 seconds for encoder tests
+async function parseHwaccels(): Promise<{ hwaccels: string[]; hwEncoders: HWEncoderInfo[] }> {
+  const ENCODER_TEST_TIMEOUT = 8000;
+  const TEST_INPUT = '-f lavfi -i testsrc=duration=0.1:size=64x64';
   
-  // Map of hwaccel name to test encoder commands (multiple fallbacks)
-  const hwaccelTests: { name: string; displayName: string; tests: string[] }[] = [
-    { 
+  // Define all platforms and their encoders per codec
+  const platforms: {
+    name: string;
+    displayName: string;
+    encoders: { codec: 'h264' | 'h265' | 'av1' | 'vp9'; name: string; cmd?: string }[];
+  }[] = [
+    {
       name: 'nvenc',
       displayName: 'NVIDIA NVENC',
-      tests: [
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_nvenc -f null -',
-        'ffmpeg -f lavfi -i color=black:size=64x64:duration=0.1 -c:v h264_nvenc -f null -',
+      encoders: [
+        { codec: 'h264', name: 'h264_nvenc' },
+        { codec: 'h265', name: 'hevc_nvenc' },
+        { codec: 'av1', name: 'av1_nvenc' },  // RTX 40 series+
       ]
     },
-    { 
+    {
       name: 'amf',
       displayName: 'AMD AMF',
-      tests: [
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_amf -f null -',
+      encoders: [
+        { codec: 'h264', name: 'h264_amf' },
+        { codec: 'h265', name: 'hevc_amf' },
+        { codec: 'av1', name: 'av1_amf' },  // RX 7000 series+
       ]
     },
-    { 
+    {
       name: 'qsv',
       displayName: 'Intel QuickSync',
-      tests: [
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null -',
-        'ffmpeg -init_hw_device qsv=hw -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null -',
+      encoders: [
+        { codec: 'h264', name: 'h264_qsv' },
+        { codec: 'h265', name: 'hevc_qsv' },
+        { codec: 'av1', name: 'av1_qsv' },   // Arc GPUs
+        { codec: 'vp9', name: 'vp9_qsv' },
       ]
     },
-    { 
+    {
       name: 'videotoolbox',
       displayName: 'Apple VideoToolbox',
-      tests: [
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_videotoolbox -f null -',
+      encoders: [
+        { codec: 'h264', name: 'h264_videotoolbox' },
+        { codec: 'h265', name: 'hevc_videotoolbox' },
       ]
     },
-    { 
+    {
       name: 'vaapi',
       displayName: 'Linux VAAPI',
-      tests: [
-        // Try multiple common VAAPI device paths
-        'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
-        'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD129 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
-        'ffmpeg -vaapi_device /dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
+      encoders: [
+        { codec: 'h264', name: 'h264_vaapi', cmd: '-init_hw_device vaapi=va:/dev/dri/renderD128 -vf format=nv12,hwupload' },
+        { codec: 'h265', name: 'hevc_vaapi', cmd: '-init_hw_device vaapi=va:/dev/dri/renderD128 -vf format=nv12,hwupload' },
+        { codec: 'av1', name: 'av1_vaapi', cmd: '-init_hw_device vaapi=va:/dev/dri/renderD128 -vf format=nv12,hwupload' },
+        { codec: 'vp9', name: 'vp9_vaapi', cmd: '-init_hw_device vaapi=va:/dev/dri/renderD128 -vf format=nv12,hwupload' },
       ]
     },
-    { 
+    {
       name: 'v4l2m2m',
-      displayName: 'V4L2 M2M (Generic ARM/SBC)',
-      tests: [
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_v4l2m2m -f null -',
+      displayName: 'V4L2 M2M (ARM/SBC)',
+      encoders: [
+        { codec: 'h264', name: 'h264_v4l2m2m' },
       ]
     },
-    { 
+    {
       name: 'rkmpp',
-      displayName: 'Rockchip MPP (RK3399/RK3588)',
-      tests: [
-        // Rockchip boards with Mali GPU use RKMPP for encoding
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_rkmpp -f null -',
+      displayName: 'Rockchip MPP',
+      encoders: [
+        { codec: 'h264', name: 'h264_rkmpp' },
+        { codec: 'h265', name: 'hevc_rkmpp' },
       ]
     },
-    { 
+    {
       name: 'omx',
-      displayName: 'OpenMAX (Raspberry Pi/embedded)',
-      tests: [
-        // Raspberry Pi and some other embedded devices use OMX
-        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_omx -f null -',
+      displayName: 'OpenMAX (RPi)',
+      encoders: [
+        { codec: 'h264', name: 'h264_omx' },
       ]
     },
   ];
   
-  console.log('[FFmpeg] Testing hardware acceleration availability...');
+  console.log('[FFmpeg] Broad-spectrum encoder probe starting...');
+  const startTime = Date.now();
   
-  // Test each encoder in parallel
+  // Build all test tasks
+  const testTasks: { platform: string; displayName: string; codec: string; encoder: string; cmd: string }[] = [];
+  
+  for (const platform of platforms) {
+    for (const enc of platform.encoders) {
+      const extraArgs = enc.cmd || '';
+      const cmd = `ffmpeg ${extraArgs} ${TEST_INPUT} -c:v ${enc.name} -f null - 2>&1`;
+      testTasks.push({
+        platform: platform.name,
+        displayName: platform.displayName,
+        codec: enc.codec,
+        encoder: enc.name,
+        cmd,
+      });
+    }
+  }
+  
+  console.log(`[FFmpeg] Testing ${testTasks.length} encoder combinations...`);
+  
+  // Run all tests in parallel
   const results = await Promise.all(
-    hwaccelTests.map(async ({ name, displayName, tests }) => {
-      // Try each test command until one succeeds
-      for (const test of tests) {
-        try {
-          await execAsync(test, { timeout: ENCODER_TEST_TIMEOUT });
-          console.log(`[FFmpeg] ✓ ${displayName} (${name}) is available`);
-          return name;
-        } catch (error: any) {
-          // Continue to next test command
-        }
+    testTasks.map(async (task) => {
+      try {
+        await execAsync(task.cmd, { timeout: ENCODER_TEST_TIMEOUT });
+        console.log(`[FFmpeg] ✓ ${task.encoder}`);
+        return { ...task, available: true };
+      } catch {
+        return { ...task, available: false };
       }
-      console.log(`[FFmpeg] ✗ ${displayName} (${name}) not available`);
-      return null;
     })
   );
   
-  const available = results.filter((r): r is string => r !== null);
-  console.log(`[FFmpeg] Available hardware acceleration: ${available.length > 0 ? available.join(', ') : 'none (CPU only)'}`);
+  // Aggregate results by platform
+  const hwEncoders: HWEncoderInfo[] = platforms.map(platform => {
+    const platformResults = results.filter(r => r.platform === platform.name);
+    const h264 = platformResults.find(r => r.codec === 'h264' && r.available);
+    const h265 = platformResults.find(r => r.codec === 'h265' && r.available);
+    const av1 = platformResults.find(r => r.codec === 'av1' && r.available);
+    const vp9 = platformResults.find(r => r.codec === 'vp9' && r.available);
+    
+    return {
+      platform: platform.name,
+      displayName: platform.displayName,
+      h264: h264?.encoder || null,
+      h265: h265?.encoder || null,
+      av1: av1?.encoder || null,
+      vp9: vp9?.encoder || null,
+    };
+  }).filter(info => info.h264 || info.h265 || info.av1 || info.vp9);  // Only include platforms with at least one encoder
   
-  return available;
+  // Legacy hwaccels list (platforms with any working encoder)
+  const hwaccels = hwEncoders.map(e => e.platform);
+  
+  console.log(`[FFmpeg] Probe complete in ${Date.now() - startTime}ms`);
+  console.log(`[FFmpeg] Available platforms: ${hwaccels.length > 0 ? hwaccels.join(', ') : 'none (CPU only)'}`);
+  for (const enc of hwEncoders) {
+    const codecs = [enc.h264 && 'H.264', enc.h265 && 'H.265', enc.av1 && 'AV1', enc.vp9 && 'VP9'].filter(Boolean);
+    console.log(`[FFmpeg]   ${enc.displayName}: ${codecs.join(', ')}`);
+  }
+  
+  return { hwaccels, hwEncoders };
 }
 
 /**
@@ -253,7 +315,7 @@ export async function probeFFmpeg(force: boolean = false): Promise<FFmpegCapabil
   console.log('[FFmpeg] Probing capabilities...');
   const startTime = Date.now();
   
-  const [version, { video, audio }, formats, hwaccels] = await Promise.all([
+  const [version, { video, audio }, formats, { hwaccels, hwEncoders }] = await Promise.all([
     getVersion(),
     parseEncoders(),
     parseFormats(),
@@ -266,12 +328,13 @@ export async function probeFFmpeg(force: boolean = false): Promise<FFmpegCapabil
     audioEncoders: audio,
     formats,
     hwaccels,
+    hwEncoders,
     probedAt: Date.now(),
   };
   
   console.log(`[FFmpeg] Probe complete in ${Date.now() - startTime}ms`);
   console.log(`[FFmpeg] Found ${video.length} video encoders, ${audio.length} audio encoders, ${formats.length} formats`);
-  console.log(`[FFmpeg] Hardware acceleration: ${hwaccels.join(', ') || 'none'}`);
+  console.log(`[FFmpeg] Hardware platforms: ${hwaccels.join(', ') || 'none'}`);
   
   return cachedCapabilities;
 }
