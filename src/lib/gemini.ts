@@ -39,10 +39,30 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   });
 
   let file = await fileManager.getFile(uploadResult.file.name);
+  let retryCount = 0;
+  const maxRetries = 5;
+  
   while (file.state === FileState.PROCESSING) {
     process.stdout.write(".");
     await new Promise((resolve) => setTimeout(resolve, 10_000));
-    file = await fileManager.getFile(uploadResult.file.name);
+    
+    // Retry with exponential backoff on transient errors
+    try {
+      file = await fileManager.getFile(uploadResult.file.name);
+      retryCount = 0; // Reset on success
+    } catch (error: any) {
+      retryCount++;
+      console.error(`\n[Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`, error.message);
+      
+      if (retryCount >= maxRetries) {
+        throw new Error(`Failed to get file status after ${maxRetries} attempts: ${error.message}`);
+      }
+      
+      // Exponential backoff: 5s, 10s, 20s, 40s, 80s
+      const backoffMs = 5000 * Math.pow(2, retryCount - 1);
+      console.log(`[Gemini] Retrying in ${backoffMs / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
   }
 
   if (file.state === FileState.FAILED) {
