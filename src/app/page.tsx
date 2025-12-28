@@ -15,13 +15,15 @@ import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { generateAss } from "@/lib/ass-utils";
+import { useSubtitleHistory } from "@/hooks/useSubtitleHistory";
 import { v4 as uuidv4 } from "uuid";
 import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo, Play, Pause } from "lucide-react";
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 
 export default function Home() {
-  const [subtitles, setSubtitles] = useState<SubtitleLine[]>([]);
+  // Undo/redo state management for subtitles
+  const { subtitles, setSubtitles, undo, redo, canUndo, canRedo, resetHistory } = useSubtitleHistory([]);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [videoPath, setVideoPath] = useState<string | null>(null);
   const [duration, setDuration] = useState(0);
@@ -44,6 +46,9 @@ export default function Home() {
   // Home screen restore state
   const [showRestoreOption, setShowRestoreOption] = useState(false);
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
+  
+  // Cache initial subtitles for "Reset to Original" feature
+  const [initialSubtitles, setInitialSubtitles] = useState<SubtitleLine[] | null>(null);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
@@ -52,7 +57,7 @@ export default function Home() {
       const data = await res.json();
       
       if (data.id) {
-        setSubtitles(data.subtitles || []);
+        resetHistory(data.subtitles || []); // Use resetHistory to clear undo stack
         setVideoPath(data.videoPath || null);
         setVideoUrl(data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null);
         setCurrentDraftId(data.id);
@@ -119,6 +124,32 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [fetchQueue]);
 
+  // Keyboard shortcuts for Undo/Redo
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input/textarea
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
+
   const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => {
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
@@ -128,6 +159,7 @@ export default function Home() {
       secondaryText: s.secondaryText
     }));
     setSubtitles(mapped);
+    setInitialSubtitles(mapped); // Cache for reset
     setVideoUrl(url);
     setVideoPath(serverPath);
     setCurrentDraftId(null); // Reset for new uploads
@@ -380,7 +412,7 @@ export default function Home() {
             onNewProject={() => {
               setVideoUrl(null);
               setVideoPath(null);
-              setSubtitles([]);
+              resetHistory([]); // Use resetHistory to clear undo stack
               setConfig(DEFAULT_CONFIG);
               setCurrentDraftId(null);
             }}
@@ -395,6 +427,10 @@ export default function Home() {
               document.getElementById('project-upload')?.click();
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
+            onUndo={undo}
+            onRedo={redo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
           <input 
             type="file" 
@@ -646,6 +682,12 @@ export default function Home() {
             if (data.error) throw new Error(data.error);
             setSubtitles(data.subtitles);
         }}
+        onResetToOriginal={() => {
+          if (initialSubtitles) {
+            resetHistory([...initialSubtitles]);
+          }
+        }}
+        canReset={initialSubtitles !== null && initialSubtitles.length > 0}
       />
     </div>
   );

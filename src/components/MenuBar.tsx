@@ -97,6 +97,8 @@ interface MenuBarProps {
   onCloseProject?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   onFindReplace?: () => void;
   onShiftTimings?: () => void;
   onToggleTimeline?: () => void;
@@ -120,6 +122,8 @@ export function MenuBar({
   onCloseProject,
   onUndo,
   onRedo,
+  canUndo = false,
+  canRedo = false,
   onFindReplace,
   onShiftTimings,
   onToggleTimeline,
@@ -162,8 +166,8 @@ export function MenuBar({
   ];
 
   const editItems: MenuItem[] = [
-    { label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: true },
-    { label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: true },
+    { label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo },
+    { label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo },
     { divider: true },
     { label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", disabled: true },
     { label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true },

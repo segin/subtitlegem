@@ -16,6 +16,8 @@ interface ProjectSettingsDialogProps {
   onUpdateConfig: (newConfig: any) => void;
   onReprocess: (language: string, model: string) => Promise<void>;
   onRetranslate: (language: string, model: string) => Promise<void>;
+  onResetToOriginal?: () => void;
+  canReset?: boolean;
 }
 
 export function ProjectSettingsDialog({
@@ -25,6 +27,8 @@ export function ProjectSettingsDialog({
   onUpdateConfig,
   onReprocess,
   onRetranslate,
+  onResetToOriginal,
+  canReset = false,
 }: ProjectSettingsDialogProps) {
   const [primaryLang, setPrimaryLang] = useState(config.primaryLanguage || "English");
   const [secondaryLang, setSecondaryLang] = useState(config.secondaryLanguage || "Secondary");
@@ -178,7 +182,20 @@ export function ProjectSettingsDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="flex gap-2">
+          {canReset && (
+            <button 
+              onClick={() => {
+                if (confirm("Restore subtitles to their original state? All edits will be lost.")) {
+                  onResetToOriginal?.();
+                  onClose();
+                }
+              }}
+              className="px-4 py-2 bg-[#4a4a4a] hover:bg-[#555555] text-white rounded text-sm"
+            >
+              Reset to Original
+            </button>
+          )}
           <button onClick={onClose} className="px-4 py-2 bg-[#007fd4] hover:bg-[#006cb5] text-white rounded text-sm">
             Done
           </button>
