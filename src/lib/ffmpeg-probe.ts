@@ -129,22 +129,47 @@ async function parseFormats(): Promise<FFmpegFormat[]> {
 }
 
 /**
- * Get available hardware acceleration methods
+ * Get available hardware acceleration methods by testing actual encoder availability.
+ * Simply listing hwaccels isn't enough - we need to verify the encoders work.
  */
 async function parseHwaccels(): Promise<string[]> {
-  try {
-    const { stdout } = await execAsync('ffmpeg -hwaccels -hide_banner 2>/dev/null');
-    const lines = stdout.split('\n');
-    
-    // Skip "Hardware acceleration methods:" header
-    return lines
-      .slice(1)
-      .map(line => line.trim())
-      .filter(line => line.length > 0);
-  } catch (error) {
-    console.error('Failed to parse FFmpeg hwaccels:', error);
-    return [];
-  }
+  const available: string[] = [];
+  
+  // Map of hwaccel name to test encoder command
+  const hwaccelTests: { name: string; test: string }[] = [
+    { 
+      name: 'nvenc', 
+      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_nvenc -f null - 2>&1' 
+    },
+    { 
+      name: 'qsv', 
+      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null - 2>&1' 
+    },
+    { 
+      name: 'videotoolbox', 
+      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_videotoolbox -f null - 2>&1' 
+    },
+    { 
+      name: 'vaapi', 
+      test: 'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf hwupload -c:v h264_vaapi -f null - 2>&1' 
+    },
+  ];
+  
+  // Test each encoder in parallel
+  const results = await Promise.all(
+    hwaccelTests.map(async ({ name, test }) => {
+      try {
+        await execAsync(test, { timeout: 5000 });
+        console.log(`[FFmpeg] Hardware acceleration '${name}' is available`);
+        return name;
+      } catch {
+        // Encoder failed or timed out - not available
+        return null;
+      }
+    })
+  );
+  
+  return results.filter((r): r is string => r !== null);
 }
 
 /**
