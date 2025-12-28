@@ -24,19 +24,23 @@ function hexToAssColor(hex: string): string {
 }
 
 function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1920, playResY: number = 1080): string {
-    const { fontFamily, fontSize, color, backgroundColor, marginV, marginH } = style;
+    const { fontFamily, fontSize, color, backgroundColor, marginV, marginH, outlineWidth, shadowDistance } = style;
     
     // ASS uses a different color format &HBBGGRR.
     const primaryColour = hexToAssColor(color);
     const backColour = hexToAssColor(backgroundColor);
     
-    // ASS font size is relative to script resolution. This is a simplification.
-    const assFontSize = (fontSize / playResY) * 1080;
+    // Convert percentage values to absolute pixels for ASS (based on script resolution)
+    const assFontSize = Math.round((fontSize / 100) * playResY);
+    const assMarginV = Math.round((marginV / 100) * playResY);
+    const assMarginH = Math.round((marginH / 100) * playResX);
+    const assOutlineWidth = (outlineWidth ?? 0.19) / 100 * playResY;
+    const assShadowDistance = (shadowDistance ?? 0.09) / 100 * playResY;
 
     // Alignment is numpad based, which is what ASS uses.
     const alignment = style.alignment;
 
-    return `Style: ${name},${fontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,1,1,${alignment},${marginH},${marginH},${marginV},1`;
+    return `Style: ${name},${fontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},${assShadowDistance.toFixed(1)},${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
 }
 
 // Sanitize text to prevent ASS tag injection

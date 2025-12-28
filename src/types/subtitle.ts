@@ -19,15 +19,20 @@ export type Alignment = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export interface TrackStyle {
   alignment: Alignment;
+  /** Font size as percentage of video height (e.g., 2.5 = 2.5%) */
   fontSize: number;
   color: string; // Hex format #RRGGBB
   fontFamily: string;
-  marginV: number; // Vertical margin in pixels
-  marginH: number; // Horizontal margin in pixels
+  /** Vertical margin as percentage of video height */
+  marginV: number;
+  /** Horizontal margin as percentage of video width */
+  marginH: number;
   backgroundColor: string; // rgba() format for transparency
   outlineColor?: string; // Optional outline color
-  outlineWidth?: number; // Optional outline width
-  shadowDistance?: number; // Optional shadow offset
+  /** Outline width as percentage of video height */
+  outlineWidth?: number;
+  /** Shadow distance as percentage of video height */
+  shadowDistance?: number;
 }
 
 export interface FFmpegConfig {
@@ -54,27 +59,27 @@ export const DEFAULT_CONFIG: SubtitleConfig = {
   secondaryLanguage: 'Secondary',
   primary: {
     alignment: 2, // Bottom Center (ASS numpad)
-    fontSize: 24,
+    fontSize: 2.22, // ~24px at 1080p (24/1080*100)
     color: '#ffffff',
     fontFamily: 'Arial',
-    marginV: 30,
-    marginH: 20,
+    marginV: 2.78, // ~30px at 1080p
+    marginH: 1.04, // ~20px at 1920p width
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: 2,
-    shadowDistance: 1,
+    outlineWidth: 0.19, // ~2px at 1080p
+    shadowDistance: 0.09, // ~1px at 1080p
   },
   secondary: {
     alignment: 8, // Top Center (ASS numpad)
-    fontSize: 20,
+    fontSize: 1.85, // ~20px at 1080p
     color: '#fbbf24', // Amber-400
     fontFamily: 'Arial',
-    marginV: 30,
-    marginH: 20,
+    marginV: 2.78, // ~30px at 1080p
+    marginH: 1.04, // ~20px at 1920p width
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: 2,
-    shadowDistance: 1,
+    outlineWidth: 0.19, // ~2px at 1080p
+    shadowDistance: 0.09, // ~1px at 1080p
   },
   ffmpeg: {
     hwaccel: 'none',

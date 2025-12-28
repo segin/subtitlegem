@@ -81,11 +81,14 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
               <div className="space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                    <div>
-                      <label className="text-[10px] text-[#888888] mb-1 block">Size (px)</label>
+                      <label className="text-[10px] text-[#888888] mb-1 block">Size (%)</label>
                       <input 
                         type="number" 
+                        step="0.01"
+                        min="0.5"
+                        max="20"
                         value={(config[activeTab as 'primary' | 'secondary']).fontSize} 
-                        onChange={(e) => updateStyle('fontSize', parseInt(e.target.value))}
+                        onChange={(e) => updateStyle('fontSize', parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                       />
                    </div>
@@ -147,20 +150,26 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
               
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                   <label className="text-[10px] text-[#888888] mb-1 block">Vertical</label>
+                   <label className="text-[10px] text-[#888888] mb-1 block">Vertical (%)</label>
                    <input 
                       type="number" 
+                      step="0.1"
+                      min="0"
+                      max="50"
                       value={(config[activeTab as 'primary' | 'secondary']).marginV} 
-                      onChange={(e) => updateStyle('marginV', parseInt(e.target.value))}
+                      onChange={(e) => updateStyle('marginV', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
                 </div>
                 <div>
-                   <label className="text-[10px] text-[#888888] mb-1 block">Horizontal</label>
+                   <label className="text-[10px] text-[#888888] mb-1 block">Horizontal (%)</label>
                    <input 
                       type="number" 
+                      step="0.1"
+                      min="0"
+                      max="50"
                       value={(config[activeTab as 'primary' | 'secondary']).marginH} 
-                      onChange={(e) => updateStyle('marginH', parseInt(e.target.value))}
+                      onChange={(e) => updateStyle('marginH', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
                 </div>
