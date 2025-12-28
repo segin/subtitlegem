@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useRef, useCallback } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2 } from "lucide-react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X } from "lucide-react";
 
 interface VideoUploadProps {
   onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string) => void;
@@ -19,9 +19,61 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [uploadSpeed, setUploadSpeed] = useState(0);
+  
+  // Model testing
+  const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean; message: string} | null>(null);
+  const [showModelChooser, setShowModelChooser] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const startTimeRef = useRef<number>(0);
   const dragCounterRef = useRef(0);
+
+  // Fetch available models from API
+  const fetchModels = async () => {
+    setLoadingModels(true);
+    try {
+      const res = await fetch('/api/models');
+      const data = await res.json();
+      if (data.models) {
+        setAvailableModels(data.models);
+      }
+    } catch (err) {
+      console.error('Failed to fetch models:', err);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  // Test current model
+  const testModel = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`/api/models?test=${encodeURIComponent(model)}`);
+      const data = await res.json();
+      setTestResult({
+        success: data.success,
+        message: data.success ? 'Model OK!' : (data.error || 'Model not accessible')
+      });
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Test failed'
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  // Open model chooser - fetch models if not loaded
+  const openModelChooser = async () => {
+    setShowModelChooser(true);
+    if (availableModels.length === 0) {
+      await fetchModels();
+    }
+  };
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
@@ -152,17 +204,47 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">AI Model</label>
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={loading}
-              className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
-            >
-              <option value="gemini-3.0-flash">Gemini 3.0 Flash (Fastest)</option>
-              <option value="gemini-3.0-pro">Gemini 3.0 Pro (Advanced)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={model}
+                onChange={(e) => {
+                  if (e.target.value === '...') {
+                    openModelChooser();
+                  } else {
+                    setModel(e.target.value);
+                    setTestResult(null);
+                  }
+                }}
+                disabled={loading}
+                className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none"
+              >
+                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                {/* Show current model if it's not in the main list */}
+                {!['gemini-2.5-flash','gemini-2.5-pro','gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-pro'].includes(model) && (
+                  <option value={model}>{model}</option>
+                )}
+                <option value="...">... (Choose other model)</option>
+              </select>
+              <button
+                type="button"
+                onClick={testModel}
+                disabled={testing || loading}
+                className="px-2 py-1 bg-[#0e639c] hover:bg-[#1177bb] disabled:opacity-50 text-white text-xs rounded-sm transition-colors flex items-center gap-1"
+                title="Test model"
+              >
+                {testing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
+              </button>
+            </div>
+            {testResult && (
+              <div className={`flex items-center gap-1 text-[10px] mt-1 ${testResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {testResult.success ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                <span>{testResult.message}</span>
+              </div>
+            )}
           </div>
           
           <div className="space-y-1">
@@ -260,6 +342,78 @@ export function VideoUpload({ onUploadComplete }: VideoUploadProps) {
         <div className="mt-4 flex items-center space-x-2 text-xs text-red-400 bg-red-950/20 border border-red-900/50 p-2">
           <AlertCircle className="w-4 h-4" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Model Chooser Modal */}
+      {showModelChooser && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#252526] border border-[#454545] shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col">
+            <div className="h-10 bg-[#333333] flex items-center justify-between px-4 text-xs font-semibold text-[#cccccc] select-none shrink-0 border-b border-[#454545]">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-3.5 h-3.5" />
+                <span>Select Gemini Model</span>
+              </div>
+              <button 
+                onClick={() => setShowModelChooser(false)}
+                className="hover:bg-[#454545] p-1 rounded transition-colors"
+                type="button"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              {loadingModels ? (
+                <div className="flex flex-col items-center justify-center py-12 gap-3 text-[#888888]">
+                  <Loader2 className="w-8 h-8 animate-spin" />
+                  <span className="text-sm">Fetching available models...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {availableModels.map(m => (
+                    <button
+                      key={m.name}
+                      onClick={() => {
+                        setModel(m.name);
+                        setShowModelChooser(false);
+                        setTestResult(null);
+                      }}
+                      className={`flex flex-col p-3 text-left border rounded transition-colors ${
+                        model === m.name
+                          ? "bg-[#094771] border-[#007acc] text-white"
+                          : "bg-[#1e1e1e] border-[#3e3e42] text-[#cccccc] hover:bg-[#2a2d2e]"
+                      }`}
+                      type="button"
+                    >
+                      <div className="text-sm font-medium">{m.displayName}</div>
+                      <div className="text-[10px] opacity-60 font-mono mt-1">{m.name}</div>
+                    </button>
+                  ))}
+                  {availableModels.length === 0 && (
+                    <div className="text-center py-8 text-[#666666]">
+                      No additional models found.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-[#454545] flex justify-between items-center bg-[#1e1e1e]">
+              <div className="text-[10px] text-[#666666]">
+                Click a model to select it.
+              </div>
+              <button
+                onClick={fetchModels}
+                disabled={loadingModels}
+                className="text-[10px] text-[#007acc] hover:underline flex items-center gap-1"
+                type="button"
+              >
+                <Loader2 className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
+                Refresh list
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
