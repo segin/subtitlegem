@@ -427,6 +427,7 @@ export default function Home() {
               document.getElementById('project-upload')?.click();
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
+            onReprocessVideo={() => setShowProjectSettings(true)}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -579,6 +580,7 @@ export default function Home() {
                         config,
                         sampleDuration,
                         ffmpegConfig,
+                        filename: config.originalFilename || undefined,
                       }),
                     });
                     

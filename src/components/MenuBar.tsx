@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { 
-  FileVideo, FolderOpen, Save, Download, X, 
+  FileVideo, FolderOpen, Save, Download, X, RefreshCw,
   Undo2, Redo2, Scissors, Copy, ClipboardPaste, Search, 
   Merge, Split, Clock, PanelLeft, PanelBottom, 
   ZoomIn, Palette, Keyboard, Settings 
@@ -109,6 +109,7 @@ interface MenuBarProps {
   onSaveProject?: () => void;
   onOpenProject?: (e?: React.MouseEvent) => void;
   onProjectSettings?: () => void;
+  onReprocessVideo?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;
   secondaryLanguage?: string;
@@ -134,6 +135,7 @@ export function MenuBar({
   onSaveProject,
   onOpenProject,
   onProjectSettings,
+  onReprocessVideo,
   hasSecondarySubtitles = false,
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
@@ -162,6 +164,7 @@ export function MenuBar({
 
     { label: "Export Transcript (.txt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('txt') },
     { divider: true },
+    { label: "Reprocess Video...", icon: <RefreshCw className="w-4 h-4" />, onClick: onReprocessVideo },
     { label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject },
   ];
 
