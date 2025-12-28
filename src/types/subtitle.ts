@@ -41,9 +41,13 @@ export interface SubtitleConfig {
   primary: TrackStyle;
   secondary: TrackStyle;
   ffmpeg: FFmpegConfig;
+  primaryLanguage?: string;
+  secondaryLanguage?: string;
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {
+  primaryLanguage: 'English',
+  secondaryLanguage: 'Secondary',
   primary: {
     alignment: 2, // Bottom Center (ASS numpad)
     fontSize: 24,

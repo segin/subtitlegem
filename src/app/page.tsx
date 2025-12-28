@@ -275,6 +275,8 @@ export default function Home() {
             }}
             onExport={handleExport}
             hasSecondarySubtitles={subtitles.some(s => !!s.secondaryText)}
+            primaryLanguage={config.primaryLanguage}
+            secondaryLanguage={config.secondaryLanguage}
             onCloseProject={() => {
               if(confirm("Discard current project?")) {
                 setVideoUrl(null);

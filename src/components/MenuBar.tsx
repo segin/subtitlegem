@@ -105,6 +105,8 @@ interface MenuBarProps {
   onZoomOut?: () => void;
   onShowShortcuts?: () => void;
   hasSecondarySubtitles?: boolean;
+  primaryLanguage?: string;
+  secondaryLanguage?: string;
 }
 
 export function MenuBar({
@@ -123,6 +125,8 @@ export function MenuBar({
   onZoomOut,
   onShowShortcuts,
   hasSecondarySubtitles = false,
+  primaryLanguage = 'English',
+  secondaryLanguage = 'Secondary',
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
@@ -131,14 +135,14 @@ export function MenuBar({
     { divider: true },
     { label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass') },
     
-    // Split SRT Export
+    // Split SRT Export with Dynamic Labels
     { 
-      label: hasSecondarySubtitles ? "Export Primary (.srt)" : "Export Subtitles (.srt)", 
+      label: hasSecondarySubtitles ? `Export ${primaryLanguage} (.srt)` : "Export Subtitles (.srt)", 
       icon: <Download className="w-4 h-4" />, 
       onClick: () => onExport?.(hasSecondarySubtitles ? 'srt-primary' : 'srt') 
     },
     ...(hasSecondarySubtitles ? [{
-      label: "Export Secondary (.srt)", 
+      label: `Export ${secondaryLanguage} (.srt)`, 
       icon: <Download className="w-4 h-4" />, 
       onClick: () => onExport?.('srt-secondary') 
     }] : []),
