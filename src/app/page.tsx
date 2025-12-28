@@ -85,25 +85,46 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
   
-  // Poll queue status
+  // Real-time queue updates via SSE
   useEffect(() => {
-    const pollQueue = async () => {
-      try {
-        const res = await fetch('/api/queue');
-        if (res.ok) {
-          const data = await res.json();
-          setQueueItems(data.items);
-          setQueuePaused(data.isPaused);
+    let eventSource: EventSource | null = null;
+    let retryTimeout: NodeJS.Timeout;
+
+    const connect = () => {
+      eventSource = new EventSource('/api/queue/events');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          // Handle 'initial' or 'update' types
+          if (data.type === 'initial' || data.type === 'update') {
+            setQueueItems(data.items);
+            setQueuePaused(data.paused);
+          }
+        } catch (error) {
+          console.error('Error parsing queue event:', error);
         }
-      } catch (err) {
-        console.error('Failed to poll queue:', err);
-      }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error('SSE connection error:', error);
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        // Retry connection after 5 seconds
+        retryTimeout = setTimeout(connect, 5000);
+      };
     };
-    
-    pollQueue();
-    const interval = setInterval(pollQueue, 2000); // Poll every 2 seconds
-    
-    return () => clearInterval(interval);
+
+    connect();
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+      clearTimeout(retryTimeout);
+    };
   }, []);
 
   const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string) => {

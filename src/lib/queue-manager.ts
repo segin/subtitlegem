@@ -4,6 +4,7 @@ import * as queueDb from './queue-db';
 import path from 'path';
 import os from 'os';
 import { processJob } from './job-processor';
+import { EventEmitter } from 'events';
 
 export interface QueueItem {
   id: string;
@@ -48,7 +49,7 @@ export interface QueueStats {
   failed: number;
 }
 
-class QueueManager {
+class QueueManager extends EventEmitter {
   private queue: Map<string, QueueItem> = new Map();
   private processing: Set<string> = new Set();
   private paused: boolean = false;
@@ -61,6 +62,7 @@ class QueueManager {
   };
 
   constructor() {
+    super();
     if (typeof process !== 'undefined') {
       process.on('SIGINT', () => {
         console.log('[Queue] SIGINT received - closing database...');
@@ -74,6 +76,8 @@ class QueueManager {
         process.exit(0);
       });
     }
+    // Increase listener limit for multiple SSE clients
+    this.setMaxListeners(50);
   }
 
   /**
@@ -163,6 +167,7 @@ class QueueManager {
     
     this.queue.set(queueItem.id, queueItem);
     this.persistItem(queueItem); // Persist to SQLite
+    this.emit('update'); // Emit update event
     
     if (this.config.autoStart && !this.paused) {
       this.processNext();
@@ -200,6 +205,7 @@ class QueueManager {
     if (item) {
       Object.assign(item, updates);
       this.persistItem(item); // Persist to SQLite
+      this.emit('update');
     }
   }
 
@@ -221,6 +227,7 @@ class QueueManager {
     const removed = this.queue.delete(id);
     if (removed) {
       queueDb.deleteItem(id); // Remove from SQLite
+      this.emit('update');
     }
     
     return removed;
@@ -325,6 +332,7 @@ class QueueManager {
     this.paused = false;
     queueDb.setPaused(false); // Persist pause state to SQLite
     this.processNext();
+    this.emit('update');
   }
 
   /**
@@ -333,6 +341,7 @@ class QueueManager {
   pause(): void {
     this.paused = true;
     queueDb.setPaused(true); // Persist pause state to SQLite
+    this.emit('update');
   }
 
   /**
@@ -355,10 +364,6 @@ class QueueManager {
   isProcessing(): boolean {
     return this.processing.size > 0;
   }
-
-  /**
-   * Process the next item(s) in the queue
-   */
 
   /**
    * execute a job using the centralized processor
