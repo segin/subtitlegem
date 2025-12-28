@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 
 export interface BurnOptions {
-  hwaccel?: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
+  hwaccel?: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
   preset?: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf?: number; // 0-51, 23 is default
   resolution?: string; // 'original' or 'WIDTHxHEIGHT'
@@ -69,15 +69,20 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
     command.videoFilter(videoFilters.join(','));
 
     // --- Encoding & Output Options ---
-    let videoCodec = 'libx264'; // Default CPU encoder
+    // Map hwaccel to appropriate encoder
+    const encoderMap: Record<string, string> = {
+      nvenc: 'h264_nvenc',
+      amf: 'h264_amf',
+      qsv: 'h264_qsv',
+      videotoolbox: 'h264_videotoolbox',
+      vaapi: 'h264_vaapi',
+      v4l2m2m: 'h264_v4l2m2m',
+      rkmpp: 'h264_rkmpp',
+      omx: 'h264_omx',
+      none: 'libx264',
+    };
     
-    if (hwaccel === 'nvenc') { // NVIDIA
-      videoCodec = 'h264_nvenc';
-    } else if (hwaccel === 'qsv') { // Intel
-      videoCodec = 'h264_qsv';
-    } else if (hwaccel === 'videotoolbox') { // macOS
-      videoCodec = 'h264_videotoolbox';
-    }
+    const videoCodec = encoderMap[hwaccel] || 'libx264';
 
     command.videoCodec(videoCodec);
 

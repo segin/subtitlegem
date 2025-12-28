@@ -133,43 +133,99 @@ async function parseFormats(): Promise<FFmpegFormat[]> {
  * Simply listing hwaccels isn't enough - we need to verify the encoders work.
  */
 async function parseHwaccels(): Promise<string[]> {
-  const available: string[] = [];
+  const ENCODER_TEST_TIMEOUT = 8000; // 8 seconds for encoder tests
   
-  // Map of hwaccel name to test encoder command
-  const hwaccelTests: { name: string; test: string }[] = [
+  // Map of hwaccel name to test encoder commands (multiple fallbacks)
+  const hwaccelTests: { name: string; displayName: string; tests: string[] }[] = [
     { 
-      name: 'nvenc', 
-      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_nvenc -f null - 2>&1' 
+      name: 'nvenc',
+      displayName: 'NVIDIA NVENC',
+      tests: [
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_nvenc -f null -',
+        'ffmpeg -f lavfi -i color=black:size=64x64:duration=0.1 -c:v h264_nvenc -f null -',
+      ]
     },
     { 
-      name: 'qsv', 
-      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null - 2>&1' 
+      name: 'amf',
+      displayName: 'AMD AMF',
+      tests: [
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_amf -f null -',
+      ]
     },
     { 
-      name: 'videotoolbox', 
-      test: 'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_videotoolbox -f null - 2>&1' 
+      name: 'qsv',
+      displayName: 'Intel QuickSync',
+      tests: [
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null -',
+        'ffmpeg -init_hw_device qsv=hw -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_qsv -f null -',
+      ]
     },
     { 
-      name: 'vaapi', 
-      test: 'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf hwupload -c:v h264_vaapi -f null - 2>&1' 
+      name: 'videotoolbox',
+      displayName: 'Apple VideoToolbox',
+      tests: [
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_videotoolbox -f null -',
+      ]
+    },
+    { 
+      name: 'vaapi',
+      displayName: 'Linux VAAPI',
+      tests: [
+        // Try multiple common VAAPI device paths
+        'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
+        'ffmpeg -init_hw_device vaapi=va:/dev/dri/renderD129 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
+        'ffmpeg -vaapi_device /dev/dri/renderD128 -f lavfi -i testsrc=duration=0.1:size=64x64 -vf format=nv12,hwupload -c:v h264_vaapi -f null -',
+      ]
+    },
+    { 
+      name: 'v4l2m2m',
+      displayName: 'V4L2 M2M (Generic ARM/SBC)',
+      tests: [
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_v4l2m2m -f null -',
+      ]
+    },
+    { 
+      name: 'rkmpp',
+      displayName: 'Rockchip MPP (RK3399/RK3588)',
+      tests: [
+        // Rockchip boards with Mali GPU use RKMPP for encoding
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_rkmpp -f null -',
+      ]
+    },
+    { 
+      name: 'omx',
+      displayName: 'OpenMAX (Raspberry Pi/embedded)',
+      tests: [
+        // Raspberry Pi and some other embedded devices use OMX
+        'ffmpeg -f lavfi -i testsrc=duration=0.1:size=64x64 -c:v h264_omx -f null -',
+      ]
     },
   ];
   
+  console.log('[FFmpeg] Testing hardware acceleration availability...');
+  
   // Test each encoder in parallel
   const results = await Promise.all(
-    hwaccelTests.map(async ({ name, test }) => {
-      try {
-        await execAsync(test, { timeout: 5000 });
-        console.log(`[FFmpeg] Hardware acceleration '${name}' is available`);
-        return name;
-      } catch {
-        // Encoder failed or timed out - not available
-        return null;
+    hwaccelTests.map(async ({ name, displayName, tests }) => {
+      // Try each test command until one succeeds
+      for (const test of tests) {
+        try {
+          await execAsync(test, { timeout: ENCODER_TEST_TIMEOUT });
+          console.log(`[FFmpeg] ✓ ${displayName} (${name}) is available`);
+          return name;
+        } catch (error: any) {
+          // Continue to next test command
+        }
       }
+      console.log(`[FFmpeg] ✗ ${displayName} (${name}) not available`);
+      return null;
     })
   );
   
-  return results.filter((r): r is string => r !== null);
+  const available = results.filter((r): r is string => r !== null);
+  console.log(`[FFmpeg] Available hardware acceleration: ${available.length > 0 ? available.join(', ') : 'none (CPU only)'}`);
+  
+  return available;
 }
 
 /**

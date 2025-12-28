@@ -162,8 +162,13 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
           >
             <option value="none">None (CPU)</option>
             {capabilities?.hwaccels.includes('nvenc') && <option value="nvenc">NVIDIA (NVENC)</option>}
+            {capabilities?.hwaccels.includes('amf') && <option value="amf">AMD (AMF)</option>}
             {capabilities?.hwaccels.includes('qsv') && <option value="qsv">Intel (QuickSync)</option>}
             {capabilities?.hwaccels.includes('videotoolbox') && <option value="videotoolbox">Apple (VideoToolbox)</option>}
+            {capabilities?.hwaccels.includes('vaapi') && <option value="vaapi">Linux (VAAPI)</option>}
+            {capabilities?.hwaccels.includes('v4l2m2m') && <option value="v4l2m2m">V4L2 M2M (ARM)</option>}
+            {capabilities?.hwaccels.includes('rkmpp') && <option value="rkmpp">Rockchip (RKMPP)</option>}
+            {capabilities?.hwaccels.includes('omx') && <option value="omx">OpenMAX (RPi)</option>}
           </select>
         </div>
 

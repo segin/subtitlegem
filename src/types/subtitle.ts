@@ -36,7 +36,7 @@ export interface TrackStyle {
 }
 
 export interface FFmpegConfig {
-  hwaccel: 'nvenc' | 'qsv' | 'videotoolbox' | 'none';
+  hwaccel: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
   preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
   resolution: string; // 'original' or 'WIDTHxHEIGHT'
