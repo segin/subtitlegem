@@ -140,14 +140,27 @@ class QueueManager extends EventEmitter {
       console.log('[Queue Recovery] Interrupted jobs requeued with crash status');
     }
     
-    if (this.queue.size > 0) {
+    }
+    
+    // Count pending and processing items (actives)
+    let activeCount = 0;
+    this.queue.forEach(item => {
+        if (item.status === 'pending' || item.status === 'processing') {
+            activeCount++;
+        }
+    });
+
+    if (activeCount > 0) {
       this.paused = true;
       if (wasInterrupted) {
         console.log('[Queue Recovery] Queue PAUSED - interrupted jobs detected');
       } else {
-        console.log('[Queue Recovery] Queue PAUSED - server was restarted');
+        console.log('[Queue Recovery] Queue PAUSED - server was restarted with items pending');
       }
       console.log('[Queue] User must manually resume processing');
+    } else {
+        this.paused = false;
+        console.log('[Queue] Queue empty on restart - auto-resuming');
     }
     
     this.initialized = true;

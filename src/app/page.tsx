@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { VideoUpload } from "@/components/VideoUpload";
 import { SubtitleTimeline } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
