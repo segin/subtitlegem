@@ -49,6 +49,10 @@ export default function Home() {
   
   // Cache initial subtitles for "Reset to Original" feature
   const [initialSubtitles, setInitialSubtitles] = useState<SubtitleLine[] | null>(null);
+  
+  // Multi-selection state (shared between timeline and list)
+  const [selectedSubtitleIds, setSelectedSubtitleIds] = useState<string[]>([]);
+  const lastSelectedIdRef = useRef<string | null>(null);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
@@ -317,6 +321,74 @@ export default function Home() {
     setCurrentDraftId(null);
     setConfig(DEFAULT_CONFIG);
     setInitialSubtitles(null);
+    setSelectedSubtitleIds([]);
+  };
+
+  // Handle subtitle selection with Shift+click range selection
+  const handleSubtitleSelect = (id: string, shiftKey: boolean) => {
+    if (shiftKey && lastSelectedIdRef.current) {
+      // Range selection
+      const lastIndex = subtitles.findIndex(s => s.id === lastSelectedIdRef.current);
+      const currentIndex = subtitles.findIndex(s => s.id === id);
+      
+      if (lastIndex !== -1 && currentIndex !== -1) {
+        const start = Math.min(lastIndex, currentIndex);
+        const end = Math.max(lastIndex, currentIndex);
+        const rangeIds = subtitles.slice(start, end + 1).map(s => s.id);
+        setSelectedSubtitleIds(rangeIds);
+        return;
+      }
+    }
+    
+    // Toggle single selection
+    setSelectedSubtitleIds(prev => {
+      if (prev.includes(id)) {
+        return prev.filter(i => i !== id);
+      } else {
+        lastSelectedIdRef.current = id;
+        return [...prev, id];
+      }
+    });
+  };
+
+  // Split a subtitle at its midpoint
+  const splitSubtitle = (id: string) => {
+    const index = subtitles.findIndex(s => s.id === id);
+    if (index === -1) return;
+    
+    const sub = subtitles[index];
+    const midTime = (sub.startTime + sub.endTime) / 2;
+    
+    // Split text roughly in half (at space if possible)
+    const text = sub.text || "";
+    const midTextIndex = Math.floor(text.length / 2);
+    const spaceIndex = text.indexOf(' ', midTextIndex);
+    const splitAt = spaceIndex !== -1 ? spaceIndex : midTextIndex;
+    
+    const firstHalf: SubtitleLine = {
+      id: uuidv4(),
+      startTime: sub.startTime,
+      endTime: midTime,
+      text: text.slice(0, splitAt).trim(),
+      secondaryText: sub.secondaryText ? sub.secondaryText.slice(0, Math.floor(sub.secondaryText.length / 2)).trim() : undefined,
+      primaryColor: sub.primaryColor,
+      secondaryColor: sub.secondaryColor,
+    };
+    
+    const secondHalf: SubtitleLine = {
+      id: uuidv4(),
+      startTime: midTime,
+      endTime: sub.endTime,
+      text: text.slice(splitAt).trim(),
+      secondaryText: sub.secondaryText ? sub.secondaryText.slice(Math.floor(sub.secondaryText.length / 2)).trim() : undefined,
+      primaryColor: sub.primaryColor,
+      secondaryColor: sub.secondaryColor,
+    };
+    
+    const newSubtitles = [...subtitles];
+    newSubtitles.splice(index, 1, firstHalf, secondHalf);
+    setSubtitles(newSubtitles);
+    setSelectedSubtitleIds([]);
   };
 
   if (!videoUrl) {
@@ -521,6 +593,9 @@ export default function Home() {
                   onUpdate={setSubtitles}
                   currentTime={currentTime}
                   onSeek={setCurrentTime}
+                  selectedIds={selectedSubtitleIds}
+                  onSelect={handleSubtitleSelect}
+                  onSplit={splitSubtitle}
                 />
              </div>
           </div>
@@ -563,7 +638,10 @@ export default function Home() {
                     onUpdate={setSubtitles} 
                     currentTime={currentTime}
                     onSeek={setCurrentTime}
-                    secondaryLanguage="Simplified Chinese"
+                    secondaryLanguage={config.secondaryLanguage || "Simplified Chinese"}
+                    selectedIds={selectedSubtitleIds}
+                    onSelect={handleSubtitleSelect}
+                    onSplit={splitSubtitle}
                   />
                 </div>
               ) : (

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { SubtitleLine } from "@/types/subtitle";
-import { Plus, Trash2, Wand2, Clock, Trash, FileText, Code, Settings, List, MonitorPlay, LogOut, Check, Move, Type, Palette, Layout, Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2 } from "lucide-react"; // Added Check for selection
+import { Plus, Trash2, Wand2, Clock, Trash, FileText, Code, Settings, List, MonitorPlay, LogOut, Check, Move, Type, Palette, Layout, Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Scissors } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { formatSRTTime } from "@/lib/srt-utils";
 
@@ -11,13 +11,16 @@ interface SubtitleListProps {
   onUpdate: (subtitles: SubtitleLine[]) => void;
   currentTime: number;
   onSeek: (time: number) => void;
-  secondaryLanguage: string; // Required for translation
+  secondaryLanguage: string;
+  // Selection props (lifted to parent for cross-component sync)
+  selectedIds: string[];
+  onSelect: (id: string, shiftKey: boolean) => void;
+  onSplit: (id: string) => void;
 }
 
-export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, secondaryLanguage }: SubtitleListProps) {
+export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, secondaryLanguage, selectedIds, onSelect, onSplit }: SubtitleListProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const handleTextChange = (id: string, field: 'text' | 'secondaryText', value: string) => {
     const updated = subtitles.map(s => s.id === id ? { ...s, [field]: value } : s);
@@ -30,8 +33,8 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
 
     setTranslatingId(sub.id);
     
-    const contextBefore = subtitles.slice(Math.max(0, index - 2), index).map(s => s.text).join('\n');
-    const contextAfter = subtitles.slice(index + 1, index + 3).map(s => s.text).join('\n');
+    const contextBefore = subtitles.slice(Math.max(0, index - 7), index).map(s => s.text).join('\n');
+    const contextAfter = subtitles.slice(index + 1, index + 8).map(s => s.text).join('\n');
 
     try {
       const res = await fetch("/api/translate", {
@@ -74,13 +77,10 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
 
   const deleteSubtitle = (id: string) => {
     onUpdate(subtitles.filter(s => s.id !== id));
-    setSelectedIds(prev => prev.filter(selectedId => selectedId !== id)); // Remove from selection if deleted
   };
 
-  const toggleSelection = (id: string) => {
-    setSelectedIds(prev => 
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const toggleSelection = (id: string, e: React.MouseEvent) => {
+    onSelect(id, e.shiftKey);
   };
 
   const mergeSelectedSubtitles = () => {
@@ -117,7 +117,7 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
     newSubtitles.splice(firstIndex, selectedIndices.length, mergedSubtitle);
 
     onUpdate(newSubtitles);
-    setSelectedIds([]);
+    // Selection will be cleared by parent after merge
   };
 
   const getCanMerge = () => {
@@ -180,11 +180,18 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
                 
                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">
                    <button 
-                      onClick={() => toggleSelection(sub.id)}
+                      onClick={(e) => toggleSelection(sub.id, e)}
                       className={`p-1.5 rounded-sm hover:bg-[#3e3e42] ${isSelected ? 'bg-[#007acc] text-white' : 'text-[#888888] hover:text-[#d7ba7d]'}`}
-                      title={isSelected ? "Deselect" : "Select"}
+                      title={isSelected ? "Deselect (Shift+click for range)" : "Select (Shift+click for range)"}
                    >
                      {isSelected ? <Check className="w-3 h-3" /> : <Move className="w-3 h-3" />}
+                   </button>
+                   <button 
+                      onClick={() => onSplit(sub.id)}
+                      className="p-1.5 rounded-sm hover:bg-[#3e3e42] text-[#888888] hover:text-[#22c55e] transition-colors"
+                      title="Split at midpoint"
+                   >
+                     <Scissors className="w-3 h-3" />
                    </button>
                    <button 
                       onClick={() => handleTranslate(index)}

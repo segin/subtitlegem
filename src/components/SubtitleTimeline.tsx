@@ -15,9 +15,13 @@ interface TimelineProps {
   onUpdate: (updatedSubtitles: SubtitleLine[]) => void;
   currentTime: number;
   onSeek: (time: number) => void;
+  // Selection props (shared with SubtitleList)
+  selectedIds: string[];
+  onSelect: (id: string, shiftKey: boolean) => void;
+  onSplit: (id: string) => void;
 }
 
-export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, onSeek }: TimelineProps) {
+export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, onSeek, selectedIds, onSelect, onSplit }: TimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
@@ -126,6 +130,8 @@ export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, o
                 pixelsPerSecond={pixelsPerSecond}
                 onDrag={(side, deltaX) => handleDrag(sub.id, side, deltaX)}
                 active={currentTime >= sub.startTime && currentTime <= sub.endTime}
+                selected={selectedIds.includes(sub.id)}
+                onClick={(e) => onSelect(sub.id, e.shiftKey)}
               />
             ))}
         </div>
@@ -134,11 +140,13 @@ export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, o
   );
 }
 
-function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active }: { 
+function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, onClick }: { 
   subtitle: SubtitleLine, 
   pixelsPerSecond: number, 
   onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void,
-  active: boolean
+  active: boolean,
+  selected: boolean,
+  onClick: (e: React.MouseEvent) => void
 }) {
   const [isDragging, setIsDragging] = useState<'left' | 'right' | 'both' | null>(null);
   const startX = useRef(0);
@@ -177,13 +185,19 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active }: {
         "absolute top-2 h-10 cursor-move flex flex-col justify-center px-2 overflow-hidden select-none group transition-colors border-l-2 border-r-2",
         active 
           ? "bg-[#264f78] border-l-[#007acc] border-r-[#007acc] text-white z-10" 
-          : "bg-[#2d2d2d] border-l-[#3e3e42] border-r-[#3e3e42] text-[#cccccc] hover:bg-[#3e3e42]",
+          : selected
+            ? "bg-[#3e3e42] border-l-[#22c55e] border-r-[#22c55e] text-white ring-1 ring-[#22c55e] z-10"
+            : "bg-[#2d2d2d] border-l-[#3e3e42] border-r-[#3e3e42] text-[#cccccc] hover:bg-[#3e3e42]",
         isDragging && "ring-1 ring-white z-20"
       )}
       style={{ 
         left: `${subtitle.startTime * pixelsPerSecond}px`, 
         width: `${Math.max((subtitle.endTime - subtitle.startTime) * pixelsPerSecond, 4)}px`,
         borderRadius: '1px'
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
       }}
       onMouseDown={(e) => handleMouseDown(e, 'both')}
     >
