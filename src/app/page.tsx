@@ -10,6 +10,7 @@ import { RawEditor } from "@/components/RawEditor";
 import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
+import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
@@ -136,33 +137,44 @@ export default function Home() {
 
   if (!videoUrl) {
     return (
-      <main className="min-h-screen bg-[#1e1e1e] flex flex-col items-center justify-center p-0 text-[#cccccc]">
-        {/* Global Queue Drawer */}
-        <QueueDrawer
-          items={queueItems}
-          isPaused={queuePaused}
-          onPauseToggle={toggleQueuePause}
-          onRemove={async (id: string, force?: boolean) => {
-            await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-          }}
-          onDownload={(item: QueueItem) => {
-            if (item.result?.videoPath) {
-              window.open(`/api/export?id=${item.id}`, '_blank');
-            }
+      <main className="min-h-screen bg-[#1e1e1e] flex text-[#cccccc]">
+        {/* Draft Projects Sidebar - Desktop (inline), Mobile handled by DraftsSidebar internally */}
+        <DraftsSidebar 
+          onLoadDraft={(draft) => {
+            // TODO: Load draft project
+            console.log('Load draft:', draft.id);
           }}
         />
-        
-        <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl mx-4">
-          <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
-            SubtitleGem - New Project
-          </div>
-          <div className="p-8 flex flex-col items-center">
-            <div className="mb-6 p-4 bg-[#1e1e1e] border border-[#333333]">
-              <FileVideo className="w-12 h-12 text-[#555555]" />
+
+        {/* Main Upload Area */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4">
+          {/* Global Queue Drawer */}
+          <QueueDrawer
+            items={queueItems}
+            isPaused={queuePaused}
+            onPauseToggle={toggleQueuePause}
+            onRemove={async (id: string, force?: boolean) => {
+              await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+            }}
+            onDownload={(item: QueueItem) => {
+              if (item.result?.videoPath) {
+                window.open(`/api/export?id=${item.id}`, '_blank');
+              }
+            }}
+          />
+          
+          <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
+            <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
+              SubtitleGem - New Project
             </div>
-            <h1 className="text-xl font-medium text-[#e1e1e1] mb-2">Welcome to SubtitleGem</h1>
-            <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
-            <VideoUpload onUploadComplete={handleUploadComplete} />
+            <div className="p-8 flex flex-col items-center">
+              <div className="mb-6 p-4 bg-[#1e1e1e] border border-[#333333]">
+                <FileVideo className="w-12 h-12 text-[#555555]" />
+              </div>
+              <h1 className="text-xl font-medium text-[#e1e1e1] mb-2">Welcome to SubtitleGem</h1>
+              <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
+              <VideoUpload onUploadComplete={handleUploadComplete} />
+            </div>
           </div>
         </div>
       </main>
