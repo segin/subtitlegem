@@ -137,8 +137,8 @@ export default function Home() {
 
   if (!videoUrl) {
     return (
-      <main className="min-h-screen bg-[#1e1e1e] flex text-[#cccccc]">
-        {/* Draft Projects Sidebar - Desktop (inline), Mobile handled by DraftsSidebar internally */}
+      <main className="min-h-screen h-screen bg-[#1e1e1e] flex text-[#cccccc] overflow-hidden">
+        {/* Draft Projects Sidebar - Left side */}
         <DraftsSidebar 
           onLoadDraft={(draft) => {
             // TODO: Load draft project
@@ -146,23 +146,8 @@ export default function Home() {
           }}
         />
 
-        {/* Main Upload Area */}
-        <div className="flex-1 flex flex-col items-center justify-center p-4">
-          {/* Global Queue Drawer */}
-          <QueueDrawer
-            items={queueItems}
-            isPaused={queuePaused}
-            onPauseToggle={toggleQueuePause}
-            onRemove={async (id: string, force?: boolean) => {
-              await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-            }}
-            onDownload={(item: QueueItem) => {
-              if (item.result?.videoPath) {
-                window.open(`/api/export?id=${item.id}`, '_blank');
-              }
-            }}
-          />
-          
+        {/* Main Upload Area - Center */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-auto">
           <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
             <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
               SubtitleGem - New Project
@@ -177,6 +162,21 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Queue Drawer - Right side */}
+        <QueueDrawer
+          items={queueItems}
+          isPaused={queuePaused}
+          onPauseToggle={toggleQueuePause}
+          onRemove={async (id: string, force?: boolean) => {
+            await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+          }}
+          onDownload={(item: QueueItem) => {
+            if (item.result?.videoPath) {
+              window.open(`/api/export?id=${item.id}`, '_blank');
+            }
+          }}
+        />
       </main>
     );
   }

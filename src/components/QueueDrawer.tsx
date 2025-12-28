@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { QueueItem } from "@/lib/queue-manager";
-import { X, Layers, Download, Trash2 } from "lucide-react";
+import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface QueueDrawerProps {
   items: QueueItem[];
@@ -36,6 +36,7 @@ export function QueueDrawer({
   onDownload,
 }: QueueDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const isDesktop = useIsDesktop();
   
   // Close drawer on escape (mobile only)
@@ -250,10 +251,29 @@ export function QueueDrawer({
         />
       )}
 
-      {/* DESKTOP: Inline Panel - Part of document flow */}
+      {/* DESKTOP: Inline Panel - Part of document flow, collapsible */}
       {isDesktop && (
-        <div className="h-full w-72 xl:w-80 bg-[#1e1e1e] border-l border-[#333333] flex flex-col shrink-0 order-last">
-          {renderPanelContent(false)}
+        <div className={`h-full bg-[#1e1e1e] border-l border-[#333333] flex flex-col shrink-0 order-last transition-all duration-300 ${isCollapsed ? 'w-10' : 'w-72 xl:w-80'}`}>
+          {/* Collapse Toggle */}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="absolute top-2 left-0 transform -translate-x-1/2 z-10 w-5 h-10 bg-[#333333] border border-[#454545] rounded-l flex items-center justify-center hover:bg-[#3e3e42] transition-colors"
+            title={isCollapsed ? "Expand queue" : "Collapse queue"}
+          >
+            {isCollapsed ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          </button>
+          
+          {isCollapsed ? (
+            /* Collapsed view - just icon and count */
+            <div className="flex flex-col items-center py-3 gap-2">
+              <Layers className="w-5 h-5 text-[#888888]" />
+              {queueItems.length > 0 && (
+                <span className="text-xs font-bold text-[#0e639c]">{queueItems.length}</span>
+              )}
+            </div>
+          ) : (
+            renderPanelContent(false)
+          )}
         </div>
       )}
 
