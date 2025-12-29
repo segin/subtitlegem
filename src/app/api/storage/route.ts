@@ -56,9 +56,19 @@ export async function GET(req: NextRequest) {
         // Convert Node stream to Web stream
         const stream = new ReadableStream({
           start(controller) {
-            fileStream.on('data', (chunk) => controller.enqueue(chunk));
-            fileStream.on('end', () => controller.close());
-            fileStream.on('error', (err) => controller.error(err));
+            fileStream.on('data', (chunk) => {
+              try { controller.enqueue(chunk); }
+              catch (e) { fileStream.destroy(); }
+            });
+            fileStream.on('end', () => {
+              try { controller.close(); } catch (e) {}
+            });
+            fileStream.on('error', (err) => {
+              try { controller.error(err); } catch (e) {}
+            });
+          },
+          cancel() {
+            fileStream.destroy();
           }
         });
 
@@ -78,9 +88,19 @@ export async function GET(req: NextRequest) {
         // Convert Node stream to Web stream
         const stream = new ReadableStream({
           start(controller) {
-            fileStream.on('data', (chunk) => controller.enqueue(chunk));
-            fileStream.on('end', () => controller.close());
-            fileStream.on('error', (err) => controller.error(err));
+            fileStream.on('data', (chunk) => {
+              try { controller.enqueue(chunk); }
+              catch (e) { fileStream.destroy(); }
+            });
+            fileStream.on('end', () => {
+              try { controller.close(); } catch (e) {}
+            });
+            fileStream.on('error', (err) => {
+              try { controller.error(err); } catch (e) {}
+            });
+          },
+          cancel() {
+            fileStream.destroy();
           }
         });
 
