@@ -54,9 +54,19 @@ function sanitizeAssText(text: string): string {
     return text.replace(/\{.*\}/g, ''); // Strip out any {style-tags}
 }
 
-export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): string {
-    const playResX = 1920;
-    const playResY = 1080;
+export interface VideoDimensions {
+    width: number;
+    height: number;
+}
+
+export function generateAss(
+    subtitles: SubtitleLine[], 
+    config: SubtitleConfig, 
+    videoDimensions?: VideoDimensions
+): string {
+    // Use actual video dimensions if provided, otherwise default to 1080p
+    const playResX = videoDimensions?.width || 1920;
+    const playResY = videoDimensions?.height || 1080;
     
     // Resolve styles with inheritance (Global -> Project -> Line)
     const resolvedPrimary = resolveTrackStyle(

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queueManager } from "@/lib/queue-manager";
-import { burnSubtitles } from "@/lib/ffmpeg-utils";
-import { generateAss } from "@/lib/ass-utils";
+import { burnSubtitles, getVideoDimensions } from "@/lib/ffmpeg-utils";
+import { generateAss, VideoDimensions } from "@/lib/ass-utils";
 import { SubtitleLine, SubtitleConfig, FFmpegConfig } from "@/types/subtitle";
 import * as fs from "fs";
 import * as path from "path";
@@ -56,8 +56,17 @@ export async function POST(req: NextRequest) {
     const outputName = `${safeBaseName}_export_${Date.now()}.mp4`; // Unique output name
     const outputPath = path.join(exportDir, outputName);
 
-    // Generate ASS file
-    const assContent = generateAss(subtitles, config);
+    // Get video dimensions for proper ASS PlayRes scaling
+    let videoDimensions: VideoDimensions | undefined;
+    try {
+      videoDimensions = await getVideoDimensions(videoPath);
+      console.log(`[Export] Video dimensions: ${videoDimensions.width}x${videoDimensions.height}`);
+    } catch (e) {
+      console.warn('[Export] Could not get video dimensions, using default 1920x1080:', e);
+    }
+
+    // Generate ASS file with actual video dimensions
+    const assContent = generateAss(subtitles, config, videoDimensions);
     fs.writeFileSync(assPath, assContent);
 
     // Add to queue with persistent metadata
