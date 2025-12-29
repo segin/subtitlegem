@@ -4,8 +4,12 @@ export interface SubtitleLine {
   endTime: number;   // in seconds
   text: string;
   secondaryText?: string;
-  primaryColor?: string;   // Optional override (Hex #RRGGBB)
-  secondaryColor?: string; // Optional override (Hex #RRGGBB)
+  // Deprecated: use styleOverrides instead
+  primaryColor?: string;
+  secondaryColor?: string;
+  
+  // Per-line specific overrides (sparse)
+  styleOverrides?: Partial<TrackStyle>;
 }
 
 // FFmpeg ASS Alignment (numpad layout):
@@ -19,20 +23,20 @@ export type Alignment = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export interface TrackStyle {
   alignment: Alignment;
-  /** Font size as percentage of video height (e.g., 2.5 = 2.5%) */
-  fontSize: number;
+  /** Font size: Number = 1080p Pixels, String = Percentage (e.g. "5%") */
+  fontSize: number | string;
   color: string; // Hex format #RRGGBB
   fontFamily: string;
-  /** Vertical margin as percentage of video height */
-  marginV: number;
-  /** Horizontal margin as percentage of video width */
-  marginH: number;
+  /** Vertical margin: Number = 1080p Pixels, String = Percentage (e.g. "22.5%") */
+  marginV: number | string;
+  /** Horizontal margin: Number = 1080p Pixels, String = Percentage (e.g. "4%") */
+  marginH: number | string;
   backgroundColor: string; // rgba() format for transparency
   outlineColor?: string; // Optional outline color
-  /** Outline width as percentage of video height */
-  outlineWidth?: number;
-  /** Shadow distance as percentage of video height */
-  shadowDistance?: number;
+  /** Outline: Number = 1080p Pixels, String = Percentage */
+  outlineWidth?: number | string;
+  /** Shadow: Number = 1080p Pixels, String = Percentage */
+  shadowDistance?: number | string;
 }
 
 export interface FFmpegConfig {
@@ -43,8 +47,10 @@ export interface FFmpegConfig {
 }
 
 export interface SubtitleConfig {
-  primary: TrackStyle;
-  secondary: TrackStyle;
+  // Styles can be partial for inheritance or full for defaults
+  primary?: Partial<TrackStyle>;
+  secondary?: Partial<TrackStyle>;
+  
   ffmpeg: FFmpegConfig;
   primaryLanguage?: string;
   secondaryLanguage?: string;
@@ -52,35 +58,15 @@ export interface SubtitleConfig {
   geminiFileExpiration?: string | null;
   fileId?: string | null;
   originalFilename?: string | null;
+  geminiModel?: string;
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {
   primaryLanguage: 'English',
   secondaryLanguage: 'Secondary',
-  primary: {
-    alignment: 2, // Bottom Center (ASS numpad)
-    fontSize: 2.22, // ~24px at 1080p (24/1080*100)
-    color: '#ffffff',
-    fontFamily: 'Arial',
-    marginV: 2.78, // ~30px at 1080p
-    marginH: 1.04, // ~20px at 1920p width
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    outlineColor: '#000000',
-    outlineWidth: 0.19, // ~2px at 1080p
-    shadowDistance: 0.09, // ~1px at 1080p
-  },
-  secondary: {
-    alignment: 8, // Top Center (ASS numpad)
-    fontSize: 1.85, // ~20px at 1080p
-    color: '#fbbf24', // Amber-400
-    fontFamily: 'Arial',
-    marginV: 2.78, // ~30px at 1080p
-    marginH: 1.04, // ~20px at 1920p width
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    outlineColor: '#000000',
-    outlineWidth: 0.19, // ~2px at 1080p
-    shadowDistance: 0.09, // ~1px at 1080p
-  },
+  // Default to empty to inherit from Global Settings
+  primary: {}, 
+  secondary: {},
   ffmpeg: {
     hwaccel: 'none',
     preset: 'veryfast',
@@ -135,27 +121,27 @@ export interface GlobalSettings {
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultPrimaryStyle: {
     alignment: 2, // Bottom Center
-    fontSize: 2.22,
+    fontSize: "5%",       // responsive default
     color: '#ffffff',
     fontFamily: 'Arial',
-    marginV: 2.78,
-    marginH: 1.04,
+    marginV: "22.5%",     // responsive default
+    marginH: "4%",        // responsive default
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: 0.19,
-    shadowDistance: 0.09,
+    outlineWidth: "0.2%",
+    shadowDistance: "0.1%",
   },
   defaultSecondaryStyle: {
     alignment: 8, // Top Center
-    fontSize: 1.85,
+    fontSize: "4%",
     color: '#fbbf24',
     fontFamily: 'Arial',
-    marginV: 2.78,
-    marginH: 1.04,
+    marginV: "22.5%",
+    marginH: "4%",
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: 0.19,
-    shadowDistance: 0.09,
+    outlineWidth: "0.2%",
+    shadowDistance: "0.1%",
   },
   defaultPrimaryLanguage: 'English',
   defaultSecondaryLanguage: 'Simplified Chinese',

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { queueManager } from '@/lib/queue-manager';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/queue - Get current queue status
 export async function GET() {
   try {

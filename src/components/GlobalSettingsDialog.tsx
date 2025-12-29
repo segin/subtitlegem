@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw } from "lucide-react";
+import { TrackStyleEditor } from "./TrackStyleEditor";
 
 interface GlobalSettingsDialogProps {
   isOpen: boolean;
@@ -108,13 +109,7 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
     setSettings({ ...settings, [key]: { ...currentStyle, ...updates } });
   };
 
-  const ALIGNMENTS = [
-    { value: 7, label: 'Top Left' }, { value: 8, label: 'Top Center' }, { value: 9, label: 'Top Right' },
-    { value: 4, label: 'Middle Left' }, { value: 5, label: 'Middle Center' }, { value: 6, label: 'Middle Right' },
-    { value: 1, label: 'Bottom Left' }, { value: 2, label: 'Bottom Center' }, { value: 3, label: 'Bottom Right' },
-  ];
 
-  const FONTS = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georgia', 'Times New Roman', 'Courier New'];
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -246,139 +241,10 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
 
                     {/* Full Style Controls */}
                     <div className="space-y-3">
-                      {/* Font Size & Family */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Font Size (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={currentStyle.fontSize}
-                            onChange={(e) => updateCurrentStyle({ fontSize: parseFloat(e.target.value) || 2 })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Font Family</label>
-                          <select
-                            value={currentStyle.fontFamily}
-                            onChange={(e) => updateCurrentStyle({ fontFamily: e.target.value })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          >
-                            {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
-                          </select>
-                        </div>
-                      </div>
-
-                      {/* Alignment */}
-                      <div>
-                        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Alignment</label>
-                        <select
-                          value={currentStyle.alignment}
-                          onChange={(e) => updateCurrentStyle({ alignment: parseInt(e.target.value) as any })}
-                          className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                        >
-                          {ALIGNMENTS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-                        </select>
-                      </div>
-
-                      {/* Colors */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Text Color</label>
-                          <div className="flex gap-1">
-                            <input
-                              type="color"
-                              value={currentStyle.color}
-                              onChange={(e) => updateCurrentStyle({ color: e.target.value })}
-                              className="w-8 h-7 border border-[#3e3e42] cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={currentStyle.color}
-                              onChange={(e) => updateCurrentStyle({ color: e.target.value })}
-                              className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Outline Color</label>
-                          <div className="flex gap-1">
-                            <input
-                              type="color"
-                              value={currentStyle.outlineColor || '#000000'}
-                              onChange={(e) => updateCurrentStyle({ outlineColor: e.target.value })}
-                              className="w-8 h-7 border border-[#3e3e42] cursor-pointer"
-                            />
-                            <input
-                              type="text"
-                              value={currentStyle.outlineColor || '#000000'}
-                              onChange={(e) => updateCurrentStyle({ outlineColor: e.target.value })}
-                              className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Background */}
-                      <div>
-                        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Background (rgba or transparent)</label>
-                        <input
-                          type="text"
-                          value={currentStyle.backgroundColor}
-                          onChange={(e) => updateCurrentStyle({ backgroundColor: e.target.value })}
-                          placeholder="rgba(0,0,0,0.7) or transparent"
-                          className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
+                        <TrackStyleEditor 
+                            style={currentStyle} 
+                            onChange={updateCurrentStyle}
                         />
-                      </div>
-
-                      {/* Margins */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">V Margin (%)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={currentStyle.marginV}
-                            onChange={(e) => updateCurrentStyle({ marginV: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">H Margin (%)</label>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={currentStyle.marginH}
-                            onChange={(e) => updateCurrentStyle({ marginH: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Outline & Shadow */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Outline Width (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={currentStyle.outlineWidth || 0}
-                            onChange={(e) => updateCurrentStyle({ outlineWidth: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Shadow (%)</label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={currentStyle.shadowDistance || 0}
-                            onChange={(e) => updateCurrentStyle({ shadowDistance: parseFloat(e.target.value) || 0 })}
-                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
-                          />
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>

@@ -13,7 +13,7 @@ import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
-import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { generateAss } from "@/lib/ass-utils";
@@ -367,6 +367,87 @@ export default function Home() {
     openShiftKeyRef.current = false;
   };
 
+  // Project Settings Handlers
+  const handleUpdateConfig = useCallback((newConfig: Partial<SubtitleConfig>) => {
+    setConfig(prev => ({ ...prev, ...newConfig }));
+  }, []);
+
+  const handleReprocessVideo = async (language: string, model: string) => {
+    if (!videoPath) throw new Error("No video loaded");
+    
+    // Call API to reprocess
+    const response = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            filePath: videoPath,
+            fileName: videoUrl?.split('/').pop() || "video.mp4",
+            fileSize: 0, // Not needed for reprocess
+            fileType: "video/mp4", // generic
+            model: model,
+            secondaryLanguage: config.secondaryLanguage || "None", 
+            reprocess: true,
+            primaryLanguage: language,
+            existingFileUri: config.geminiFileUri
+        })
+    });
+    
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Reprocessing failed");
+    }
+    
+    const data = await response.json();
+    if (data.subtitles) {
+        setSubtitles(data.subtitles);
+        // Add unique IDs if missing
+        const processed = data.subtitles.map((s: any) => ({
+            ...s,
+            id: s.id || uuidv4()
+        }));
+        setSubtitles(processed);
+        resetHistory(processed);
+    }
+  };
+
+  const handleRetranslate = async (language: string, model: string) => {
+     if (subtitles.length === 0) throw new Error("No subtitles to translate");
+
+     const response = await fetch('/api/translate', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+             subtitles,
+             targetLanguage: language,
+             model: model
+         })
+     });
+
+     if (!response.ok) {
+         const err = await response.json();
+         throw new Error(err.error || "Translation failed");
+     }
+
+     const data = await response.json();
+     if (data.subtitles) {
+         setSubtitles(data.subtitles);
+         resetHistory(data.subtitles);
+     }
+  };
+  
+  // Ref for project loading
+  const projectState = useRef<{videoPath: string} | null>(null);
+  
+  const loadProject = (path: string) => {
+      // Placeholder for actual project reloading logic if needed
+      // Currently just resets subtitles which effectively "reloads" if we kept the video
+      if (!path) return;
+      if (initialSubtitles) {
+          setSubtitles(initialSubtitles);
+          resetHistory(initialSubtitles);
+      }
+  };
+
   const handleCloseProject = async () => {
     // If there's a saved draft, offer to delete it
     if (currentDraftId) {
@@ -579,6 +660,23 @@ export default function Home() {
         <GlobalSettingsDialog
           isOpen={showGlobalSettings}
           onClose={() => setShowGlobalSettings(false)}
+        />
+        
+        <ProjectSettingsDialog
+            isOpen={showProjectSettings}
+            onClose={() => setShowProjectSettings(false)}
+            config={{
+                primaryLanguage: config.primaryLanguage,
+                secondaryLanguage: config.secondaryLanguage,
+                geminiFileUri: config.geminiFileUri,
+                geminiFileExpiration: config.geminiFileExpiration,
+                geminiModel: config.geminiModel || DEFAULT_GLOBAL_SETTINGS.defaultGeminiModel, // Pass model
+            }}
+            onUpdateConfig={handleUpdateConfig}
+            onReprocess={handleReprocessVideo}
+            onRetranslate={handleRetranslate}
+            onResetToOriginal={() => loadProject(projectState.current?.videoPath || "")}
+            canReset={!!projectState.current}
         />
       </main>
     );

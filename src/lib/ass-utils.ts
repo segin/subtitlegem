@@ -1,6 +1,18 @@
-// src/lib/ass-utils.ts
-import { SubtitleLine, SubtitleConfig, TrackStyle } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { formatSRTTime } from "./srt-utils";
+import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
+
+// Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)
+function hexToAssColor(hex: string | undefined): string {
+    if (!hex) return '&HFFFFFF&'; // Default to white if undefined
+    if (hex.startsWith('#')) {
+        const r = hex.substring(1, 3);
+        const g = hex.substring(3, 5);
+        const b = hex.substring(5, 7);
+        return `&H${b}${g}${r}&`;
+    }
+    return '&HFFFFFF&'; // Default to white
+}
 
 function formatAssTime(seconds: number): string {
     const date = new Date(0);
@@ -12,31 +24,19 @@ function formatAssTime(seconds: number): string {
     return `${h}:${mm}:${ss}.${cs}`;
 }
 
-// Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)
-function hexToAssColor(hex: string): string {
-    if (hex.startsWith('#')) {
-        const r = hex.substring(1, 3);
-        const g = hex.substring(3, 5);
-        const b = hex.substring(5, 7);
-        return `&H${b}${g}${r}&`;
-    }
-    return '&HFFFFFF&'; // Default to white
-}
-
 function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1920, playResY: number = 1080): string {
     const { fontFamily, fontSize, color, backgroundColor, marginV, marginH, outlineWidth, shadowDistance } = style;
     
-    // ASS uses a different color format &HBBGGRR.
+    // Normalize all mixed units (pixels vs %) to Absolute ASS Pixels (based on PlayRes)
+    const assFontSize = Math.round(normalizeToPx(fontSize, playResY));
+    const assMarginV = Math.round(normalizeToPx(marginV, playResY));
+    const assMarginH = Math.round(normalizeToPx(marginH, playResX));
+    const assOutlineWidth = normalizeToPx(outlineWidth ?? 2.0, playResY);
+    const assShadowDistance = normalizeToPx(shadowDistance ?? 1.5, playResY);
+
     const primaryColour = hexToAssColor(color);
     const backColour = hexToAssColor(backgroundColor);
     
-    // Convert percentage values to absolute pixels for ASS (based on script resolution)
-    const assFontSize = Math.round((fontSize / 100) * playResY);
-    const assMarginV = Math.round((marginV / 100) * playResY);
-    const assMarginH = Math.round((marginH / 100) * playResX);
-    const assOutlineWidth = (outlineWidth ?? 0.19) / 100 * playResY;
-    const assShadowDistance = (shadowDistance ?? 0.09) / 100 * playResY;
-
     // Alignment is numpad based, which is what ASS uses.
     const alignment = style.alignment;
 
@@ -52,6 +52,16 @@ export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): 
     const playResX = 1920;
     const playResY = 1080;
     
+    // Resolve styles with inheritance (Global -> Project -> Line)
+    const resolvedPrimary = resolveTrackStyle(
+        DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle,
+        config.primary
+    );
+    const resolvedSecondary = resolveTrackStyle(
+        DEFAULT_GLOBAL_SETTINGS.defaultSecondaryStyle,
+        config.secondary
+    );
+    
     const scriptInfo = [
         '[Script Info]',
         'Title: SubtitleGem Export',
@@ -66,8 +76,8 @@ export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): 
     const styles = [
         '[V4+ Styles]',
         'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-        generateStyleLine('Primary', config.primary, playResX, playResY),
-        generateStyleLine('Secondary', config.secondary, playResX, playResY),
+        generateStyleLine('Primary', resolvedPrimary, playResX, playResY),
+        generateStyleLine('Secondary', resolvedSecondary, playResX, playResY),
         '',
     ].join('\n');
 
@@ -75,13 +85,24 @@ export function generateAss(subtitles: SubtitleLine[], config: SubtitleConfig): 
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
         ...subtitles.map(sub => {
-            const colorTag = sub.primaryColor ? `{\\c${hexToAssColor(sub.primaryColor)}}` : '';
+            // For per-line overrides, resolve style: Global -> Project -> Line
+            const lineStyle = resolveTrackStyle(
+                DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle,
+                config.primary,
+                sub.styleOverrides
+            );
+            
+            // If line has custom color, use it; otherwise use resolved style
+            const customColor = sub.styleOverrides?.color || sub.primaryColor;
+            const colorTag = customColor ? `{\\c${hexToAssColor(customColor)}}` : '';
+            
             return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Primary,,0,0,0,,${colorTag}${sanitizeAssText(sub.text)}`;
         }),
         ...subtitles
             .filter(sub => sub.secondaryText)
             .map(sub => {
-                const colorTag = sub.secondaryColor ? `{\\c${hexToAssColor(sub.secondaryColor)}}` : '';
+                const customColor = sub.secondaryColor;
+                const colorTag = customColor ? `{\\c${hexToAssColor(customColor)}}` : '';
                 return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Secondary,,0,0,0,,${colorTag}${sanitizeAssText(sub.secondaryText!)}`;
             }),
     ].join('\n');
