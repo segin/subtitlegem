@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { QueueItem } from "@/lib/queue-manager";
-import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle } from "lucide-react";
 
 interface QueueDrawerProps {
   items: QueueItem[];
@@ -11,6 +11,10 @@ interface QueueDrawerProps {
   onRemove: (id: string, force?: boolean) => void;
   onRefresh?: () => void;
   onDownload: (item: QueueItem) => void;
+  width?: number;
+  onWidthChange?: (width: number) => void;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 // Custom hook to detect desktop (lg breakpoint = 1024px)
@@ -36,10 +40,20 @@ export function QueueDrawer({
   onRemove,
   onRefresh,
   onDownload,
+  width = 300,
+  onWidthChange,
+  isOpen: externalIsOpen,
+  onClose,
 }: QueueDrawerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const isDesktop = useIsDesktop();
+  
+  const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
+  const setIsOpen = (val: boolean) => {
+    if (onClose && !val) onClose();
+    if (externalIsOpen === undefined) setInternalIsOpen(val);
+  }
   
   // Close drawer on escape (mobile only)
   useEffect(() => {
@@ -59,6 +73,38 @@ export function QueueDrawer({
   const pendingCount = items.filter(i => i.status === 'pending').length;
   const processingCount = items.filter(i => i.status === 'processing').length;
   const failedCount = items.filter(i => i.status === 'failed').length;
+
+  // Handle Resize
+  useEffect(() => {
+    if (!isResizing || !onWidthChange) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      // Calculate new width relative to window right edge
+      const newWidth = window.innerWidth - e.clientX;
+      // Constraint min/max
+      if (newWidth >= 250 && newWidth <= 600) {
+        onWidthChange(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'default';
+      document.body.style.userSelect = 'auto';
+    };
+  }, [isResizing, onWidthChange]);
 
   // Helper: Calculate ETA
   const getEta = (item: QueueItem) => {
@@ -141,10 +187,9 @@ export function QueueDrawer({
               </button>
             )}
             
-            {/* Delete */}
             <button
-              onClick={() => onRemove(item.id, item.status === 'processing')}
-              className="p-1 rounded-sm bg-[#5f2d2d] hover:bg-[#7f3e3e] text-white transition-colors"
+              onClick={() => onRemove(item.id)}
+              className="p-1 rounded-sm hover:bg-[#3e3e42] hover:text-red-400 text-[#888888] transition-colors"
               title="Remove"
             >
               <Trash2 className="w-3 h-3" />
@@ -153,24 +198,17 @@ export function QueueDrawer({
         </div>
       </div>
       
-      {/* Progress bar */}
-      {item.status === 'processing' && (
-        <div className="mt-1.5 h-1 bg-[#333333] rounded-full overflow-hidden">
+      {/* Progress Bar Background */}
+      {(item.status === 'processing' || item.status === 'completed') && (
+        <div className="mt-1 h-0.5 w-full bg-[#333333] overflow-hidden rounded-full">
           <div 
-            className="h-full bg-green-500 transition-all duration-300 ease-out"
-            style={{ width: `${Math.round(item.progress || 0)}%` }}
+            className={`h-full ${item.status === 'completed' ? 'bg-green-500' : 'bg-[#007acc]'} transition-all duration-300`}
+            style={{ width: `${item.progress || 0}%` }}
           />
         </div>
       )}
-      
-      {/* Error */}
-      {item.status === 'failed' && item.error && (
-        <div className="mt-1 text-[9px] text-red-400 truncate" title={item.error}>
-          {item.error}
-        </div>
-      )}
     </div>
-  );
+    );
   };
 
   // Shared panel content component
@@ -181,15 +219,28 @@ export function QueueDrawer({
         <h2 className="text-sm font-bold text-[#e1e1e1] uppercase tracking-wider">
           Job Queue
         </h2>
-        {showCloseButton && (
-          <button
-            onClick={() => setIsOpen(false)}
-            className="p-1 hover:bg-[#3e3e42] rounded-sm transition-colors"
-            title="Close"
-          >
-            <X className="w-4 h-4 text-[#888888]" />
-          </button>
-        )}
+        
+        {/* Only show pause toggle here for desktop if needed, or in Action bar */}
+        <div className="flex items-center space-x-2">
+            <button 
+                onClick={onPauseToggle}
+                className="flex items-center gap-1 text-xs hover:text-white text-[#aaaaaa] transition-colors"
+                title={isPaused ? "Resume Queue" : "Pause Queue"}
+            >
+                {isPaused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+                {isPaused ? "RESUME" : "PAUSE"}
+            </button>
+            
+            {showCloseButton && (
+            <button
+                onClick={() => setIsOpen(false)}
+                className="p-1 hover:bg-[#3e3e42] rounded-sm transition-colors"
+                title="Close"
+            >
+                <X className="w-4 h-4 text-[#888888]" />
+            </button>
+            )}
+        </div>
       </div>
 
       {/* Queue Section - 67% */}
@@ -201,27 +252,22 @@ export function QueueDrawer({
           <div className="flex items-center gap-2">
             <button
               onClick={onRefresh}
-              className="text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
               title="Refresh Queue"
             >
-              ↻
-            </button>
-            <button
-              onClick={onPauseToggle}
-              className="text-[10px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#cccccc] transition-colors"
-            >
-              {isPaused ? '▶ Resume' : '⏸ Pause'}
+              <RefreshCw className="w-3 h-3" />
+              Refresh
             </button>
           </div>
         </div>
         
         <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#1e1e1e]">
           {queueItems.length === 0 ? (
-            <div className="p-4 text-center text-xs text-[#666666]">
-              No jobs in queue
+            <div className="p-4 text-center text-xs text-[#555555]">
+              No pending jobs
             </div>
           ) : (
-            queueItems.map(item => renderItem(item, false))
+            queueItems.map(item => renderItem(item))
           )}
         </div>
       </div>
@@ -230,22 +276,15 @@ export function QueueDrawer({
       <div className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center justify-between p-2 border-b border-[#333333] bg-[#252526] shrink-0">
           <span className="text-[10px] font-bold text-green-500 uppercase tracking-wider">
-            ✓ Completed ({completedItems.length})
+            Completed ({completedItems.length})
           </span>
           {completedItems.length > 0 && (
-            <button
-              onClick={async () => {
-                try {
-                  await fetch('/api/queue?action=clear_completed', { method: 'DELETE' });
-                  onRefresh?.(); // Force immediate refresh
-                } catch (e) {
-                  console.error("Failed to clear completed items", e);
-                }
-              }}
-              className="text-[9px] px-2 py-1 rounded-sm bg-[#3e3e42] hover:bg-[#4e4e52] text-[#888888] transition-colors"
-            >
-              Clear All
-            </button>
+             <button
+               onClick={() => completedItems.forEach(i => onRemove(i.id))}
+               className="text-[10px] text-[#888888] hover:text-[#cccccc]"
+             >
+               Clear All
+             </button>
           )}
         </div>
         
@@ -264,15 +303,15 @@ export function QueueDrawer({
 
   return (
     <>
-      {/* MOBILE: Toggle Button - Only show on mobile */}
-      {!isDesktop && (
+      {/* MOBILE: Toggle Button - Only show on mobile, floating */}
+      <div className="lg:hidden">
         <button
           onClick={() => setIsOpen(!isOpen)}
           className="fixed top-3 right-3 z-50 flex items-center space-x-2 px-3 py-2 bg-[#2d2d2d] hover:bg-[#3e3e42] border border-[#444444] rounded-sm shadow-lg transition-all"
           title="Job Queue"
         >
           <Layers className="w-4 h-4 text-[#cccccc]" />
-          
+          {/* Mobile badges can go here if needed */}
           {items.length > 0 && (
             <div className="flex items-center space-x-1">
               {pendingCount > 0 && (
@@ -302,52 +341,40 @@ export function QueueDrawer({
             <span className="text-xs text-[#888888]">Queue</span>
           )}
         </button>
-      )}
+      </div>
 
-      {/* MOBILE: Backdrop - Only show when drawer open on mobile */}
-      {!isDesktop && isOpen && (
+      {/* MOBILE: Backdrop */}
+      {isOpen && (
         <div 
-          className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* DESKTOP: Inline Panel - Part of document flow, collapsible */}
-      {isDesktop && (
-        <div className={`h-full bg-[#1e1e1e] border-l border-[#333333] flex flex-col shrink-0 order-last transition-all duration-300 ${isCollapsed ? 'w-10' : 'w-72 xl:w-80'}`}>
-          {/* Collapse Toggle */}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="absolute top-2 left-0 transform -translate-x-1/2 z-10 w-5 h-10 bg-[#333333] border border-[#454545] rounded-l flex items-center justify-center hover:bg-[#3e3e42] transition-colors"
-            title={isCollapsed ? "Expand queue" : "Collapse queue"}
-          >
-            {isCollapsed ? <ChevronLeft className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          </button>
+      {/* DESKTOP: Inline Panel - only show if isOpen */}
+      {isOpen && (
+        <div 
+          className="hidden lg:flex flex-col shrink-0 border-l border-[#333333] h-full bg-[#1e1e1e] relative"
+          style={{ width: width }}
+        >
+          {/* Resize Handle */}
+          <div
+              className="absolute left-0 top-0 bottom-0 w-1 hover:bg-[#007acc] cursor-ew-resize z-10 transition-colors"
+              onMouseDown={() => setIsResizing(true)}
+          />
           
-          {isCollapsed ? (
-            /* Collapsed view - just icon and count */
-            <div className="flex flex-col items-center py-3 gap-2">
-              <Layers className="w-5 h-5 text-[#888888]" />
-              {queueItems.length > 0 && (
-                <span className="text-xs font-bold text-[#0e639c]">{queueItems.length}</span>
-              )}
-            </div>
-          ) : (
-            renderPanelContent(false)
-          )}
+          {renderPanelContent(false)}
         </div>
       )}
 
       {/* MOBILE: Slide-out Drawer */}
-      {!isDesktop && (
-        <div 
-          className={`fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-[#1e1e1e] border-l border-[#333333] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-            isOpen ? 'translate-x-0' : 'translate-x-full'
-          }`}
-        >
-          {renderPanelContent(true)}
-        </div>
-      )}
+      <div 
+        className={`fixed top-0 right-0 h-full w-80 max-w-[90vw] bg-[#1e1e1e] border-l border-[#333333] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out flex flex-col lg:hidden ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {renderPanelContent(true)}
+      </div>
     </>
   );
 }

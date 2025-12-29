@@ -52,6 +52,24 @@ export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, o
     onSeek(time);
   };
 
+  // Handle Ctrl+scroll for zoom, regular scroll for horizontal panning
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey) {
+      // Zoom
+      e.preventDefault();
+      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+      setPixelsPerSecond(prev => Math.max(20, Math.min(400, prev * zoomFactor)));
+    } else {
+      // Convert vertical scroll to horizontal scroll
+      // Also supports native horizontal scroll wheel (deltaX)
+      const scrollAmount = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+      if (scrollAmount !== 0 && containerRef.current) {
+        e.preventDefault();
+        containerRef.current.scrollLeft += scrollAmount;
+      }
+    }
+  };
+
   // Handle scrubbing globally
   React.useEffect(() => {
     if (!isScrubbing) return;
@@ -78,7 +96,11 @@ export function SubtitleTimeline({ subtitles, duration, onUpdate, currentTime, o
   }, [isScrubbing, pixelsPerSecond, duration, onSeek]);
 
   return (
-    <div ref={containerRef} className="w-full h-full bg-[#1e1e1e] overflow-x-auto relative custom-scrollbar select-none">
+    <div 
+      ref={containerRef} 
+      className="w-full h-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none"
+      onWheel={handleWheel}
+    >
       <div 
         data-timeline-bg
         className="relative h-full min-w-full cursor-pointer" 

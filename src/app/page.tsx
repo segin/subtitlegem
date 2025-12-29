@@ -12,13 +12,14 @@ import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
+import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useSubtitleHistory } from "@/hooks/useSubtitleHistory";
 import { v4 as uuidv4 } from "uuid";
-import { Download, Sparkles, Code, Settings, List, MonitorPlay, LogOut, FileVideo, Play, Pause } from "lucide-react";
+import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Trash2, Edit2, Check, Sparkles, AlertCircle, FileText, Settings, Code, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 
@@ -57,17 +58,76 @@ export default function Home() {
   
   // Global settings dialog
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+  
+  // Queue Drawer State
+  const [showQueue, setShowQueue] = useState(true);
+  const [queueWidth, setQueueWidth] = useState(300);
+
+  // Video Properties Dialog
+  const [showVideoProperties, setShowVideoProperties] = useState(false);
+  const [videoProperties, setVideoProperties] = useState<VideoProperties | null>(null);
+  const [videoPropsLoading, setVideoPropsLoading] = useState(false);
+  const [videoPropsError, setVideoPropsError] = useState<string | undefined>(undefined);
+
+  // Fetch and cache video properties
+  const handleShowVideoProperties = async () => {
+    setShowVideoProperties(true);
+    
+    // Use cached if available
+    if (videoProperties) return;
+    
+    if (!videoPath) {
+      setVideoPropsError('No video loaded');
+      return;
+    }
+    
+    setVideoPropsLoading(true);
+    setVideoPropsError(undefined);
+    
+    try {
+      const res = await fetch(`/api/video-info?path=${encodeURIComponent(videoPath)}`);
+      const data = await res.json();
+      if (data.error) {
+        setVideoPropsError(data.error);
+      } else {
+        setVideoProperties(data);
+      }
+    } catch (err: any) {
+      setVideoPropsError(err.message || 'Failed to fetch video properties');
+    } finally {
+      setVideoPropsLoading(false);
+    }
+  };
+
+  // Load persisted queue width
+  useEffect(() => {
+    const savedWidth = localStorage.getItem('subtitlegem_queue_width');
+    if (savedWidth) {
+       const w = parseInt(savedWidth);
+       if (!isNaN(w) && w >= 250 && w <= 600) setQueueWidth(w);
+    }
+  }, []);
+
+  const handleQueueWidthChange = (w: number) => {
+    setQueueWidth(w);
+    localStorage.setItem('subtitlegem_queue_width', w.toString());
+  };
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
     try {
+      console.log("[Draft] Loading draft:", draft.id);
       const res = await fetch(`/api/drafts?id=${draft.id}`);
       const data = await res.json();
+      
+      console.log("[Draft] Loaded data:", { id: data.id, videoPath: data.videoPath });
       
       if (data.id) {
         resetHistory(data.subtitles || []); // Use resetHistory to clear undo stack
         setVideoPath(data.videoPath || null);
-        setVideoUrl(data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null);
+        const url = data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null;
+        console.log("[Draft] Setting video URL:", url);
+        setVideoUrl(url);
         setCurrentDraftId(data.id);
         if (data.config) setConfig(data.config);
       }
@@ -170,6 +230,7 @@ export default function Home() {
     setInitialSubtitles(mapped); // Cache for reset
     setVideoUrl(url);
     setVideoPath(serverPath);
+    setVideoProperties(null); // Clear cached properties for new video
     setCurrentDraftId(null); // Reset for new uploads
     
     // Auto-set detected language and original filename
@@ -399,16 +460,26 @@ export default function Home() {
     return (
       <main className="min-h-screen h-screen bg-[#1e1e1e] flex flex-col text-[#cccccc] overflow-hidden">
         {/* Top Header Bar with Menu and App Name */}
-        <div className="h-8 bg-[#333333] border-b border-[#252526] flex items-center px-2 shrink-0">
+        <div className="h-8 bg-[#333333] border-b border-[#252526] flex items-center px-1 shrink-0 select-none">
+          <div className="flex items-center gap-1.5 ml-2 mr-3">
+            <span className="font-bold tracking-tight text-[#e1e1e1] text-[13px]">SUBTITLEGEM</span>
+          </div>
+          <div className="w-px h-3.5 bg-[#444444] mx-1" />
           <MenuBar 
             isUploadScreen={true}
             onGlobalSettings={() => setShowGlobalSettings(true)}
           />
-          <div className="flex-1" />
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#cccccc]">
-            <Sparkles className="w-3.5 h-3.5 text-[#d7ba7d]" />
-            <span>SubtitleGem</span>
-          </div>
+        </div>
+
+        {/* Queue Toggle Button (Right-aligned in header) */}
+        <div className="absolute right-0 top-0 h-8 flex items-center pr-2">
+            <button 
+                onClick={() => setShowQueue(!showQueue)}
+                className="flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium hover:bg-[#3e3e42] hover:text-[#e1e1e1] text-[#cccccc] transition-colors rounded-sm ml-2 border border-transparent hover:border-[#444444]"
+            >
+                <Layers className="w-3 h-3" />
+                Queue
+            </button>
         </div>
         
         {/* Main Content Row */}
@@ -498,6 +569,10 @@ export default function Home() {
               window.open(`/api/export?id=${item.id}`, '_blank');
             }
           }}
+          width={queueWidth}
+          onWidthChange={handleQueueWidthChange}
+          isOpen={showQueue}
+          onClose={() => setShowQueue(false)}
         />
         </div>
         
@@ -539,6 +614,7 @@ export default function Home() {
             onProjectSettings={() => setShowProjectSettings(true)}
             onReprocessVideo={() => setShowProjectSettings(true)}
             onGlobalSettings={() => setShowGlobalSettings(true)}
+            onVideoProperties={handleShowVideoProperties}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -554,7 +630,18 @@ export default function Home() {
         </div>
 
         
-        <div className="flex items-center space-x-2 mr-24"> {/* mr-24 gives space for queue button */}
+        <div className="flex items-center space-x-2 mr-4"> {/* Adjusted margin */}
+
+          <button 
+              onClick={() => setShowQueue(!showQueue)}
+              className="flex items-center space-x-1.5 px-2 py-1 text-xs hover:bg-[#3e3e42] hover:text-white rounded-sm transition-colors text-[#cccccc]"
+              title={showQueue ? "Hide Queue" : "Show Queue"}
+          >
+              <Layers className="w-3 h-3" />
+              <span>Queue</span>
+          </button>
+          
+          <div className="w-px h-3 bg-[#444444] mx-1" />
           
           <button 
             onClick={() => setShowRawEditor(true)}
@@ -751,6 +838,10 @@ export default function Home() {
               window.open(`/api/export?id=${item.id}`, '_blank');
             }
           }}
+          width={queueWidth}
+          onWidthChange={handleQueueWidthChange}
+          isOpen={showQueue}
+          onClose={() => setShowQueue(false)}
         />
       </div>
 
@@ -812,6 +903,14 @@ export default function Home() {
       <GlobalSettingsDialog
         isOpen={showGlobalSettings}
         onClose={() => setShowGlobalSettings(false)}
+      />
+      
+      <VideoPropertiesDialog
+        isOpen={showVideoProperties}
+        onClose={() => setShowVideoProperties(false)}
+        properties={videoProperties}
+        loading={videoPropsLoading}
+        error={videoPropsError}
       />
     </div>
   );

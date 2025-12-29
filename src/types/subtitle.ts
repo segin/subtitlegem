@@ -112,15 +112,16 @@ export interface ProjectState {
 
 /** Global application settings (persisted across sessions) */
 export interface GlobalSettings {
-  // Default style settings (percentage-based)
-  defaultPrimaryFontSize: number;
-  defaultSecondaryFontSize: number;
-  defaultMarginV: number;
-  defaultMarginH: number;
+  // Default styles (full TrackStyle objects)
+  defaultPrimaryStyle: TrackStyle;
+  defaultSecondaryStyle: TrackStyle;
   
   // Default languages
   defaultPrimaryLanguage: string;
   defaultSecondaryLanguage: string;
+  
+  // Subtitle style mode
+  subtitleStyle: 'split' | 'combined';
   
   // Default FFmpeg settings
   defaultHwaccel: string;
@@ -132,12 +133,33 @@ export interface GlobalSettings {
 }
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
-  defaultPrimaryFontSize: 2.22,
-  defaultSecondaryFontSize: 1.85,
-  defaultMarginV: 2.78,
-  defaultMarginH: 1.04,
+  defaultPrimaryStyle: {
+    alignment: 2, // Bottom Center
+    fontSize: 2.22,
+    color: '#ffffff',
+    fontFamily: 'Arial',
+    marginV: 2.78,
+    marginH: 1.04,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    outlineColor: '#000000',
+    outlineWidth: 0.19,
+    shadowDistance: 0.09,
+  },
+  defaultSecondaryStyle: {
+    alignment: 8, // Top Center
+    fontSize: 1.85,
+    color: '#fbbf24',
+    fontFamily: 'Arial',
+    marginV: 2.78,
+    marginH: 1.04,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    outlineColor: '#000000',
+    outlineWidth: 0.19,
+    shadowDistance: 0.09,
+  },
   defaultPrimaryLanguage: 'English',
   defaultSecondaryLanguage: 'Simplified Chinese',
+  subtitleStyle: 'split',
   defaultHwaccel: 'none',
   defaultPreset: 'veryfast',
   defaultCrf: 23,

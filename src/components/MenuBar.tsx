@@ -115,6 +115,8 @@ interface MenuBarProps {
   primaryLanguage?: string;
   secondaryLanguage?: string;
   isUploadScreen?: boolean;
+  onToggleQueue?: () => void;
+  onVideoProperties?: () => void;
 }
 
 export function MenuBar({
@@ -143,6 +145,8 @@ export function MenuBar({
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
   isUploadScreen = false,
+  onToggleQueue,
+  onVideoProperties,
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
@@ -192,6 +196,8 @@ export function MenuBar({
   ];
 
   const viewItems: MenuItem[] = [
+    { label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
+    { divider: true },
     { label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true },
     { label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: true },
     { divider: true },
@@ -202,11 +208,51 @@ export function MenuBar({
     { label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts, disabled: true },
   ];
 
+  // Cleanup consecutive and edge dividers
+  const cleanDividers = (items: MenuItem[]): MenuItem[] => {
+    let result = items.filter((item, i, arr) => {
+      if (!('divider' in item)) return true;
+      // Remove if: first item, last item, or previous item was also a divider
+      if (i === 0) return false;
+      if (i === arr.length - 1) return false;
+      if ('divider' in arr[i - 1]) return false;
+      return true;
+    });
+    // Also remove trailing dividers after filtering
+    while (result.length > 0 && 'divider' in result[result.length - 1]) {
+      result.pop();
+    }
+    return result;
+  };
+
+  // Filter items for upload screen
+  const visibleFileItems = fileItems.filter(item => {
+    if (!isUploadScreen) return true;
+    if ('divider' in item) return true;
+    return ['New Project', 'Open Draft...'].includes(item.label);
+  });
+
+  const visibleEditItems = editItems.filter(item => {
+    if (!isUploadScreen) return true;
+    if ('divider' in item) return true;
+    return ['Global Settings...'].includes(item.label);
+  });
+
+  const visibleViewItems = viewItems.filter(item => {
+    if (!isUploadScreen) return true;
+    return false; // Hide View menu entirely on upload screen
+  });
+
+  // Apply separator cleanup to all visible item lists
+  const cleanedFileItems = cleanDividers(visibleFileItems);
+  const cleanedEditItems = cleanDividers(visibleEditItems);
+  const cleanedViewItems = cleanDividers(visibleViewItems);
+
   return (
-    <nav className="flex space-x-1">
-      <Menu label="File" items={fileItems} />
-      <Menu label="Edit" items={editItems} />
-      <Menu label="View" items={viewItems} />
+    <nav className="flex space-x-1 flex-1 items-center">
+      <Menu label="File" items={cleanedFileItems} />
+      <Menu label="Edit" items={cleanedEditItems} />
+      {cleanedViewItems.length > 0 && <Menu label="View" items={cleanedViewItems} />}
     </nav>
   );
 }

@@ -32,10 +32,8 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
 
-      // Serve the file
-      const fileBuffer = fs.readFileSync(absolutePath);
+      // Determine content type
       const fileExtension = path.extname(absolutePath).toLowerCase();
-      
       let contentType = 'application/octet-stream';
       if (fileExtension === '.mp4') contentType = 'video/mp4';
       else if (fileExtension === '.webm') contentType = 'video/webm';
@@ -43,12 +41,57 @@ export async function GET(req: NextRequest) {
       else if (fileExtension === '.srt') contentType = 'text/plain';
       else if (fileExtension === '.ass') contentType = 'text/plain';
 
-      return new NextResponse(fileBuffer, {
-        headers: {
-          'Content-Type': contentType,
-          'Content-Length': fileBuffer.length.toString(),
-        },
-      });
+      const stat = fs.statSync(absolutePath);
+      const fileSize = stat.size;
+      const range = req.headers.get('range');
+
+      if (range) {
+        // Handle Range request (byte serving)
+        const parts = range.replace(/bytes=/, "").split("-");
+        const start = parseInt(parts[0], 10);
+        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const chunksize = (end - start) + 1;
+        const fileStream = fs.createReadStream(absolutePath, { start, end });
+
+        // Convert Node stream to Web stream
+        const stream = new ReadableStream({
+          start(controller) {
+            fileStream.on('data', (chunk) => controller.enqueue(chunk));
+            fileStream.on('end', () => controller.close());
+            fileStream.on('error', (err) => controller.error(err));
+          }
+        });
+
+        return new NextResponse(stream as any, {
+          status: 206,
+          headers: {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Accept-Ranges': 'bytes',
+            'Content-Length': chunksize.toString(),
+            'Content-Type': contentType,
+          },
+        });
+      } else {
+        // Handle full file request
+        const fileStream = fs.createReadStream(absolutePath);
+        
+        // Convert Node stream to Web stream
+        const stream = new ReadableStream({
+          start(controller) {
+            fileStream.on('data', (chunk) => controller.enqueue(chunk));
+            fileStream.on('end', () => controller.close());
+            fileStream.on('error', (err) => controller.error(err));
+          }
+        });
+
+        return new NextResponse(stream as any, {
+          status: 200,
+          headers: {
+            'Content-Length': fileSize.toString(),
+            'Content-Type': contentType,
+          },
+        });
+      }
     }
 
     const config = getStorageConfig();

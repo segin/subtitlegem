@@ -22,18 +22,18 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
     
-    // Validate required fields
+    // Merge with existing settings to allow partial updates
+    const existing = getGlobalSettings();
     const settings: GlobalSettings = {
-      defaultPrimaryFontSize: body.defaultPrimaryFontSize ?? 2.22,
-      defaultSecondaryFontSize: body.defaultSecondaryFontSize ?? 1.85,
-      defaultMarginV: body.defaultMarginV ?? 2.78,
-      defaultMarginH: body.defaultMarginH ?? 1.04,
-      defaultPrimaryLanguage: body.defaultPrimaryLanguage ?? 'English',
-      defaultSecondaryLanguage: body.defaultSecondaryLanguage ?? 'Simplified Chinese',
-      defaultHwaccel: body.defaultHwaccel ?? 'none',
-      defaultPreset: body.defaultPreset ?? 'veryfast',
-      defaultCrf: body.defaultCrf ?? 23,
-      defaultGeminiModel: body.defaultGeminiModel ?? 'gemini-2.0-flash',
+      defaultPrimaryStyle: body.defaultPrimaryStyle ?? existing.defaultPrimaryStyle,
+      defaultSecondaryStyle: body.defaultSecondaryStyle ?? existing.defaultSecondaryStyle,
+      defaultPrimaryLanguage: body.defaultPrimaryLanguage ?? existing.defaultPrimaryLanguage,
+      defaultSecondaryLanguage: body.defaultSecondaryLanguage ?? existing.defaultSecondaryLanguage,
+      subtitleStyle: body.subtitleStyle ?? existing.subtitleStyle,
+      defaultHwaccel: body.defaultHwaccel ?? existing.defaultHwaccel,
+      defaultPreset: body.defaultPreset ?? existing.defaultPreset,
+      defaultCrf: body.defaultCrf ?? existing.defaultCrf,
+      defaultGeminiModel: body.defaultGeminiModel ?? existing.defaultGeminiModel,
     };
     
     saveGlobalSettings(settings);

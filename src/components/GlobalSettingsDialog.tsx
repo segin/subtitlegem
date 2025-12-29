@@ -28,6 +28,7 @@ const LANGUAGES = [
 
 export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>('styles');
+  const [stylesSubTab, setStylesSubTab] = useState<'primary' | 'secondary'>('primary');
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -100,14 +101,29 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
 
   if (!isOpen) return null;
 
+  // Get current style being edited
+  const currentStyle = stylesSubTab === 'primary' ? settings.defaultPrimaryStyle : settings.defaultSecondaryStyle;
+  const updateCurrentStyle = (updates: Partial<typeof currentStyle>) => {
+    const key = stylesSubTab === 'primary' ? 'defaultPrimaryStyle' : 'defaultSecondaryStyle';
+    setSettings({ ...settings, [key]: { ...currentStyle, ...updates } });
+  };
+
+  const ALIGNMENTS = [
+    { value: 7, label: 'Top Left' }, { value: 8, label: 'Top Center' }, { value: 9, label: 'Top Right' },
+    { value: 4, label: 'Middle Left' }, { value: 5, label: 'Middle Center' }, { value: 6, label: 'Middle Right' },
+    { value: 1, label: 'Bottom Left' }, { value: 2, label: 'Bottom Center' }, { value: 3, label: 'Bottom Right' },
+  ];
+
+  const FONTS = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georgia', 'Times New Roman', 'Courier New'];
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
       <div 
-        className="bg-[#252526] border border-[#3e3e42] shadow-2xl w-full max-w-lg rounded-sm"
+        className="bg-[#252526] border border-[#3e3e42] shadow-2xl w-full max-w-4xl rounded-sm max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="h-10 bg-[#333333] flex items-center justify-between px-3 border-b border-[#454545]">
+        <div className="h-10 bg-[#333333] flex items-center justify-between px-3 border-b border-[#454545] shrink-0">
           <div className="flex items-center gap-2">
             <Settings className="w-4 h-4 text-[#888888]" />
             <span className="text-sm font-medium text-[#e1e1e1]">Global Settings</span>
@@ -144,49 +160,225 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
           ) : (
             <>
               {activeTab === 'styles' && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">Primary Font Size (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={settings.defaultPrimaryFontSize}
-                        onChange={(e) => setSettings({ ...settings, defaultPrimaryFontSize: parseFloat(e.target.value) || 2.22 })}
-                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-sm p-2 focus:border-[#007acc] outline-none"
-                      />
+                <div className="flex gap-6">
+                  {/* Preview Panel */}
+                  <div className="w-64 shrink-0">
+                    <div className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm aspect-video relative overflow-hidden">
+                      {/* Simulated video background */}
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222]" />
+                      
+                      {/* Preview subtitles */}
+                      <div 
+                        className="absolute left-1/2 -translate-x-1/2 text-center max-w-[90%]"
+                        style={{
+                          bottom: `${currentStyle.marginV}%`,
+                          fontFamily: currentStyle.fontFamily,
+                        }}
+                      >
+                        <span 
+                          style={{
+                            fontSize: `${currentStyle.fontSize * 5}px`,
+                            color: currentStyle.color,
+                            backgroundColor: currentStyle.backgroundColor,
+                            padding: '2px 6px',
+                            textShadow: currentStyle.outlineWidth 
+                              ? `0 0 ${currentStyle.outlineWidth * 5}px ${currentStyle.outlineColor || '#000'}` 
+                              : 'none',
+                            display: 'inline-block',
+                          }}
+                        >
+                          {stylesSubTab === 'primary' ? 'Sample Text' : '样本文字'}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">Secondary Font Size (%)</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={settings.defaultSecondaryFontSize}
-                        onChange={(e) => setSettings({ ...settings, defaultSecondaryFontSize: parseFloat(e.target.value) || 1.85 })}
-                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-sm p-2 focus:border-[#007acc] outline-none"
-                      />
-                    </div>
+                    <p className="text-[9px] text-[#555] mt-2 text-center">Live Preview</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">Vertical Margin (%)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={settings.defaultMarginV}
-                        onChange={(e) => setSettings({ ...settings, defaultMarginV: parseFloat(e.target.value) || 2.78 })}
-                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-sm p-2 focus:border-[#007acc] outline-none"
-                      />
+
+                  {/* Controls Panel */}
+                  <div className="flex-1 space-y-4 overflow-y-auto max-h-[400px] pr-2">
+                    {/* Style Mode Toggle */}
+                    <div className="flex gap-1 bg-[#1e1e1e] p-1 rounded-sm">
+                      <button
+                        onClick={() => setSettings({ ...settings, subtitleStyle: 'split' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                          settings.subtitleStyle === 'split' 
+                            ? 'bg-[#007acc] text-white' 
+                            : 'text-[#888888] hover:text-[#cccccc] hover:bg-[#333333]'
+                        }`}
+                      >
+                        Split
+                      </button>
+                      <button
+                        onClick={() => setSettings({ ...settings, subtitleStyle: 'combined' })}
+                        className={`flex-1 py-1.5 text-xs font-medium rounded-sm transition-colors ${
+                          settings.subtitleStyle === 'combined' 
+                            ? 'bg-[#007acc] text-white' 
+                            : 'text-[#888888] hover:text-[#cccccc] hover:bg-[#333333]'
+                        }`}
+                      >
+                        Combined
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">Horizontal Margin (%)</label>
-                      <input
-                        type="number"
-                        step="0.1"
-                        value={settings.defaultMarginH}
-                        onChange={(e) => setSettings({ ...settings, defaultMarginH: parseFloat(e.target.value) || 1.04 })}
-                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-sm p-2 focus:border-[#007acc] outline-none"
-                      />
+
+                    {/* Primary/Secondary Sub-tabs */}
+                    <div className="flex gap-1 border-b border-[#333333]">
+                      <button
+                        onClick={() => setStylesSubTab('primary')}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          stylesSubTab === 'primary' 
+                            ? 'text-[#e1e1e1] border-b-2 border-[#007acc]' 
+                            : 'text-[#888888] hover:text-[#cccccc]'
+                        }`}
+                      >
+                        Primary
+                      </button>
+                      <button
+                        onClick={() => setStylesSubTab('secondary')}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          stylesSubTab === 'secondary' 
+                            ? 'text-[#e1e1e1] border-b-2 border-[#007acc]' 
+                            : 'text-[#888888] hover:text-[#cccccc]'
+                        }`}
+                      >
+                        Secondary
+                      </button>
+                    </div>
+
+                    {/* Full Style Controls */}
+                    <div className="space-y-3">
+                      {/* Font Size & Family */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Font Size (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={currentStyle.fontSize}
+                            onChange={(e) => updateCurrentStyle({ fontSize: parseFloat(e.target.value) || 2 })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Font Family</label>
+                          <select
+                            value={currentStyle.fontFamily}
+                            onChange={(e) => updateCurrentStyle({ fontFamily: e.target.value })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          >
+                            {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Alignment */}
+                      <div>
+                        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Alignment</label>
+                        <select
+                          value={currentStyle.alignment}
+                          onChange={(e) => updateCurrentStyle({ alignment: parseInt(e.target.value) as any })}
+                          className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                        >
+                          {ALIGNMENTS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                        </select>
+                      </div>
+
+                      {/* Colors */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Text Color</label>
+                          <div className="flex gap-1">
+                            <input
+                              type="color"
+                              value={currentStyle.color}
+                              onChange={(e) => updateCurrentStyle({ color: e.target.value })}
+                              className="w-8 h-7 border border-[#3e3e42] cursor-pointer"
+                            />
+                            <input
+                              type="text"
+                              value={currentStyle.color}
+                              onChange={(e) => updateCurrentStyle({ color: e.target.value })}
+                              className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Outline Color</label>
+                          <div className="flex gap-1">
+                            <input
+                              type="color"
+                              value={currentStyle.outlineColor || '#000000'}
+                              onChange={(e) => updateCurrentStyle({ outlineColor: e.target.value })}
+                              className="w-8 h-7 border border-[#3e3e42] cursor-pointer"
+                            />
+                            <input
+                              type="text"
+                              value={currentStyle.outlineColor || '#000000'}
+                              onChange={(e) => updateCurrentStyle({ outlineColor: e.target.value })}
+                              className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Background */}
+                      <div>
+                        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Background (rgba or transparent)</label>
+                        <input
+                          type="text"
+                          value={currentStyle.backgroundColor}
+                          onChange={(e) => updateCurrentStyle({ backgroundColor: e.target.value })}
+                          placeholder="rgba(0,0,0,0.7) or transparent"
+                          className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono"
+                        />
+                      </div>
+
+                      {/* Margins */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">V Margin (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={currentStyle.marginV}
+                            onChange={(e) => updateCurrentStyle({ marginV: parseFloat(e.target.value) || 0 })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">H Margin (%)</label>
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={currentStyle.marginH}
+                            onChange={(e) => updateCurrentStyle({ marginH: parseFloat(e.target.value) || 0 })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Outline & Shadow */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Outline Width (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={currentStyle.outlineWidth || 0}
+                            onChange={(e) => updateCurrentStyle({ outlineWidth: parseFloat(e.target.value) || 0 })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Shadow (%)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={currentStyle.shadowDistance || 0}
+                            onChange={(e) => updateCurrentStyle({ shadowDistance: parseFloat(e.target.value) || 0 })}
+                            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
