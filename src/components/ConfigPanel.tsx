@@ -12,6 +12,9 @@ interface ConfigProps {
 export function ConfigPanel({ config, onChange }: ConfigProps) {
   const [activeTab, setActiveTab] = useState<'primary' | 'secondary' | 'encoding'>('primary');
 
+  // Get current style with null safety
+  const currentStyle = (activeTab !== 'encoding' ? config[activeTab] : null) || {};
+
   const updateStyle = (key: keyof TrackStyle, value: any) => {
     if (activeTab === 'encoding') return;
     
@@ -62,7 +65,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                           key={align}
                           onClick={() => updateStyle('alignment', align as Alignment)}
                           className={`flex items-center justify-center text-[10px] font-mono transition-colors
-                              ${(config[activeTab as 'primary' | 'secondary']).alignment === align ? 'bg-[#007acc] text-white' : 'bg-[#1e1e1e] text-[#666666] hover:bg-[#2d2d2d]'}
+                              ${currentStyle.alignment === align ? 'bg-[#007acc] text-white' : 'bg-[#1e1e1e] text-[#666666] hover:bg-[#2d2d2d]'}
                           `}
                           type="button"
                       >
@@ -87,7 +90,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                         step="0.01"
                         min="0.5"
                         max="20"
-                        value={(config[activeTab as 'primary' | 'secondary']).fontSize} 
+                        value={currentStyle.fontSize} 
                         onChange={(e) => updateStyle('fontSize', parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                       />
@@ -95,7 +98,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                    <div>
                       <label className="text-[10px] text-[#888888] mb-1 block">Family</label>
                       <select 
-                        value={(config[activeTab as 'primary' | 'secondary']).fontFamily} 
+                        value={currentStyle.fontFamily} 
                         onChange={(e) => updateStyle('fontFamily', e.target.value)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                       >
@@ -121,7 +124,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                   <div className="flex items-center space-x-2 bg-[#1e1e1e] border border-[#333333] rounded-sm p-1">
                     <input 
                       type="color" 
-                      value={(config[activeTab as 'primary' | 'secondary']).color} 
+                      value={currentStyle.color} 
                       onChange={(e) => updateStyle('color', e.target.value)}
                       className="w-full h-4 bg-transparent border-none p-0 cursor-pointer"
                     />
@@ -133,7 +136,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                   <div className="flex items-center space-x-2 bg-[#1e1e1e] border border-[#333333] rounded-sm p-1">
                     <input 
                       type="color" 
-                      value={(config[activeTab as 'primary' | 'secondary']).backgroundColor} 
+                      value={currentStyle.backgroundColor} 
                       onChange={(e) => updateStyle('backgroundColor', e.target.value)}
                       className="w-full h-4 bg-transparent border-none p-0 cursor-pointer"
                     />
@@ -156,7 +159,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={(config[activeTab as 'primary' | 'secondary']).marginV} 
+                      value={currentStyle.marginV} 
                       onChange={(e) => updateStyle('marginV', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
@@ -168,7 +171,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={(config[activeTab as 'primary' | 'secondary']).marginH} 
+                      value={currentStyle.marginH} 
                       onChange={(e) => updateStyle('marginH', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />

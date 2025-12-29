@@ -166,18 +166,18 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
                       <div 
                         className="absolute left-1/2 -translate-x-1/2 text-center max-w-[90%]"
                         style={{
-                          bottom: `${currentStyle.marginV}%`,
+                          bottom: `${typeof currentStyle.marginV === 'number' ? currentStyle.marginV : parseFloat(String(currentStyle.marginV)) || 5}%`,
                           fontFamily: currentStyle.fontFamily,
                         }}
                       >
                         <span 
                           style={{
-                            fontSize: `${currentStyle.fontSize * 5}px`,
+                            fontSize: `${(typeof currentStyle.fontSize === 'number' ? currentStyle.fontSize : parseFloat(String(currentStyle.fontSize)) || 5) * 5}px`,
                             color: currentStyle.color,
                             backgroundColor: currentStyle.backgroundColor,
                             padding: '2px 6px',
                             textShadow: currentStyle.outlineWidth 
-                              ? `0 0 ${currentStyle.outlineWidth * 5}px ${currentStyle.outlineColor || '#000'}` 
+                              ? `0 0 ${(typeof currentStyle.outlineWidth === 'number' ? currentStyle.outlineWidth : parseFloat(String(currentStyle.outlineWidth)) || 0.2) * 5}px ${currentStyle.outlineColor || '#000'}` 
                               : 'none',
                             display: 'inline-block',
                           }}

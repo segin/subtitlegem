@@ -8,7 +8,7 @@ import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
-import ffmpeg from "fluent-ffmpeg";
+// fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
 
@@ -188,21 +188,8 @@ export async function POST(req: NextRequest) {
 
         const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.${ext}`);
         
-        await new Promise<void>((resolve, reject) => {
-          ffmpeg(videoPath)
-            .noVideo()
-            .audioCodec('copy')
-            .outputOptions('-movflags', 'faststart')
-            .on('end', () => {
-              console.log('Audio extraction complete');
-              resolve();
-            })
-            .on('error', (err: any) => {
-              console.error('Audio extraction failed:', err);
-              reject(err);
-            })
-            .save(audioPath);
-        });
+        await extractAudio(videoPath, audioPath);
+        console.log('Audio extraction complete');
         
         processPath = audioPath;
         mimeType = newMime;

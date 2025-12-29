@@ -670,7 +670,8 @@ export default function Home() {
                 secondaryLanguage: config.secondaryLanguage,
                 geminiFileUri: config.geminiFileUri,
                 geminiFileExpiration: config.geminiFileExpiration,
-                geminiModel: config.geminiModel || DEFAULT_GLOBAL_SETTINGS.defaultGeminiModel, // Pass model
+                geminiModel: config.geminiModel || DEFAULT_GLOBAL_SETTINGS.defaultGeminiModel,
+                ffmpeg: config.ffmpeg,
             }}
             onUpdateConfig={handleUpdateConfig}
             onReprocess={handleReprocessVideo}

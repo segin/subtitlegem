@@ -1,6 +1,13 @@
-import ffmpeg, { FfmpegCommand } from "fluent-ffmpeg";
-import path from "path";
-import fs from "fs";
+/**
+ * FFmpeg Utilities - Using native child_process (replaces fluent-ffmpeg)
+ * 
+ * This module provides FFmpeg operations using Node.js child_process.spawn
+ * for better control, no deprecated dependencies, and consistent behavior.
+ */
+
+import { spawn, ChildProcess } from 'child_process';
+import path from 'path';
+import fs from 'fs';
 
 export interface BurnOptions {
   hwaccel?: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
@@ -11,30 +18,134 @@ export interface BurnOptions {
   onProgress?: (progress: number, details?: any) => void;
 }
 
-export async function getAudioCodec(filePath: string): Promise<string> {
+export interface VideoMetadata {
+  duration: number;
+  width: number;
+  height: number;
+  audioCodec?: string;
+  videoCodec?: string;
+  fps?: number;
+}
+
+/**
+ * Run ffprobe and return parsed JSON metadata
+ */
+export async function ffprobe(filePath: string): Promise<VideoMetadata> {
   return new Promise((resolve, reject) => {
-    ffmpeg.ffprobe(filePath, (err, metadata) => {
-      if (err) return reject(err);
-      const audioStream = metadata.streams.find(s => s.codec_type === 'audio');
-      resolve(audioStream?.codec_name || 'unknown');
+    const args = [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_format',
+      '-show_streams',
+      filePath
+    ];
+
+    const proc = spawn('ffprobe', args);
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', (data) => { stdout += data.toString(); });
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`ffprobe failed with code ${code}: ${stderr}`));
+      }
+
+      try {
+        const data = JSON.parse(stdout);
+        const videoStream = data.streams?.find((s: any) => s.codec_type === 'video');
+        const audioStream = data.streams?.find((s: any) => s.codec_type === 'audio');
+        const format = data.format || {};
+
+        resolve({
+          duration: parseFloat(format.duration) || 0,
+          width: videoStream?.width || 0,
+          height: videoStream?.height || 0,
+          audioCodec: audioStream?.codec_name,
+          videoCodec: videoStream?.codec_name,
+          fps: videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : undefined,
+        });
+      } catch (e) {
+        reject(new Error(`Failed to parse ffprobe output: ${e}`));
+      }
     });
+
+    proc.on('error', reject);
   });
 }
 
+/**
+ * Get audio codec from video file
+ */
+export async function getAudioCodec(filePath: string): Promise<string> {
+  const metadata = await ffprobe(filePath);
+  return metadata.audioCodec || 'unknown';
+}
+
+/**
+ * Get video dimensions
+ */
+export async function getVideoDimensions(filePath: string): Promise<{ width: number; height: number }> {
+  const metadata = await ffprobe(filePath);
+  return { width: metadata.width, height: metadata.height };
+}
+
+/**
+ * Extract audio from video file
+ */
 export async function extractAudio(videoPath: string, outputPath: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    ffmpeg(videoPath)
-      .noVideo()
-      .audioCodec('copy')
-      .on('end', () => resolve(outputPath))
-      .on('error', reject)
-      .save(outputPath);
+    const args = [
+      '-i', videoPath,
+      '-vn',           // No video
+      '-acodec', 'copy',
+      '-y',            // Overwrite output
+      outputPath
+    ];
+
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return reject(new Error(`ffmpeg extractAudio failed: ${stderr}`));
+      }
+      resolve(outputPath);
+    });
+
+    proc.on('error', reject);
   });
 }
 
-// Overhauled burnSubtitles function
-export function burnSubtitles(videoPath: string, srtPath: string, outputPath: string, options: BurnOptions = {}): Promise<string> {
-  return new Promise((resolve, reject) => {
+/**
+ * Parse ffmpeg progress line to get current time in seconds
+ */
+function parseProgressTime(line: string): number | null {
+  // Example: "time=00:01:23.45"
+  const match = line.match(/time=(\d{2}):(\d{2}):(\d{2})\.(\d{2})/);
+  if (match) {
+    const hours = parseInt(match[1]);
+    const minutes = parseInt(match[2]);
+    const seconds = parseInt(match[3]);
+    const centiseconds = parseInt(match[4]);
+    return hours * 3600 + minutes * 60 + seconds + centiseconds / 100;
+  }
+  return null;
+}
+
+/**
+ * Burn subtitles into video using FFmpeg
+ */
+export function burnSubtitles(
+  videoPath: string, 
+  assPath: string, 
+  outputPath: string, 
+  options: BurnOptions = {}
+): Promise<string> {
+  return new Promise(async (resolve, reject) => {
     const { 
       hwaccel = 'none', 
       preset = 'veryfast', 
@@ -44,32 +155,41 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
       onProgress 
     } = options;
 
-    const command: FfmpegCommand = ffmpeg(videoPath);
-
-    // --- Input & Hardware Acceleration ---
-    // Note: Actual hwaccel options depend on ffmpeg build & system
-    if (hwaccel === 'videotoolbox') { // macOS
-      command.inputOptions('-hwaccel videotoolbox');
-    } else if (hwaccel === 'qsv') { // Intel
-      command.inputOptions('-hwaccel qsv');
+    // Get video duration for progress calculation
+    let totalDuration = 0;
+    try {
+      const metadata = await ffprobe(videoPath);
+      totalDuration = metadata.duration;
+    } catch (e) {
+      console.warn('[FFmpeg] Could not get video duration for progress:', e);
     }
 
-    // Video Filters: Aspect Ratio Preservation
-    // ASS format supports more styling than SRT.
-    let videoFilters = [];
+    // Build FFmpeg arguments
+    const args: string[] = ['-i', videoPath];
+
+    // Hardware acceleration input options
+    if (hwaccel === 'videotoolbox') {
+      args.unshift('-hwaccel', 'videotoolbox');
+    } else if (hwaccel === 'qsv') {
+      args.unshift('-hwaccel', 'qsv');
+    }
+
+    // Build video filter chain
+    const videoFilters: string[] = [];
 
     if (resolution && resolution !== 'original' && resolution.includes('x')) {
       const [width, height] = resolution.split('x');
-      // Scale to fit within target and pad to maintain aspect ratio
       videoFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
       videoFilters.push(`pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`);
     }
 
-    videoFilters.push(`subtitles=${srtPath}`);
-    command.videoFilter(videoFilters.join(','));
+    // Add subtitle filter (escape path for filter syntax)
+    const escapedAssPath = assPath.replace(/:/g, '\\:').replace(/\\/g, '/');
+    videoFilters.push(`subtitles=${escapedAssPath}`);
 
-    // --- Encoding & Output Options ---
-    // Map hwaccel to appropriate encoder
+    args.push('-vf', videoFilters.join(','));
+
+    // Map hwaccel to encoder
     const encoderMap: Record<string, string> = {
       nvenc: 'h264_nvenc',
       amf: 'h264_amf',
@@ -81,54 +201,57 @@ export function burnSubtitles(videoPath: string, srtPath: string, outputPath: st
       omx: 'h264_omx',
       none: 'libx264',
     };
-    
+
     const videoCodec = encoderMap[hwaccel] || 'libx264';
+    args.push('-c:v', videoCodec);
 
-    command.videoCodec(videoCodec);
-
-    if (sampleDuration && sampleDuration > 0) {
-      command.outputOptions([`-t ${sampleDuration}`]);
-    }
-
+    // Encoder-specific options
     if (videoCodec === 'libx264') {
-      command.outputOptions([
-        `-preset ${preset}`,
-        `-crf ${crf}`,
-      ]);
+      args.push('-preset', preset);
+      args.push('-crf', crf.toString());
     }
 
-    // Copy audio track to avoid re-encoding
-    command.audioCodec('copy');
+    // Copy audio
+    args.push('-c:a', 'copy');
 
-    // --- Event Handling ---
-    let totalDuration = 0;
-    
-    command
-      .on('start', (commandLine) => {
-        console.log(`[${new Date().toISOString()}] Spawning Ffmpeg with command: ` + commandLine);
-      })
-      .on('codecData', (data) => {
-        // Get total duration of video
-        totalDuration = parseFloat(data.duration.replace(/:/g, ''));
-      })
-      .on('progress', (progress) => {
-        if (onProgress && totalDuration > 0) {
-          const currentTime = parseFloat(progress.timemark.replace(/:/g, ''));
-          const percent = (currentTime / totalDuration) * 100;
-          onProgress(percent, progress);
+    // Sample duration (for previews)
+    if (sampleDuration && sampleDuration > 0) {
+      args.push('-t', sampleDuration.toString());
+    }
+
+    // Overwrite output
+    args.push('-y', outputPath);
+
+    console.log(`[${new Date().toISOString()}] Spawning FFmpeg: ffmpeg ${args.join(' ')}`);
+
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => {
+      const line = data.toString();
+      stderr += line;
+
+      // Parse progress
+      if (onProgress && totalDuration > 0) {
+        const currentTime = parseProgressTime(line);
+        if (currentTime !== null) {
+          const percent = Math.min((currentTime / totalDuration) * 100, 100);
+          onProgress(percent, { timemark: line });
         }
-      })
-      .on('end', (stdout, stderr) => {
-        console.log(`[${new Date().toISOString()}] Ffmpeg finished successfully.`);
-        resolve(outputPath);
-      })
-      .on('error', (err, stdout, stderr) => {
-        console.error(`[${new Date().toISOString()}] Ffmpeg error:`, err.message);
-        console.error('ffmpeg stderr:', stderr);
-        reject(new Error(`Ffmpeg failed: ${err.message}`));
-      });
-      
-    // --- Save ---
-    command.save(outputPath);
+      }
+    });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`[${new Date().toISOString()}] FFmpeg error:`, stderr);
+        return reject(new Error(`FFmpeg failed with code ${code}`));
+      }
+      console.log(`[${new Date().toISOString()}] FFmpeg finished successfully.`);
+      resolve(outputPath);
+    });
+
+    proc.on('error', (err) => {
+      reject(new Error(`FFmpeg spawn error: ${err.message}`));
+    });
   });
 }

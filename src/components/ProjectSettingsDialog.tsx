@@ -308,15 +308,15 @@ export function ProjectSettingsDialog({
                                     style={{
                                     fontFamily: resolvedStyle.fontFamily || 'Arial',
                                     // Scale 1080p ref pixels to preview height
-                                    fontSize: `${(resolvedStyle.fontSize / 1080) * referenceHeight * scale}px`, 
+                                    fontSize: `${(normalizeToPx(resolvedStyle.fontSize, 1080) / 1080) * referenceHeight * scale}px`, 
                                     color: resolvedStyle.color || '#FFF',
                                     backgroundColor: resolvedStyle.backgroundColor || 'transparent',
                                     padding: '0.1em 0.3em',
                                     textShadow: resolvedStyle.outlineWidth 
-                                        ? `0 0 ${(resolvedStyle.outlineWidth / 1080 * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
+                                        ? `0 0 ${(normalizeToPx(resolvedStyle.outlineWidth, 1080) / 1080 * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
                                         : 'none',
                                     boxShadow: resolvedStyle.shadowDistance 
-                                        ? `${(resolvedStyle.shadowDistance / 1080 * referenceHeight * scale)}px ${(resolvedStyle.shadowDistance / 1080 * referenceHeight * scale)}px 0px rgba(0,0,0,0.5)`
+                                        ? `${(normalizeToPx(resolvedStyle.shadowDistance, 1080) / 1080 * referenceHeight * scale)}px ${(normalizeToPx(resolvedStyle.shadowDistance, 1080) / 1080 * referenceHeight * scale)}px 0px rgba(0,0,0,0.5)`
                                         : 'none',
                                     display: 'inline-block',
                                     lineHeight: 1.5,
