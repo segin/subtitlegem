@@ -31,16 +31,22 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1
     const assFontSize = Math.round(normalizeToPx(fontSize, playResY));
     const assMarginV = Math.round(normalizeToPx(marginV, playResY));
     const assMarginH = Math.round(normalizeToPx(marginH, playResX));
-    const assOutlineWidth = normalizeToPx(outlineWidth ?? 2.0, playResY);
-    const assShadowDistance = normalizeToPx(shadowDistance ?? 1.5, playResY);
+    // Clamp outline/shadow to prevent massive globs if user sets high % (e.g. 5% = 54px)
+    // 10px @ 1080p is already very thick.
+    const assOutlineWidth = Math.min(normalizeToPx(outlineWidth ?? 2.0, playResY), 20); 
+    const assShadowDistance = Math.min(normalizeToPx(shadowDistance ?? 1.5, playResY), 20);
 
     const primaryColour = hexToAssColor(color);
     const backColour = hexToAssColor(backgroundColor);
     
+    // Fallback for Arial on Linux systems to Noto Sans (Better CJK support)
+    const finalFontFamily = (fontFamily === 'Arial') ? 'Noto Sans' : fontFamily;
+
     // Alignment is numpad based, which is what ASS uses.
     const alignment = style.alignment;
 
-    return `Style: ${name},${fontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},${assShadowDistance.toFixed(1)},${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
+    return `Style: ${name},${finalFontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},${assShadowDistance.toFixed(1)},${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
+
 }
 
 // Sanitize text to prevent ASS tag injection

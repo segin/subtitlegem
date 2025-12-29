@@ -18,6 +18,68 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeSubtitle, setActiveSubtitle] = useState<SubtitleLine | null>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
+  
+  // Transcoding State
+  const [useTranscoding, setUseTranscoding] = useState(false);
+  const [checkingSupport, setCheckingSupport] = useState(false);
+
+
+  // Check if browser supports the source file, otherwise fallback to transcoding
+  useEffect(() => {
+    if (!videoUrl) return;
+    
+    // Reset state on new video
+    setUseTranscoding(false);
+    setCheckingSupport(true);
+
+    const checkSupport = async () => {
+        try {
+            // 1. Guess mime type from extension (simple)
+            const ext = videoUrl.split('.').pop()?.toLowerCase();
+            let mime = 'video/mp4'; // default
+            if (ext === 'mkv') mime = 'video/x-matroska';
+            if (ext === 'webm') mime = 'video/webm';
+            if (ext === 'mov') mime = 'video/quicktime';
+            if (ext === 'avi') mime = 'video/x-msvideo';
+
+            const video = document.createElement('video');
+            const canPlay = video.canPlayType(mime);
+            
+            console.log(`[Preview] Checking support for ${mime}: '${canPlay}'`);
+
+            // If browser says "no" (empty string) or if it's MKV (often problematic despite "maybe"), 
+            // fallback to transcoding.
+            if (canPlay === '' || mime === 'video/x-matroska') {
+                 console.warn(`[Preview] Format ${mime} unsupported or risky, enabling transcoding.`);
+                 setUseTranscoding(true);
+            }
+        } catch (e) {
+            console.error("Support check failed:", e);
+        } finally {
+            setCheckingSupport(false);
+        }
+    };
+
+    checkSupport();
+  }, [videoUrl]);
+
+  // Timeout-based fallback: if video doesn't load within 5s, use transcoding
+  useEffect(() => {
+    if (useTranscoding || !videoUrl) return;
+    
+    const timeout = setTimeout(() => {
+      if (videoRef.current) {
+        // Check if video has actually loaded (has duration)
+        if (!videoRef.current.duration || isNaN(videoRef.current.duration)) {
+          console.warn('[Preview] Video load timeout - switching to transcoding fallback');
+          setUseTranscoding(true);
+        }
+      }
+    }, 5000); // 5 second timeout
+
+    return () => clearTimeout(timeout);
+  }, [videoUrl, useTranscoding]);
+
 
   // Resolve styles with proper inheritance: Global -> Project -> Line
   const resolvedPrimaryStyle = resolveTrackStyle(
@@ -108,6 +170,19 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
     return (pxSize / 1080) * containerHeight;
   };
 
+  // Helper to extract raw path
+  const getRawPath = (url: string) => {
+      try {
+          // If relative URL, base doesn't matter much as we only want search params
+          const u = new URL(url, 'http://localhost');
+          return u.searchParams.get('path');
+      } catch { return null; }
+  };
+ 
+  const activeSrc = useTranscoding && videoUrl 
+     ? `/api/stream?path=${encodeURIComponent(getRawPath(videoUrl) || '')}`
+     : videoUrl;
+
   return (
     <div className="w-full bg-[#000000] flex items-center justify-center overflow-hidden border border-[#333333] shadow-lg p-4">
       <div 
@@ -116,11 +191,19 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
       >
         <video
           ref={videoRef}
-          src={videoUrl}
+          src={activeSrc || ""}
           className="max-h-[65vh] max-w-full object-contain block"
           onTimeUpdate={handleTimeUpdate}
           onLoadedMetadata={handleLoadedMetadata}
           controls
+          onError={(e) => {
+              // Auto-fallback on error
+              console.warn("Video playback error event:", e);
+              if (!useTranscoding) {
+                  console.log("Playback failed, attempting transcode fallback...");
+                  setUseTranscoding(true);
+              }
+          }}
         />
         
         {activeSubtitle && (

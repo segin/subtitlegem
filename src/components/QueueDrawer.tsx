@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { QueueItem } from "@/lib/queue-manager";
-import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle } from "lucide-react";
+import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle, Eye } from "lucide-react";
 
 interface QueueDrawerProps {
   items: QueueItem[];
@@ -47,6 +47,7 @@ export function QueueDrawer({
 }: QueueDrawerProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [previewItem, setPreviewItem] = useState<QueueItem | null>(null);
   const isDesktop = useIsDesktop();
   
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
@@ -136,6 +137,7 @@ export function QueueDrawer({
     }
 
     const eta = getEta(item);
+    const hasResult = isCompleted && item.result?.videoPath;
 
     return (
     <div 
@@ -176,6 +178,17 @@ export function QueueDrawer({
               </span>
             )}
             
+            {/* Preview for completed */}
+            {hasResult && (
+              <button
+                onClick={() => setPreviewItem(item)}
+                className="p-1 rounded-sm bg-[#007acc] hover:bg-[#0099ff] text-white transition-colors"
+                title="Preview Video"
+              >
+                <Eye className="w-3 h-3" />
+              </button>
+            )}
+
             {/* Download for completed */}
             {isCompleted && (
               <button
@@ -375,6 +388,37 @@ export function QueueDrawer({
       >
         {renderPanelContent(true)}
       </div>
+
+       {/* PREVIEW DIALOG */}
+       {previewItem && previewItem.result?.videoPath && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={() => setPreviewItem(null)}>
+          <div 
+            className="bg-[#1e1e1e] border border-[#333333] shadow-2xl max-w-5xl w-full rounded-lg overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-3 border-b border-[#333333] bg-[#252526]">
+               <div className="flex flex-col">
+                  <h3 className="text-sm font-bold text-white truncate max-w-xl">{previewItem.file.name}</h3>
+                  <span className="text-[10px] text-[#888888]">Result Preview</span>
+               </div>
+               <button 
+                  onClick={() => setPreviewItem(null)} 
+                  className="p-1.5 rounded-md hover:bg-[#3e3e42] text-[#888888] hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+            </div>
+            <div className="aspect-video bg-black relative flex items-center justify-center">
+              <video 
+                src={`/api/stream?path=${encodeURIComponent(previewItem.result.videoPath)}`} 
+                className="w-full h-full object-contain max-h-[80vh]"
+                controls 
+                autoPlay 
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
