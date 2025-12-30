@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine } from "lucide-react";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -9,6 +9,12 @@ export type UploadMode =
   | 'multi-video'      // Multiple videos → single project (Mode 1)
   | 'batch'            // Multiple videos → separate projects (Mode 2)
   | 'advanced';        // Advanced: custom assignment (Mode 3)
+
+export interface StagedProject {
+  id: string;
+  files: File[];
+  isDragging: boolean;
+}
 
 interface VideoUploadProps {
   onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => void;
@@ -38,6 +44,11 @@ export function VideoUpload({
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [uploadSpeed, setUploadSpeed] = useState(0);
+
+  // Advanced Mode State (Mode 3)
+  const [advancedProjects, setAdvancedProjects] = useState<StagedProject[]>([
+    { id: 'proj-' + Math.random().toString(36).substr(2, 9), files: [], isDragging: false }
+  ]);
   
   // Model Data & Global Selection State
   const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
@@ -448,7 +459,180 @@ export function VideoUpload({
         </div>
       )}
 
-      {!file ? (
+      {/* Advanced Mode (Mode 3) */}
+      {uploadMode === 'advanced' ? (
+        <div className="space-y-4">
+          {/* Add Project Button - Top Left */}
+          <div className="flex justify-start">
+            <button
+              type="button"
+              onClick={() => {
+                setAdvancedProjects(prev => [...prev, {
+                  id: 'proj-' + Math.random().toString(36).substr(2, 9),
+                  files: [],
+                  isDragging: false
+                }]);
+              }}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-xs rounded-sm hover:bg-[#3e3e42] hover:border-[#555555] transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Project</span>
+            </button>
+          </div>
+
+          {/* Main Projects Container */}
+          <div className="bg-[#1e1e1e] border border-[#333333] rounded-md overflow-hidden">
+            {advancedProjects.map((project, projectIndex) => (
+              <div 
+                key={project.id}
+                className={`${projectIndex > 0 ? 'border-t border-[#333333]' : ''}`}
+              >
+                {/* Project Section Header */}
+                <div className="flex items-center justify-between px-3 py-2 bg-[#252526]">
+                  <div className="flex items-center gap-2">
+                    {/* Add Files Button */}
+                    <label className="flex items-center gap-1 px-2 py-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#888888] text-[10px] rounded-sm hover:bg-[#3e3e42] hover:text-[#cccccc] cursor-pointer transition-colors">
+                      <Plus className="w-3 h-3" />
+                      <span>Add Files</span>
+                      <input
+                        type="file"
+                        accept="video/*"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            const newFiles = Array.from(e.target.files).filter(f => f.type.startsWith('video/'));
+                            setAdvancedProjects(prev => prev.map(p => 
+                              p.id === project.id 
+                                ? { ...p, files: [...p.files, ...newFiles] }
+                                : p
+                            ));
+                          }
+                        }}
+                      />
+                    </label>
+                    <span className="text-[10px] text-[#555555]">
+                      {project.files.length} file{project.files.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  {/* Remove Project Button */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (advancedProjects.length > 1) {
+                        setAdvancedProjects(prev => prev.filter(p => p.id !== project.id));
+                      }
+                    }}
+                    disabled={advancedProjects.length <= 1}
+                    className="p-1 text-[#666666] hover:text-[#f44336] disabled:opacity-30 disabled:hover:text-[#666666] transition-colors"
+                    title={advancedProjects.length <= 1 ? "Cannot remove the only project" : "Remove project"}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* File Drop Zone */}
+                <div
+                  onDragEnter={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setAdvancedProjects(prev => prev.map(p => 
+                      p.id === project.id ? { ...p, isDragging: true } : p
+                    ));
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setAdvancedProjects(prev => prev.map(p => 
+                      p.id === project.id ? { ...p, isDragging: false } : p
+                    ));
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setAdvancedProjects(prev => prev.map(p => 
+                      p.id === project.id ? { ...p, isDragging: false } : p
+                    ));
+                    if (e.dataTransfer.files) {
+                      const newFiles = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
+                      setAdvancedProjects(prev => prev.map(p => 
+                        p.id === project.id 
+                          ? { ...p, files: [...p.files, ...newFiles] }
+                          : p
+                      ));
+                    }
+                  }}
+                  className={`min-h-[80px] mx-3 mb-3 mt-2 border-2 border-dashed rounded-md transition-all ${
+                    project.isDragging
+                      ? 'border-[#007acc] bg-[#007acc]/10'
+                      : 'border-[#333333] bg-[#1a1a1a]'
+                  }`}
+                >
+                  {project.files.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-20 text-[#555555]">
+                      <Upload className="w-5 h-5 mb-1" />
+                      <span className="text-[10px]">Drop videos here</span>
+                    </div>
+                  ) : (
+                    <div className="p-2 space-y-1">
+                      {project.files.map((file, fileIndex) => (
+                        <div 
+                          key={`${file.name}-${fileIndex}`}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
+                        >
+                          <GripVertical className="w-3 h-3 text-[#444444] cursor-grab" />
+                          <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
+                          <span className="flex-1 text-xs text-[#cccccc] truncate">{file.name}</span>
+                          {fileIndex === 0 && (
+                            <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAdvancedProjects(prev => prev.map(p => 
+                                p.id === project.id 
+                                  ? { ...p, files: p.files.filter((_, i) => i !== fileIndex) }
+                                  : p
+                              ));
+                            }}
+                            className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Process All Button */}
+          <button
+            type="button"
+            onClick={() => {
+              // Collect all files from all projects and trigger processing
+              const allProjects = advancedProjects.filter(p => p.files.length > 0);
+              if (allProjects.length > 0 && onMultiVideoUpload) {
+                // For now, flatten all files - the actual processing logic will need
+                // to be implemented to handle the project structure
+                console.log('Processing projects:', allProjects);
+              }
+            }}
+            disabled={loading || advancedProjects.every(p => p.files.length === 0)}
+            className="w-full py-3 bg-[#007acc] hover:bg-[#0062a3] disabled:bg-[#333333] disabled:text-[#666666] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 rounded-sm"
+          >
+            <ArrowUpFromLine className="w-4 h-4" />
+            <span>Process All Projects</span>
+          </button>
+        </div>
+      ) : !file ? (
         <label 
           htmlFor="video-input" 
           onDragEnter={handleDragEnter}
