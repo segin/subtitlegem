@@ -562,15 +562,20 @@ export function VideoUpload({
                     e.preventDefault();
                     e.stopPropagation();
                     setAdvancedProjects(prev => prev.map(p => 
-                      p.id === project.id ? { ...p, isDragging: true } : p
+                      p.id === project.id ? { ...p, isDragging: true } : { ...p, isDragging: false }
                     ));
                   }}
                   onDragLeave={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setAdvancedProjects(prev => prev.map(p => 
-                      p.id === project.id ? { ...p, isDragging: false } : p
-                    ));
+                    // Only unset if leaving the whole zone
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const x = e.clientX, y = e.clientY;
+                    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                      setAdvancedProjects(prev => prev.map(p => 
+                        p.id === project.id ? { ...p, isDragging: false } : p
+                      ));
+                    }
                   }}
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -579,16 +584,42 @@ export function VideoUpload({
                   onDrop={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setAdvancedProjects(prev => prev.map(p => 
-                      p.id === project.id ? { ...p, isDragging: false } : p
-                    ));
-                    if (e.dataTransfer.files) {
+                    setAdvancedProjects(prev => prev.map(p => ({ ...p, isDragging: false })));
+                    
+                    // Check if this is a cross-project move (internal drag)
+                    if (dragProjectId && dragProjectId !== project.id && dragSourceIndex !== null) {
+                      // Move file from source project to this project
+                      setAdvancedProjects(prev => {
+                        let fileToMove: File | null = null;
+                        const updated = prev.map(p => {
+                          if (p.id === dragProjectId && dragSourceIndex !== null) {
+                            fileToMove = p.files[dragSourceIndex];
+                            return { ...p, files: p.files.filter((_, i) => i !== dragSourceIndex) };
+                          }
+                          return p;
+                        });
+                        if (fileToMove) {
+                          return updated.map(p => 
+                            p.id === project.id 
+                              ? { ...p, files: [...p.files, fileToMove!] }
+                              : p
+                          );
+                        }
+                        return updated;
+                      });
+                      setDragSourceIndex(null);
+                      setDragProjectId(null);
+                      setDragTargetIndex(null);
+                    } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                      // External file drop
                       const newFiles = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
-                      setAdvancedProjects(prev => prev.map(p => 
-                        p.id === project.id 
-                          ? { ...p, files: [...p.files, ...newFiles] }
-                          : p
-                      ));
+                      if (newFiles.length > 0) {
+                        setAdvancedProjects(prev => prev.map(p => 
+                          p.id === project.id 
+                            ? { ...p, files: [...p.files, ...newFiles] }
+                            : p
+                        ));
+                      }
                     }
                   }}
                   className={`min-h-[80px] mx-3 mb-3 mt-2 border-2 border-dashed rounded-md transition-all ${
