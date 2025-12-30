@@ -80,13 +80,13 @@ describe('SubtitleTimeline', () => {
     // Initial zoom text (approx 100% of 100px/s default)
     expect(screen.getByText('100%')).toBeInTheDocument();
 
-    const zoomInBtn = screen.getByTitle('Zoom In');
+    const zoomInBtn = screen.getByTitle('Zoom In (+)');
     fireEvent.click(zoomInBtn);
 
     // 100 * 1.2 = 120
     expect(screen.getByText('120%')).toBeInTheDocument();
 
-    const zoomOutBtn = screen.getByTitle('Zoom Out');
+    const zoomOutBtn = screen.getByTitle('Zoom Out (-)');
     fireEvent.click(zoomOutBtn); // 120 * 0.8 = 96
     
     expect(screen.getByText('96%')).toBeInTheDocument();

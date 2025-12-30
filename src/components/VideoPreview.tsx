@@ -1,42 +1,104 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
 import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
 
 interface PreviewProps {
-  videoUrl: string;
+  // Legacy support for single video
+  videoUrl?: string | null;
   subtitles: SubtitleLine[];
+  
+  // Multi-video support
+  timelineClips?: TimelineClip[];
+  videoClips?: VideoClip[];
+  timelineImages?: TimelineImage[];
+  imageAssets?: ImageAsset[];
+  projectConfig?: ProjectConfig;
+  
   config: SubtitleConfig;
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
 }
 
-export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeUpdate, onDurationChange }: PreviewProps) {
+export function VideoPreview({ 
+  videoUrl, 
+  subtitles, 
+  timelineClips = [], 
+  videoClips = [], 
+  timelineImages = [],
+  imageAssets = [],
+  projectConfig,
+  config, 
+  currentTime, 
+  onTimeUpdate, 
+  onDurationChange 
+}: PreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeSubtitle, setActiveSubtitle] = useState<SubtitleLine | null>(null);
   const [containerHeight, setContainerHeight] = useState<number>(0);
+  
+  // Multi-video state
+  const isMultiVideo = timelineClips.length > 0 || timelineImages.length > 0;
+  const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(videoUrl || null);
+  const [activeImageUrl, setActiveImageUrl] = useState<string | null>(null);
+  const lastTimeRef = useRef(currentTime);
   
   // Transcoding State
   const [useTranscoding, setUseTranscoding] = useState(false);
   const [checkingSupport, setCheckingSupport] = useState(false);
 
 
-  // Check if browser supports the source file, otherwise fallback to transcoding
+  // Multi-clip and Image switching logic
   useEffect(() => {
-    if (!videoUrl) return;
+    if (!isMultiVideo) {
+      if (videoUrl !== activeVideoUrl) setActiveVideoUrl(videoUrl || null);
+      return;
+    }
+
+    // Find what should be visible at currentTime
+    const activeVideoClip = timelineClips.find(c => currentTime >= c.projectStartTime && currentTime < c.projectStartTime + c.clipDuration);
+    const activeImage = timelineImages.find(i => currentTime >= i.projectStartTime && currentTime < i.projectStartTime + i.duration);
+
+    if (activeVideoClip) {
+      const clipInfo = videoClips.find(c => c.id === activeVideoClip.videoClipId);
+      if (clipInfo) {
+        const fullUrl = `/api/storage?path=${encodeURIComponent(clipInfo.filePath)}`;
+        if (fullUrl !== activeVideoUrl) {
+          setActiveVideoUrl(fullUrl);
+          setActiveImageUrl(null);
+          // We need to set the video time appropriately, but let's do it after load
+        }
+      }
+    } else if (activeImage) {
+      const asset = imageAssets.find(a => a.id === activeImage.imageAssetId);
+      if (asset) {
+        const fullUrl = `/api/storage?path=${encodeURIComponent(asset.filePath)}`;
+        if (fullUrl !== activeImageUrl) {
+          setActiveImageUrl(fullUrl);
+          setActiveVideoUrl(null);
+        }
+      }
+    } else {
+      // Gap or nothing
+      setActiveVideoUrl(null);
+      setActiveImageUrl(null);
+    }
+  }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets]);
+
+  // Support check for active video
+  useEffect(() => {
+    if (!activeVideoUrl) return;
     
-    // Reset state on new video
     setUseTranscoding(false);
     setCheckingSupport(true);
 
     const checkSupport = async () => {
         try {
-            // 1. Guess mime type from extension (simple)
-            const ext = videoUrl.split('.').pop()?.toLowerCase();
-            let mime = 'video/mp4'; // default
+            const ext = activeVideoUrl.split('.').pop()?.split('?')[0]?.toLowerCase(); // Handle query params
+            let mime = 'video/mp4'; 
             if (ext === 'mkv') mime = 'video/x-matroska';
             if (ext === 'webm') mime = 'video/webm';
             if (ext === 'mov') mime = 'video/quicktime';
@@ -45,12 +107,7 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
             const video = document.createElement('video');
             const canPlay = video.canPlayType(mime);
             
-            console.log(`[Preview] Checking support for ${mime}: '${canPlay}'`);
-
-            // If browser says "no" (empty string) or if it's MKV (often problematic despite "maybe"), 
-            // fallback to transcoding.
             if (canPlay === '' || mime === 'video/x-matroska') {
-                 console.warn(`[Preview] Format ${mime} unsupported or risky, enabling transcoding.`);
                  setUseTranscoding(true);
             }
         } catch (e) {
@@ -61,24 +118,44 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
     };
 
     checkSupport();
-  }, [videoUrl]);
+  }, [activeVideoUrl]);
+
+  // Handle seekers & scrubbing (Project Time -> Local Video Time)
+  useEffect(() => {
+    if (!videoRef.current || !activeVideoUrl) return;
+
+    if (isMultiVideo) {
+       const activeClip = timelineClips.find(c => currentTime >= c.projectStartTime && currentTime < c.projectStartTime + c.clipDuration);
+       if (activeClip) {
+          const localTime = (currentTime - activeClip.projectStartTime) + activeClip.sourceInPoint;
+          // Only seek if difference is significant to avoid stutter
+          if (Math.abs(videoRef.current.currentTime - localTime) > 0.3) {
+             videoRef.current.currentTime = localTime;
+          }
+       }
+    } else {
+       if (Math.abs(videoRef.current.currentTime - currentTime) > 0.3) {
+          videoRef.current.currentTime = currentTime;
+       }
+    }
+  }, [currentTime, activeVideoUrl, isMultiVideo, timelineClips]);
 
   // Timeout-based fallback: if video doesn't load within 5s, use transcoding
   useEffect(() => {
-    if (useTranscoding || !videoUrl) return;
+    const urlToCheck = isMultiVideo ? activeVideoUrl : videoUrl;
+    if (useTranscoding || !urlToCheck) return;
     
     const timeout = setTimeout(() => {
       if (videoRef.current) {
-        // Check if video has actually loaded (has duration)
         if (!videoRef.current.duration || isNaN(videoRef.current.duration)) {
           console.warn('[Preview] Video load timeout - switching to transcoding fallback');
           setUseTranscoding(true);
         }
       }
-    }, 5000); // 5 second timeout
+    }, 5000);
 
     return () => clearTimeout(timeout);
-  }, [videoUrl, useTranscoding]);
+  }, [videoUrl, activeVideoUrl, useTranscoding, isMultiVideo]);
 
 
   // Resolve styles with proper inheritance: Global -> Project -> Line
@@ -114,7 +191,18 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
 
   const handleTimeUpdate = () => {
     if (videoRef.current) {
-      onTimeUpdate(videoRef.current.currentTime);
+      if (isMultiVideo) {
+        const activeClip = timelineClips.find(c => currentTime >= c.projectStartTime && currentTime < c.projectStartTime + c.clipDuration);
+        if (activeClip) {
+          const newProjectTime = activeClip.projectStartTime + (videoRef.current.currentTime - activeClip.sourceInPoint);
+          // Update global time if it drifted significantly from playback
+          if (Math.abs(newProjectTime - currentTime) > 0.1) {
+             onTimeUpdate(newProjectTime);
+          }
+        }
+      } else {
+        onTimeUpdate(videoRef.current.currentTime);
+      }
     }
   };
 
@@ -189,22 +277,33 @@ export function VideoPreview({ videoUrl, subtitles, config, currentTime, onTimeU
         ref={containerRef}
         className="relative inline-block"
       >
-        <video
-          ref={videoRef}
-          src={activeSrc || ""}
-          className="max-h-[65vh] max-w-full object-contain block"
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          controls
-          onError={(e) => {
-              // Auto-fallback on error
-              console.warn("Video playback error event:", e);
-              if (!useTranscoding) {
-                  console.log("Playback failed, attempting transcode fallback...");
-                  setUseTranscoding(true);
-              }
-          }}
-        />
+        {activeImageUrl ? (
+          <img 
+            src={activeImageUrl} 
+            className="max-h-[65vh] max-w-full object-contain block mx-auto"
+            alt="Timeline Preview"
+            style={{ 
+              aspectRatio: projectConfig ? `${projectConfig.width}/${projectConfig.height}` : 'auto',
+              backgroundColor: '#000'
+            }}
+          />
+        ) : (
+          <video
+            ref={videoRef}
+            src={activeSrc || ""}
+            className="max-h-[65vh] max-w-full object-contain block"
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            controls
+            onError={(e) => {
+                console.warn("Video playback error event:", e);
+                if (!useTranscoding) {
+                    console.log("Playback failed, attempting transcode fallback...");
+                    setUseTranscoding(true);
+                }
+            }}
+          />
+        )}
         
         {activeSubtitle && (
           <div className="absolute inset-0 pointer-events-none">

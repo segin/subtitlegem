@@ -227,7 +227,10 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
     // Scroll if playhead is outside visible area (with margin)
     const margin = 100;
     if (playheadX < scrollLeft + margin || playheadX > scrollLeft + visibleWidth - margin) {
-      container.scrollTo({ left: playheadX - visibleWidth / 3, behavior: 'smooth' });
+      // scrollTo may not be available in test environment (JSDOM)
+      if (container.scrollTo) {
+        container.scrollTo({ left: playheadX - visibleWidth / 3, behavior: 'smooth' });
+      }
     }
   }, [currentTime, pixelsPerSecond, followPlayhead, isScrubbing]);
 

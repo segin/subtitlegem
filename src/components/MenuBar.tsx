@@ -117,6 +117,7 @@ interface MenuBarProps {
   isUploadScreen?: boolean;
   onToggleQueue?: () => void;
   onVideoProperties?: () => void;
+  onToggleVideoLibrary?: () => void;
 }
 
 export function MenuBar({
@@ -147,6 +148,7 @@ export function MenuBar({
   isUploadScreen = false,
   onToggleQueue,
   onVideoProperties,
+  onToggleVideoLibrary,
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
     { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
@@ -196,6 +198,7 @@ export function MenuBar({
   ];
 
   const viewItems: MenuItem[] = [
+    { label: "Video Assets", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen },
     { label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
     { divider: true },
     { label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true },

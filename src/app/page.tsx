@@ -21,6 +21,8 @@ import {
   DEFAULT_GLOBAL_SETTINGS,
   VideoClip,
   TimelineClip,
+  TimelineImage,
+  ImageAsset,
   DEFAULT_PROJECT_CONFIG,
   ProjectConfig,
 } from "@/types/subtitle";
@@ -28,6 +30,7 @@ import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useSubtitleHistory } from "@/hooks/useSubtitleHistory";
+import { getProjectDuration } from "@/lib/timeline-utils";
 import { v4 as uuidv4 } from "uuid";
 import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Trash2, Edit2, Check, Sparkles, AlertCircle, FileText, Settings, Code, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
 
@@ -58,6 +61,8 @@ export default function Home() {
   // Home screen restore state
   const [showRestoreOption, setShowRestoreOption] = useState(false);
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+
   
   // Cache initial subtitles for "Reset to Original" feature
   const [initialSubtitles, setInitialSubtitles] = useState<SubtitleLine[] | null>(null);
@@ -86,6 +91,9 @@ export default function Home() {
   const [uploadMode, setUploadMode] = useState<UploadMode>('single');
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [showVideoLibrary, setShowVideoLibrary] = useState(false);
+  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
+  const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
+  const [timelineImages, setTimelineImages] = useState<TimelineImage[]>([]);
 
   // Check if we're in multi-video mode
   const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
@@ -133,6 +141,13 @@ export default function Home() {
     setQueueWidth(w);
     localStorage.setItem('subtitlegem_queue_width', w.toString());
   };
+
+  // Sync project duration in multi-video mode
+  useEffect(() => {
+    if (isMultiVideoMode) {
+      setDuration(getProjectDuration(timelineClips, timelineImages));
+    }
+  }, [timelineClips, timelineImages, isMultiVideoMode]);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: any) => {
@@ -238,6 +253,102 @@ export default function Home() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
+
+  // Multi-video handlers
+  const handleToggleVideoLibrary = () => setShowVideoLibrary(prev => !prev);
+  
+  const handleAddToTimeline = (clipId: string) => {
+    const clip = videoClips.find(c => c.id === clipId);
+    if (!clip) return;
+
+    const newTimelineClip: TimelineClip = {
+      id: uuidv4(),
+      videoClipId: clipId,
+      projectStartTime: duration, // Append at the end (sum of all clip durations)
+      sourceInPoint: 0,
+      clipDuration: clip.duration,
+    };
+
+    setTimelineClips(prev => [...prev, newTimelineClip]);
+  };
+
+  const handleRemoveClip = (clipId: string) => {
+    const isUsed = timelineClips.some(c => c.videoClipId === clipId);
+    if (isUsed && !confirm('This clip is used on the timeline. Removing it will also remove it from the timeline. Continue?')) {
+      return;
+    }
+
+    setVideoClips(prev => prev.filter(c => c.id !== clipId));
+    setTimelineClips(prev => prev.filter(c => c.videoClipId !== clipId));
+  };
+
+  const handleMultiVideoUpload = async (files: File[]) => {
+    setLoading(true);
+    const newClips: VideoClip[] = [];
+    
+    for (const f of files) {
+      try {
+        const formData = new FormData();
+        formData.append("video", f);
+        formData.append("secondaryLanguage", config.secondaryLanguage || "Simplified Chinese");
+        formData.append("model", "gemini-2.5-flash");
+
+        const res = await fetch('/api/process', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!res.ok) throw new Error(`Upload failed for ${f.name}`);
+        
+        const data = await res.json();
+        const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(data.videoPath)}`);
+        const info = await infoRes.json();
+        
+        const clip: VideoClip = {
+          id: uuidv4(),
+          filePath: data.videoPath,
+          originalFilename: f.name,
+          duration: info.duration || 0,
+          width: info.width || 0,
+          height: info.height || 0,
+          fileSize: f.size,
+          subtitles: data.subtitles || [],
+        };
+        
+        newClips.push(clip);
+        
+        if (!videoUrl && newClips.length === 1) {
+          setVideoUrl(URL.createObjectURL(f));
+          setVideoPath(data.videoPath);
+          setSubtitles(data.subtitles || []);
+          setDuration(info.duration || 0);
+        }
+      } catch (err) {
+        console.error(`Error uploading ${f.name}:`, err);
+      }
+    }
+    
+    setVideoClips(prev => [...prev, ...newClips]);
+    setShowVideoLibrary(true);
+    setLoading(false);
+    
+    if (timelineClips.length === 0) {
+      let currentStartTime = 0;
+      const initialTimeline: TimelineClip[] = newClips.map(clip => {
+        const tc: TimelineClip = {
+          id: uuidv4(),
+          videoClipId: clip.id,
+          projectStartTime: currentStartTime,
+          sourceInPoint: 0,
+          clipDuration: clip.duration,
+        };
+        currentStartTime += clip.duration;
+        return tc;
+      });
+      setTimelineClips(initialTimeline);
+    }
+  };
+
 
   const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
     // Check if we can auto-repair a missing clip
@@ -647,6 +758,7 @@ export default function Home() {
                 pendingProjectFile={pendingProjectFile}
                 uploadMode={uploadMode}
                 onUploadModeChange={setUploadMode}
+                onMultiVideoUpload={handleMultiVideoUpload}
               />
               
               {/* Restore existing project option */}
@@ -776,6 +888,7 @@ export default function Home() {
             onReprocessVideo={() => setShowProjectSettings(true)}
             onGlobalSettings={() => setShowGlobalSettings(true)}
             onVideoProperties={handleShowVideoProperties}
+            onToggleVideoLibrary={handleToggleVideoLibrary}
             onUndo={undo}
             onRedo={redo}
             canUndo={canUndo}
@@ -828,6 +941,20 @@ export default function Home() {
       {/* Main Workspace - Always horizontal layout */}
       <div className="flex-1 flex flex-row overflow-hidden">
         
+        {/* VIDEO LIBRARY SIDEBAR - Multi-video mode */}
+        {showVideoLibrary && (
+          <VideoLibrary
+            clips={videoClips}
+            timelineClips={timelineClips}
+            onAddToTimeline={handleAddToTimeline}
+            onRemoveClip={handleRemoveClip}
+            onClipSelect={setSelectedClipId}
+            selectedClipId={selectedClipId}
+            isCollapsed={isLibraryCollapsed}
+            onToggleCollapse={() => setIsLibraryCollapsed(!isLibraryCollapsed)}
+          />
+        )}
+        
         {/* Left Stage: Preview & Timeline */}
         <div className="flex-1 flex flex-col min-w-0 bg-[#1e1e1e] relative">
           {/* Video Preview Area */}
@@ -838,9 +965,14 @@ export default function Home() {
             />
             
             <div className="relative z-10 w-full h-full p-4 flex items-center justify-center">
-               <VideoPreview 
+                <VideoPreview 
                   videoUrl={videoUrl} 
                   subtitles={subtitles} 
+                  timelineClips={timelineClips}
+                  videoClips={videoClips}
+                  timelineImages={timelineImages}
+                  imageAssets={imageAssets}
+                  projectConfig={projectConfig}
                   config={config} 
                   currentTime={currentTime}
                   onTimeUpdate={setCurrentTime}

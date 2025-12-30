@@ -7,7 +7,7 @@
  * - Relative subtitle time: Time relative to a clip's start (0-based)
  */
 
-import { SubtitleLine, VideoClip, TimelineClip } from '@/types/subtitle';
+import { SubtitleLine, VideoClip, TimelineClip, TimelineImage } from '@/types/subtitle';
 
 /**
  * Calculate the absolute project time for a subtitle within a clip.
@@ -79,12 +79,18 @@ export function getClipEndTime(clip: TimelineClip): number {
 }
 
 /**
- * Calculate total project duration from all timeline clips.
+ * Calculate total project duration from all timeline items.
  */
-export function getProjectDuration(timeline: TimelineClip[]): number {
-  if (timeline.length === 0) return 0;
-  
-  return Math.max(...timeline.map(clip => getClipEndTime(clip)));
+export function getProjectDuration(timeline: TimelineClip[], images: TimelineImage[] = []): number {
+  let maxTime = 0;
+  if (timeline.length > 0) {
+    maxTime = Math.max(...timeline.map(clip => clip.projectStartTime + clip.clipDuration));
+  }
+  if (images.length > 0) {
+    const maxImageTime = Math.max(...images.map(img => img.projectStartTime + img.duration));
+    maxTime = Math.max(maxTime, maxImageTime);
+  }
+  return maxTime;
 }
 
 /**
