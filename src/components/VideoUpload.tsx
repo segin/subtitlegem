@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -172,14 +172,32 @@ export function VideoUpload({
 
   // Multi-file select for Mode 1/2
   const handleMultiFileSelect = useCallback((selectedFiles: FileList | File[]) => {
-    const videoFiles = Array.from(selectedFiles).filter(f => f.type.startsWith('video/'));
-    if (videoFiles.length === 0) {
-      setError('No valid video files found');
+    const allFiles = Array.from(selectedFiles);
+    const videoFiles = allFiles.filter(f => f.type.startsWith('video/'));
+    const projectFiles = allFiles.filter(f => f.name.endsWith('.sgproj'));
+    
+    // .sgproj files go first (locked as primary for restore mode)
+    const orderedFiles = [...projectFiles, ...videoFiles];
+    
+    if (orderedFiles.length === 0) {
+      setError('No valid video or project files found');
       return;
     }
-    setFiles(prev => [...prev, ...videoFiles]);
+    
+    setFiles(prev => {
+      // If adding a .sgproj, remove any existing ones first (only one per project in batch mode)
+      // In multi-video mode, only allow one .sgproj total
+      if (projectFiles.length > 0) {
+        const existingProjects = prev.filter(f => f.name.endsWith('.sgproj'));
+        const existingVideos = prev.filter(f => !f.name.endsWith('.sgproj'));
+        // Place new .sgproj first, then existing videos, then new videos
+        return [...projectFiles.slice(0, 1), ...existingVideos, ...videoFiles];
+      }
+      return [...prev, ...orderedFiles];
+    });
     setError(null);
   }, []);
+
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -748,7 +766,7 @@ export function VideoUpload({
           >
             <input
               type="file"
-              accept="video/*"
+              accept="video/*,.sgproj"
               multiple
               onChange={handleFileChange}
               className="hidden"
@@ -785,69 +803,44 @@ export function VideoUpload({
                 </button>
               </div>
               <div className="max-h-48 overflow-y-auto p-2 space-y-1">
-                {files.map((f, idx) => (
-                  <div 
-                    key={`${f.name}-${idx}`}
-                    draggable
-                    onDragStart={(e) => {
-                      setDragSourceIndex(idx);
-                      setDragProjectId('mode12');
-                      e.dataTransfer.effectAllowed = 'move';
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      if (dragProjectId === 'mode12' && dragSourceIndex !== null && dragSourceIndex !== idx) {
-                        setDragTargetIndex(idx);
-                      }
-                    }}
-                    onDragLeave={() => setDragTargetIndex(null)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (dragProjectId === 'mode12' && dragSourceIndex !== null && dragSourceIndex !== idx) {
-                        setFiles(prev => {
-                          const newFiles = [...prev];
-                          const [removed] = newFiles.splice(dragSourceIndex, 1);
-                          newFiles.splice(idx, 0, removed);
-                          return newFiles;
-                        });
-                      }
-                      setDragSourceIndex(null);
-                      setDragTargetIndex(null);
-                      setDragProjectId(null);
-                    }}
-                    onDragEnd={() => {
-                      setDragSourceIndex(null);
-                      setDragTargetIndex(null);
-                      setDragProjectId(null);
-                    }}
-                    className={`flex items-center gap-2 px-2 py-1.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
-                      dragProjectId === 'mode12' && dragTargetIndex === idx
-                        ? 'border-[#007acc] bg-[#007acc]/10'
-                        : dragProjectId === 'mode12' && dragSourceIndex === idx
-                        ? 'opacity-50 border-[#555555]'
-                        : 'border-[#333333]'
-                    }`}
-                  >
-                    <GripVertical className="w-3 h-3 text-[#444444]" />
-                    <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
-                    <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
-                    <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
-                    {uploadMode === 'multi-video' && idx === 0 && (
-                      <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
-                    )}
-                    {uploadMode === 'batch' && (
-                      <span className="px-1.5 py-0.5 bg-[#3e3e42] text-[#888888] text-[8px] rounded">proj {idx + 1}</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
-                      className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                {files.map((f, idx) => {
+                  const isProjectFile = f.name.endsWith('.sgproj');
+                  const hasProjectFile = files.some(file => file.name.endsWith('.sgproj'));
+                  
+                  return (
+                    <div 
+                      key={`${f.name}-${idx}`}
+                      className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
                     >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                      {isProjectFile ? (
+                        <Lock className="w-3 h-3 text-[#f0a000]" />
+                      ) : (
+                        <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
+                      )}
+                      <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
+                      <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
+                      {isProjectFile && (
+                        <span className="px-1.5 py-0.5 bg-[#4a3000] text-[#f0a000] text-[8px] rounded flex items-center gap-1">
+                          <Lock className="w-2 h-2" />
+                          restore
+                        </span>
+                      )}
+                      {!isProjectFile && uploadMode === 'multi-video' && idx === 0 && !hasProjectFile && (
+                        <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
+                      )}
+                      {!isProjectFile && uploadMode === 'batch' && (
+                        <span className="px-1.5 py-0.5 bg-[#3e3e42] text-[#888888] text-[8px] rounded">proj {idx + 1}</span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
+                        className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
