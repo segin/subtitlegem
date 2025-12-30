@@ -118,6 +118,10 @@ export interface VideoClip {
   height: number;
   fps?: number;
   
+  /** File Integrity Tracking */
+  fileSize?: number; // Size in bytes on disk
+  missing?: boolean; // True if file is missing or size mismatch
+  
   /** Gemini API references for re-processing */
   geminiFileUri?: string | null;
   geminiFileExpiration?: string | null;

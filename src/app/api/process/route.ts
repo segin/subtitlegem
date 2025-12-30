@@ -33,24 +33,87 @@ export async function POST(req: NextRequest) {
   // Handle JSON requests for Reprocessing/Translation
   if (req.headers.get("content-type")?.includes("application/json")) {
     try {
-      const { mode, fileUri, language, secondaryLanguage, subtitles, model } = await req.json();
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = await req.json();
       const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
-         if (!fileUri) return NextResponse.json({ error: "No fileUri provided" }, { status: 400 });
+         // We need either a Gemini URI or a local File Path
+         if (!fileUri && !filePath) {
+             return NextResponse.json({ error: "No fileUri or filePath provided" }, { status: 400 });
+         }
          
          const { getGlobalSettings } = await import("@/lib/global-settings-store");
          const { processWithFallback } = await import("@/lib/ai-provider");
+         const { uploadToGemini } = await import("@/lib/gemini");
          const settings = getGlobalSettings();
+         
+         let targetUri = fileUri;
+         let targetMime = "video/mp4"; // Default assumption, or derive from path
+         let newGeminiFile = null;
 
-         console.log(`Reprocessing with file: ${fileUri}, Lang: ${language} using fallback chain`);
+         // If we have a local path but no URI (or we want to re-upload), handle that
+         if (!targetUri && filePath) {
+             console.log(`Reprocessing from local file: ${filePath}`);
+             if (!fs.existsSync(filePath)) {
+                 return NextResponse.json({ error: "Local file not found" }, { status: 404 });
+             }
+             
+             // Check size/type - simplify for now assuming video/mp4 or audio
+             // In a real scenario we'd check mime type properly
+             const ext = path.extname(filePath).toLowerCase();
+             if (['.mp3', '.wav', '.m4a', '.flac', '.ogg'].includes(ext)) {
+                 targetMime = "audio/" + ext.replace('.', '');
+                 if (ext === '.m4a') targetMime = "audio/mp4";
+             }
+
+             // Check if we can do inline
+             const stats = fs.statSync(filePath);
+             const sizeMB = stats.size / (1024 * 1024);
+             
+             if (sizeMB < 9.8) {
+                 // Inline
+                 const fileBuffer = fs.readFileSync(filePath);
+                 const base64Data = fileBuffer.toString('base64');
+                 console.log(`Reprocessing inline (${sizeMB.toFixed(2)} MB)`);
+                 
+                 const result = await processWithFallback(
+                   'generate',
+                   { 
+                       base64Data, 
+                       mimeType: targetMime, 
+                       secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+                       isInline: true
+                   },
+                   settings.aiFallbackChain
+                 );
+                 return NextResponse.json({ ...result, clipId });
+             } else {
+                 // Upload to Gemini
+                 console.log(`Uploading local file to Gemini (${sizeMB.toFixed(2)} MB)...`);
+                 newGeminiFile = await uploadToGemini(filePath, targetMime);
+                 targetUri = newGeminiFile.uri;
+             }
+         }
+
+         console.log(`Reprocessing with URI: ${targetUri}, Lang: ${language}`);
          const result = await processWithFallback(
            'generate',
-           { fileUri, mimeType: "video/mp4", secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage },
+           { 
+               fileUri: targetUri, 
+               mimeType: targetMime, 
+               secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage 
+           },
            settings.aiFallbackChain
          );
          
-         return NextResponse.json(result);
+         return NextResponse.json({ 
+             ...result, 
+             clipId,
+             // Pass back new gemini info if we uploaded
+             geminiFileUri: newGeminiFile?.uri || fileUri,
+             geminiFileExpiration: newGeminiFile?.expirationTime || undefined,
+             fileId: newGeminiFile?.name || undefined
+         });
       
       } else if (mode === 'translate') {
          if (!subtitles) return NextResponse.json({ error: "No subtitles provided" }, { status: 400 });
@@ -66,7 +129,7 @@ export async function POST(req: NextRequest) {
            settings.aiFallbackChain
          );
          
-         return NextResponse.json({ subtitles: result.subtitles });
+         return NextResponse.json({ subtitles: result.subtitles, clipId });
       }
       
       return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
@@ -267,7 +330,9 @@ export async function POST(req: NextRequest) {
       detectedLanguage,
       geminiFileUri,
       geminiFileExpiration,
-      fileId
+      fileId,
+      fileSize: fs.statSync(videoPath).size,
+      originalFilename
     });
 
   } catch (error: any) {

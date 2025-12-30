@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft } from "@/lib/draft-store";
+import fs from 'fs';
+import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
 
 export const runtime = 'nodejs';
 
@@ -11,10 +13,51 @@ export async function GET(req: NextRequest) {
   
   if (id) {
     const draft = loadDraft(id);
-    if (!draft) {
-      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    if (draft) {
+      // Perform integrity check on load
+      let hasChanges = false;
+
+      if (draft.version === 2) {
+        // Check all clips
+        draft.clips = draft.clips.map(clip => {
+          let measuredSize: number | null = null;
+          try {
+            if (fs.existsSync(clip.filePath)) {
+               const stats = fs.statSync(clip.filePath);
+               measuredSize = stats.size;
+            }
+          } catch (e) {
+            console.error(`[DraftAPI] Failed to stat file ${clip.filePath}`, e);
+          }
+
+          const status = checkClipIntegrity(clip, measuredSize);
+          
+          if (status === IntegrityStatus.MISSING || status === IntegrityStatus.MISMATCH) {
+             console.warn(`[DraftAPI] Integrity check failed for clip ${clip.id}: ${status}`);
+             return { ...clip, missing: true };
+          } else if (status === IntegrityStatus.OK && measuredSize !== null && clip.fileSize !== measuredSize) {
+             // Self-heal: If size was undefined but file exists and is valid (legacy), update it
+             // BUT, checkClipIntegrity returns OK for undefined fileSize. 
+             // If we want to backfill fileSize, we can do it here.
+             return { ...clip, fileSize: measuredSize, missing: false };
+          }
+          
+          return { ...clip, missing: false };
+        });
+      } else if (draft.version === 1 && draft.videoPath) {
+         // Basic V1 check
+         if (!fs.existsSync(draft.videoPath)) {
+            // We can't easily flag V1 structure as missing without changing type, 
+            // but we can pass a transient error or just let it fail later.
+            // Or migrate to V2?
+            console.warn(`[DraftAPI] V1 Draft video missing: ${draft.videoPath}`);
+         }
+      }
+      
+      return NextResponse.json(draft);
     }
-    return NextResponse.json(draft);
+    
+    return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   }
   
   const drafts = listDrafts();

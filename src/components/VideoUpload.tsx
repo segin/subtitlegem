@@ -17,7 +17,7 @@ export interface StagedProject {
 }
 
 interface VideoUploadProps {
-  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => void;
+  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => void;
   pendingProjectFile?: File | null;
   // Multi-video support
   uploadMode?: UploadMode;
@@ -32,6 +32,7 @@ export function VideoUpload({
   onUploadModeChange,
   onMultiVideoUpload,
 }: VideoUploadProps) {
+
   const [file, setFile] = useState<File | null>(null);
   const [files, setFiles] = useState<File[]>([]); // For multi-file modes
   const [loading, setLoading] = useState(false);
@@ -298,7 +299,8 @@ export function VideoUpload({
                     secondaryLanguage,
                     data.videoPath,
                     data.detectedLanguage,
-                    data.originalFilename
+                    data.originalFilename,
+                    data.fileSize
                   );
                 } catch {
                   // Fall back to generated subtitles
@@ -308,7 +310,8 @@ export function VideoUpload({
                     secondaryLanguage,
                     data.videoPath,
                     data.detectedLanguage,
-                    data.originalFilename
+                    data.originalFilename,
+                    data.fileSize
                   );
                 }
               };
@@ -320,7 +323,8 @@ export function VideoUpload({
                 secondaryLanguage, 
                 data.videoPath,
                 data.detectedLanguage,
-                data.originalFilename
+                data.originalFilename,
+                data.fileSize
               );
             }
           }
@@ -343,7 +347,7 @@ export function VideoUpload({
   };
 
   return (
-    <div className="w-full bg-[#252526] p-6 text-[#cccccc]">
+    <div className="w-full bg-[#252526] p-4 text-[#cccccc]">
       <input
         type="file"
         accept="video/*"
@@ -354,8 +358,8 @@ export function VideoUpload({
       />
       
       {/* Model and Language Selection - Always visible */}
-      <div className="space-y-4 mb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="space-y-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider">AI Model</label>
             <div className="flex gap-2">
@@ -441,14 +445,14 @@ export function VideoUpload({
 
       {/* Upload Mode Selector */}
       {onUploadModeChange && (
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider block mb-2">Upload Mode</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => onUploadModeChange('single')}
               disabled={loading}
-              className={`p-3 rounded-md border transition-all text-left ${
+              className={`p-2 rounded-md border transition-all text-left ${
                 uploadMode === 'single'
                   ? 'bg-[#264f78] border-[#007acc] text-white'
                   : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
@@ -462,7 +466,7 @@ export function VideoUpload({
               type="button"
               onClick={() => onUploadModeChange('multi-video')}
               disabled={loading}
-              className={`p-3 rounded-md border transition-all text-left ${
+              className={`p-2 rounded-md border transition-all text-left ${
                 uploadMode === 'multi-video'
                   ? 'bg-[#264f78] border-[#007acc] text-white'
                   : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
@@ -476,7 +480,7 @@ export function VideoUpload({
               type="button"
               onClick={() => onUploadModeChange('batch')}
               disabled={loading}
-              className={`p-3 rounded-md border transition-all text-left ${
+              className={`p-2 rounded-md border transition-all text-left ${
                 uploadMode === 'batch'
                   ? 'bg-[#264f78] border-[#007acc] text-white'
                   : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
@@ -490,7 +494,7 @@ export function VideoUpload({
               type="button"
               onClick={() => onUploadModeChange('advanced')}
               disabled={loading}
-              className={`p-3 rounded-md border transition-all text-left ${
+              className={`p-2 rounded-md border transition-all text-left ${
                 uploadMode === 'advanced'
                   ? 'bg-[#264f78] border-[#007acc] text-white'
                   : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
@@ -534,7 +538,7 @@ export function VideoUpload({
                 className={`${projectIndex > 0 ? 'border-t border-[#333333]' : ''}`}
               >
                 {/* Project Section Header */}
-                <div className="flex items-center justify-between px-3 py-2 bg-[#252526]">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526]">
                   <div className="flex items-center gap-2">
                     {/* Add Files Button */}
                     <label className="flex items-center gap-1 px-2 py-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#888888] text-[10px] rounded-sm hover:bg-[#3e3e42] hover:text-[#cccccc] cursor-pointer transition-colors">
@@ -643,7 +647,7 @@ export function VideoUpload({
                       }
                     }
                   }}
-                  className={`min-h-[80px] mx-3 mb-3 mt-2 border-2 border-dashed rounded-md transition-all ${
+                  className={`min-h-[60px] mx-2 mb-2 mt-1 border-2 border-dashed rounded-md transition-all ${
                     project.isDragging
                       ? 'border-[#007acc] bg-[#007acc]/10'
                       : 'border-[#333333] bg-[#1a1a1a]'
@@ -761,7 +765,7 @@ export function VideoUpload({
                               setInsertProjectId(null);
                               setInsertIndex(null);
                             }}
-                            className={`flex items-center gap-2 px-2 py-1.5 my-0.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
+                            className={`flex items-center gap-2 px-2 py-1 my-0.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
                               dragProjectId === project.id && dragTargetIndex === fileIndex
                                 ? 'border-[#007acc] bg-[#007acc]/10'
                                 : dragProjectId === project.id && dragSourceIndex === fileIndex

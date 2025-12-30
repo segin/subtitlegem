@@ -239,7 +239,30 @@ export default function Home() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [undo, redo]);
 
-  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => {
+  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
+    // Check if we can auto-repair a missing clip
+    if (fileSize && originalFilename) {
+       const missingClipIndex = videoClips.findIndex(c => c.missing && c.originalFilename === originalFilename && c.fileSize === fileSize);
+       
+       if (missingClipIndex !== -1) {
+          // Found a match! Repair it.
+          const repaired = [...videoClips];
+          repaired[missingClipIndex] = {
+             ...repaired[missingClipIndex],
+             filePath: serverPath,
+             missing: false
+          };
+          setVideoClips(repaired);
+          
+          // If this was the active video or the only video, restore state?
+          // If multi-video, we just updated the library.
+          // If single video (migrated to V2 structure or checking V1 via clips array if present)
+          
+          alert(`Successfully restored file for "${originalFilename}"`);
+          return; // Skip new project creation
+       }
+    }
+
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
       startTime: parseSRTTime(s.startTime),
@@ -261,6 +284,22 @@ export default function Home() {
       secondaryLanguage: lang === "None" ? "Secondary" : lang,
       originalFilename: originalFilename || null
     }));
+    
+    // V2: Initialize clips if empty (Single Video Mode init)
+    // If not in multi-video mode explicitly, we treat this as a fresh single project
+    if (!uploadMode || uploadMode === 'single') {
+       const newClip: VideoClip = {
+          id: uuidv4(),
+          filePath: serverPath,
+          originalFilename: originalFilename || "Untitled",
+          duration: 0, // Will be updated on load
+          width: 0,
+          height: 0,
+          fileSize: fileSize,
+          subtitles: mapped
+       };
+       setVideoClips([newClip]);
+    }
   };
   
   const handleEditFromQueue = async (item: QueueItem) => {
@@ -592,17 +631,17 @@ export default function Home() {
           />
 
           {/* Main Upload Area - Center */}
-          <div className="flex-1 flex flex-col items-center justify-center p-4 overflow-auto">
+          <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-auto">
           <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
             <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
               SubtitleGem - New Project
             </div>
-            <div className="p-8 flex flex-col items-center">
-              <div className="mb-6 p-4 bg-[#1e1e1e] border border-[#333333]">
-                <FileVideo className="w-12 h-12 text-[#555555]" />
+            <div className="p-5 flex flex-col items-center">
+              <div className="mb-4 p-3 bg-[#1e1e1e] border border-[#333333]">
+                <FileVideo className="w-10 h-10 text-[#555555]" />
               </div>
-              <h1 className="text-xl font-medium text-[#e1e1e1] mb-2">Welcome to SubtitleGem</h1>
-              <p className="text-sm text-[#888888] mb-8 text-center">Start by importing a video file to generate subtitles.</p>
+              <h1 className="text-xl font-medium text-[#e1e1e1] mb-1">Welcome to SubtitleGem</h1>
+              <p className="text-sm text-[#888888] mb-5 text-center">Start by importing a video file to generate subtitles.</p>
               <VideoUpload 
                 onUploadComplete={handleUploadComplete} 
                 pendingProjectFile={pendingProjectFile}

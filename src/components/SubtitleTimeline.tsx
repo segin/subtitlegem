@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SubtitleLine, VideoClip, TimelineClip } from "@/types/subtitle";
+import { AlertCircle } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -189,13 +190,39 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   const VIDEO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
   const SUBTITLE_TRACK_HEIGHT = 48;
   const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 16;
+  
+  // Zoom handlers
+  const handleZoomIn = () => setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
+  const handleZoomOut = () => setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
 
   return (
-    <div 
-      ref={containerRef} 
-      className="w-full h-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none"
-      onWheel={handleWheel}
-    >
+    <div className="relative w-full h-full flex flex-col bg-[#1e1e1e]">
+      {/* Timeline Controls Overlay */}
+      <div className="absolute top-2 right-4 z-40 flex items-center space-x-1 bg-[#252526] px-2 py-1 rounded shadow-md border border-[#333333]">
+         <button 
+           onClick={handleZoomOut}
+           className="p-1 hover:bg-[#3e3e42] rounded text-[#cccccc]"
+           title="Zoom Out"
+         >
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+         </button>
+         <span className="text-[10px] text-[#888888] font-mono min-w-[32px] text-center">
+            {Math.round((pixelsPerSecond / 100) * 100)}%
+         </span>
+         <button 
+           onClick={handleZoomIn}
+           className="p-1 hover:bg-[#3e3e42] rounded text-[#cccccc]"
+           title="Zoom In"
+         >
+           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+         </button>
+      </div>
+
+      <div 
+        ref={containerRef} 
+        className="flex-1 w-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none"
+        onWheel={handleWheel}
+      >
       <div 
         data-timeline-bg
         className="relative h-full min-w-full cursor-pointer" 
@@ -272,6 +299,7 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -354,7 +382,9 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
         "absolute top-1 bottom-1 cursor-move flex items-center px-2 overflow-hidden select-none group transition-colors rounded-sm",
         selected
           ? "bg-[#264f78] ring-2 ring-[#007acc] text-white z-10"
-          : "bg-[#3d5c3d] border border-[#4a704a] text-[#cccccc] hover:bg-[#4a704a]",
+          : videoClip.missing 
+            ? "bg-red-950/50 border border-red-800 text-red-200 hover:bg-red-900/50"
+            : "bg-[#3d5c3d] border border-[#4a704a] text-[#cccccc] hover:bg-[#4a704a]",
         isDragging && "ring-1 ring-white z-20"
       )}
       style={{ 
@@ -368,13 +398,19 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
       onMouseDown={(e) => handleMouseDown(e, 'both')}
     >
       {/* Clip content */}
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 relative">
         <div className="text-[10px] font-medium truncate pointer-events-none">
           {videoClip.originalFilename}
         </div>
         <div className="text-[8px] opacity-60 pointer-events-none">
           {formatTime(clip.sourceInPoint)} - {formatTime(clip.sourceInPoint + clip.clipDuration)}
         </div>
+        {videoClip.missing && (
+           <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-30">
+              <AlertCircle className="w-4 h-4 text-red-500 mr-1" />
+              <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider">MISSING</span>
+           </div>
+        )}
       </div>
       
       {/* Resize handles */}
