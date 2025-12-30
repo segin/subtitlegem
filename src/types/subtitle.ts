@@ -260,6 +260,20 @@ export interface GlobalSettings {
   
   // Default Gemini model
   defaultGeminiModel: string;
+
+  // Safety Re-route (Phase 7)
+  aiFallbackChain: ModelConfig[];
+}
+
+export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'ollama' | 'local';
+
+export interface ModelConfig {
+  id: string; // Internal unique ID
+  provider: AIProvider;
+  modelName: string;
+  apiKey?: string;
+  endpoint?: string; // For local/custom providers
+  enabled: boolean;
 }
 
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
@@ -294,4 +308,12 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultPreset: 'veryfast',
   defaultCrf: 23,
   defaultGeminiModel: 'gemini-2.0-flash',
+  aiFallbackChain: [
+    {
+      id: 'default-gemini',
+      provider: 'gemini',
+      modelName: 'gemini-2.0-flash',
+      enabled: true
+    }
+  ],
 };

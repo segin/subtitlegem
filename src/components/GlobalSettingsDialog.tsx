@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
-import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw } from "lucide-react";
+import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 
 interface GlobalSettingsDialogProps {
@@ -328,31 +328,143 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
               )}
 
               {activeTab === 'ai' && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">Default Gemini Model</label>
-                    <select
-                      value={settings.defaultGeminiModel}
-                      onChange={(e) => setSettings({ ...settings, defaultGeminiModel: e.target.value })}
-                      className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-sm p-2 focus:border-[#007acc] outline-none"
+                <div className="space-y-4 overflow-y-auto max-h-[400px] pr-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-[#e1e1e1]">Safety Re-route Chain</h4>
+                      <p className="text-[10px] text-[#666666]">
+                        Ordered list of models to try. If a model fails due to a safety filter, the next one is tried.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        const newChain = [...(settings.aiFallbackChain || [])];
+                        newChain.push({
+                          id: Math.random().toString(36).substr(2, 9),
+                          provider: 'gemini',
+                          modelName: 'gemini-1.5-flash',
+                          enabled: true
+                        });
+                        setSettings({ ...settings, aiFallbackChain: newChain });
+                      }}
+                      className="flex items-center gap-1 px-2 py-1 bg-[#2d2d2d] border border-[#3e3e42] text-[10px] text-[#cccccc] hover:bg-[#3e3e42] rounded-sm transition-colors"
                     >
-                      {models.length > 0 ? (
-                        models.map((model) => (
-                          <option key={model} value={model}>{model}</option>
-                        ))
-                      ) : (
-                        <>
-                          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                          <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite</option>
-                          <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                          <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                        </>
-                      )}
-                    </select>
+                      <Plus className="w-3 h-3" />
+                      Add Model
+                    </button>
                   </div>
-                  <p className="text-xs text-[#666666]">
-                    This model will be used by default for subtitle generation and translation.
-                  </p>
+
+                  <div className="space-y-2">
+                    {(settings.aiFallbackChain || []).map((model, index) => (
+                      <div key={model.id} className="bg-[#1e1e1e] border border-[#333333] p-3 rounded-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-[#555] w-4">{index + 1}</span>
+                            <select
+                              value={model.provider}
+                              onChange={(e) => {
+                                const newChain = [...settings.aiFallbackChain];
+                                newChain[index].provider = e.target.value as any;
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              className="bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-[10px] px-1 py-0.5 rounded-sm outline-none"
+                            >
+                              <option value="gemini">Gemini</option>
+                              <option value="deepseek">DeepSeek</option>
+                              <option value="openai">OpenAI</option>
+                              <option value="anthropic">Anthropic</option>
+                              <option value="ollama">Ollama</option>
+                              <option value="local">Local/Custom</option>
+                            </select>
+                            <input 
+                              type="text"
+                              value={model.modelName}
+                              onChange={(e) => {
+                                const newChain = [...settings.aiFallbackChain];
+                                newChain[index].modelName = e.target.value;
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              placeholder="Model Name (e.g. gpt-4o)"
+                              className="bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-[10px] px-2 py-0.5 rounded-sm outline-none w-40"
+                            />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={() => {
+                                if (index === 0) return;
+                                const newChain = [...settings.aiFallbackChain];
+                                [newChain[index - 1], newChain[index]] = [newChain[index], newChain[index - 1]];
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              disabled={index === 0}
+                              className="p-1 text-[#555] hover:text-[#888] disabled:opacity-30"
+                            >
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                if (index === settings.aiFallbackChain.length - 1) return;
+                                const newChain = [...settings.aiFallbackChain];
+                                [newChain[index], newChain[index + 1]] = [newChain[index + 1], newChain[index]];
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              disabled={index === settings.aiFallbackChain.length - 1}
+                              className="p-1 text-[#555] hover:text-[#888] disabled:opacity-30"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
+                            <button 
+                              onClick={() => {
+                                const newChain = settings.aiFallbackChain.filter(m => m.id !== model.id);
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              className="p-1 text-[#888] hover:text-[#f44336]"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {model.provider !== 'gemini' && model.provider !== 'ollama' && model.provider !== 'local' && (
+                          <div className="flex gap-2">
+                             <input 
+                              type="password"
+                              value={model.apiKey || ''}
+                              onChange={(e) => {
+                                const newChain = [...settings.aiFallbackChain];
+                                newChain[index].apiKey = e.target.value;
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              placeholder="API Key (Optional if in .env)"
+                              className="flex-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-[10px] px-2 py-1 rounded-sm outline-none"
+                            />
+                          </div>
+                        )}
+
+                        {(model.provider === 'ollama' || model.provider === 'local' || model.provider === 'openai') && (
+                          <div className="flex gap-2">
+                             <input 
+                              type="text"
+                              value={model.endpoint || ''}
+                              onChange={(e) => {
+                                const newChain = [...settings.aiFallbackChain];
+                                newChain[index].endpoint = e.target.value;
+                                setSettings({ ...settings, aiFallbackChain: newChain });
+                              }}
+                              placeholder="Endpoint URL (Optional)"
+                              className="flex-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-[10px] px-2 py-1 rounded-sm outline-none"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {(settings.aiFallbackChain || []).length === 0 && (
+                      <div className="py-8 text-center border-2 border-dashed border-[#333] text-[#555] text-xs">
+                        No fallbacks configured. Primary settings will be used.
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </>

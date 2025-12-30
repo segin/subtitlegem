@@ -34,6 +34,7 @@ export async function PUT(req: NextRequest) {
       defaultPreset: body.defaultPreset ?? existing.defaultPreset,
       defaultCrf: body.defaultCrf ?? existing.defaultCrf,
       defaultGeminiModel: body.defaultGeminiModel ?? existing.defaultGeminiModel,
+      aiFallbackChain: body.aiFallbackChain ?? existing.aiFallbackChain,
     };
     
     saveGlobalSettings(settings);

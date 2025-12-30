@@ -39,26 +39,34 @@ export async function POST(req: NextRequest) {
       if (mode === 'reprocess') {
          if (!fileUri) return NextResponse.json({ error: "No fileUri provided" }, { status: 400 });
          
-         console.log(`Reprocessing with file: ${fileUri}, Lang: ${language}`);
-         const result = await generateSubtitles(
-            fileUri, 
-            "video/mp4", // In reprocess mode we assume video uri is valid and type is generic enough or known
-            secondaryLanguage === "None" ? undefined : secondaryLanguage,
-            1,
-            modelName
+         const { getGlobalSettings } = await import("@/lib/global-settings-store");
+         const { processWithFallback } = await import("@/lib/ai-provider");
+         const settings = getGlobalSettings();
+
+         console.log(`Reprocessing with file: ${fileUri}, Lang: ${language} using fallback chain`);
+         const result = await processWithFallback(
+           'generate',
+           { fileUri, mimeType: "video/mp4", secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage },
+           settings.aiFallbackChain
          );
          
-         // Override detected language if we forced it? No, keep AI detection or allow user override hint?
-         // For now, return result.
          return NextResponse.json(result);
       
       } else if (mode === 'translate') {
          if (!subtitles) return NextResponse.json({ error: "No subtitles provided" }, { status: 400 });
          
-         console.log(`Retranslating to: ${secondaryLanguage}`);
-         const translated = await translateSubtitles(subtitles, secondaryLanguage, modelName);
+         const { getGlobalSettings } = await import("@/lib/global-settings-store");
+         const { processWithFallback } = await import("@/lib/ai-provider");
+         const settings = getGlobalSettings();
          
-         return NextResponse.json({ subtitles: translated });
+         console.log(`Retranslating to: ${secondaryLanguage} using fallback chain`);
+         const result = await processWithFallback(
+           'translate',
+           { subtitles, targetLanguage: secondaryLanguage },
+           settings.aiFallbackChain
+         );
+         
+         return NextResponse.json({ subtitles: result.subtitles });
       }
       
       return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
@@ -212,17 +220,22 @@ export async function POST(req: NextRequest) {
     let geminiFileExpiration: string | null = null;
     let fileId: string | null = null;
     
+    const { getGlobalSettings } = await import("@/lib/global-settings-store");
+    const { processWithFallback } = await import("@/lib/ai-provider");
+    const settings = getGlobalSettings();
+
     if (useInlineData) {
       console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
       
       const fileBuffer = fs.readFileSync(processPath);
       const base64Data = fileBuffer.toString('base64');
-      result = await generateSubtitlesInline(
-        base64Data,
-        mimeType,
-        secondaryLanguage === "None" ? undefined : secondaryLanguage,
-        1,
-        modelName
+      
+      // Note: currently processWithFallback needs to handle inline vs Files API
+      // I'll update it to pass through more info or just use a specific task
+      result = await processWithFallback(
+        'generate',
+        { base64Data, mimeType, secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage, isInline: true },
+        settings.aiFallbackChain
       );
     } else {
       console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
@@ -232,12 +245,10 @@ export async function POST(req: NextRequest) {
       geminiFileExpiration = geminiFile.expirationTime || null;
       fileId = geminiFile.name || null;
       
-      result = await generateSubtitles(
-        geminiFile.uri!,
-        mimeType,
-        secondaryLanguage === "None" ? undefined : secondaryLanguage,
-        1,
-        modelName
+      result = await processWithFallback(
+        'generate',
+        { fileUri: geminiFile.uri!, mimeType, secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage },
+        settings.aiFallbackChain
       );
     }
     
