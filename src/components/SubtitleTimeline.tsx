@@ -79,6 +79,7 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
+  const [followPlayhead, setFollowPlayhead] = useState(true);
 
   // Subtitle drag handler
   const handleSubtitleDrag = useCallback((id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
@@ -194,6 +195,41 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   // Zoom handlers
   const handleZoomIn = () => setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
   const handleZoomOut = () => setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
+  
+  // Fit to View: Calculate zoom level to fit entire duration in visible area
+  const handleFitToView = useCallback(() => {
+    if (!containerRef.current || duration <= 0) return;
+    const containerWidth = containerRef.current.clientWidth - 64; // Subtract track label width
+    const newPPS = Math.max(20, Math.min(400, containerWidth / duration));
+    setPixelsPerSecond(newPPS);
+    containerRef.current.scrollLeft = 0;
+  }, [duration]);
+  
+  // Keyboard shortcuts for zoom (+/-)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === '=' || e.key === '+') { handleZoomIn(); }
+      if (e.key === '-') { handleZoomOut(); }
+      if (e.key === '0' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); handleFitToView(); }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleFitToView]);
+  
+  // Auto-scroll to keep playhead visible
+  useEffect(() => {
+    if (!followPlayhead || !containerRef.current || isScrubbing) return;
+    const container = containerRef.current;
+    const playheadX = currentTime * pixelsPerSecond;
+    const scrollLeft = container.scrollLeft;
+    const visibleWidth = container.clientWidth;
+    // Scroll if playhead is outside visible area (with margin)
+    const margin = 100;
+    if (playheadX < scrollLeft + margin || playheadX > scrollLeft + visibleWidth - margin) {
+      container.scrollTo({ left: playheadX - visibleWidth / 3, behavior: 'smooth' });
+    }
+  }, [currentTime, pixelsPerSecond, followPlayhead, isScrubbing]);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[#1e1e1e]">
@@ -202,7 +238,7 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
          <button 
            onClick={handleZoomOut}
            className="p-1 hover:bg-[#3e3e42] rounded text-[#cccccc]"
-           title="Zoom Out"
+           title="Zoom Out (-)"
          >
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
          </button>
@@ -212,9 +248,24 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
          <button 
            onClick={handleZoomIn}
            className="p-1 hover:bg-[#3e3e42] rounded text-[#cccccc]"
-           title="Zoom In"
+           title="Zoom In (+)"
          >
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+         </button>
+         <div className="w-px h-4 bg-[#444444] mx-1" />
+         <button 
+           onClick={handleFitToView}
+           className="px-1.5 py-0.5 text-[10px] hover:bg-[#3e3e42] rounded text-[#cccccc]"
+           title="Fit to View (Ctrl+0)"
+         >
+           Fit
+         </button>
+         <button 
+           onClick={() => setFollowPlayhead(!followPlayhead)}
+           className={`px-1.5 py-0.5 text-[10px] rounded ${followPlayhead ? 'bg-[#264f78] text-white' : 'text-[#888888] hover:bg-[#3e3e42]'}`}
+           title="Auto-follow playhead"
+         >
+           Follow
          </button>
       </div>
 
