@@ -2,6 +2,7 @@
   "name": "subtitlegem",
   "version": "0.1.0",
   "private": true,
+  "license": "Apache-2.0",
   "scripts": {
     "dev": "next dev -p 3050",
     "build": "next build",
