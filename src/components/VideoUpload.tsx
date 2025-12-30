@@ -49,6 +49,11 @@ export function VideoUpload({
   const [advancedProjects, setAdvancedProjects] = useState<StagedProject[]>([
     { id: 'proj-' + Math.random().toString(36).substr(2, 9), files: [], isDragging: false }
   ]);
+
+  // Drag reorder state
+  const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
+  const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
+  const [dragProjectId, setDragProjectId] = useState<string | null>(null);
   
   // Model Data & Global Selection State
   const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
@@ -599,14 +604,57 @@ export function VideoUpload({
                     </div>
                   ) : (
                     <div className="p-2 space-y-1">
-                      {project.files.map((file, fileIndex) => (
+                      {project.files.map((f, fileIndex) => (
                         <div 
-                          key={`${file.name}-${fileIndex}`}
-                          className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
+                          key={`${f.name}-${fileIndex}`}
+                          draggable
+                          onDragStart={(e) => {
+                            setDragSourceIndex(fileIndex);
+                            setDragProjectId(project.id);
+                            e.dataTransfer.effectAllowed = 'move';
+                            e.dataTransfer.setData('text/plain', String(fileIndex));
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
+                              setDragTargetIndex(fileIndex);
+                            }
+                          }}
+                          onDragLeave={() => {
+                            setDragTargetIndex(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
+                              setAdvancedProjects(prev => prev.map(p => {
+                                if (p.id !== project.id) return p;
+                                const newFiles = [...p.files];
+                                const [removed] = newFiles.splice(dragSourceIndex, 1);
+                                newFiles.splice(fileIndex, 0, removed);
+                                return { ...p, files: newFiles };
+                              }));
+                            }
+                            setDragSourceIndex(null);
+                            setDragTargetIndex(null);
+                            setDragProjectId(null);
+                          }}
+                          onDragEnd={() => {
+                            setDragSourceIndex(null);
+                            setDragTargetIndex(null);
+                            setDragProjectId(null);
+                          }}
+                          className={`flex items-center gap-2 px-2 py-1.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
+                            dragProjectId === project.id && dragTargetIndex === fileIndex
+                              ? 'border-[#007acc] bg-[#007acc]/10'
+                              : dragProjectId === project.id && dragSourceIndex === fileIndex
+                              ? 'opacity-50 border-[#555555]'
+                              : 'border-[#333333]'
+                          }`}
                         >
-                          <GripVertical className="w-3 h-3 text-[#444444] cursor-grab" />
+                          <GripVertical className="w-3 h-3 text-[#444444]" />
                           <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
-                          <span className="flex-1 text-xs text-[#cccccc] truncate">{file.name}</span>
+                          <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
                           {fileIndex === 0 && (
                             <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
                           )}
@@ -709,9 +757,48 @@ export function VideoUpload({
                 {files.map((f, idx) => (
                   <div 
                     key={`${f.name}-${idx}`}
-                    className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
+                    draggable
+                    onDragStart={(e) => {
+                      setDragSourceIndex(idx);
+                      setDragProjectId('mode12');
+                      e.dataTransfer.effectAllowed = 'move';
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (dragProjectId === 'mode12' && dragSourceIndex !== null && dragSourceIndex !== idx) {
+                        setDragTargetIndex(idx);
+                      }
+                    }}
+                    onDragLeave={() => setDragTargetIndex(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (dragProjectId === 'mode12' && dragSourceIndex !== null && dragSourceIndex !== idx) {
+                        setFiles(prev => {
+                          const newFiles = [...prev];
+                          const [removed] = newFiles.splice(dragSourceIndex, 1);
+                          newFiles.splice(idx, 0, removed);
+                          return newFiles;
+                        });
+                      }
+                      setDragSourceIndex(null);
+                      setDragTargetIndex(null);
+                      setDragProjectId(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragSourceIndex(null);
+                      setDragTargetIndex(null);
+                      setDragProjectId(null);
+                    }}
+                    className={`flex items-center gap-2 px-2 py-1.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
+                      dragProjectId === 'mode12' && dragTargetIndex === idx
+                        ? 'border-[#007acc] bg-[#007acc]/10'
+                        : dragProjectId === 'mode12' && dragSourceIndex === idx
+                        ? 'opacity-50 border-[#555555]'
+                        : 'border-[#333333]'
+                    }`}
                   >
-                    <GripVertical className="w-3 h-3 text-[#444444] cursor-grab" />
+                    <GripVertical className="w-3 h-3 text-[#444444]" />
                     <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
                     <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
                     <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
