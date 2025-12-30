@@ -165,9 +165,24 @@ export function VideoUpload({
     }
   }, []);
 
+  // Multi-file select for Mode 1/2
+  const handleMultiFileSelect = useCallback((selectedFiles: FileList | File[]) => {
+    const videoFiles = Array.from(selectedFiles).filter(f => f.type.startsWith('video/'));
+    if (videoFiles.length === 0) {
+      setError('No valid video files found');
+      return;
+    }
+    setFiles(prev => [...prev, ...videoFiles]);
+    setError(null);
+  }, []);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelect(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      if (uploadMode === 'multi-video' || uploadMode === 'batch') {
+        handleMultiFileSelect(e.target.files);
+      } else {
+        handleFileSelect(e.target.files[0]);
+      }
     }
   };
 
@@ -201,10 +216,14 @@ export function VideoUpload({
     dragCounterRef.current = 0;
 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFileSelect(e.dataTransfer.files[0]);
+      if (uploadMode === 'multi-video' || uploadMode === 'batch') {
+        handleMultiFileSelect(e.dataTransfer.files);
+      } else {
+        handleFileSelect(e.dataTransfer.files[0]);
+      }
       e.dataTransfer.clearData();
     }
-  }, [handleFileSelect]);
+  }, [handleFileSelect, handleMultiFileSelect, uploadMode]);
 
   const handleUpload = async () => {
     if (!file) return;
@@ -630,6 +649,115 @@ export function VideoUpload({
           >
             <ArrowUpFromLine className="w-4 h-4" />
             <span>Process All Projects</span>
+          </button>
+        </div>
+      ) : (uploadMode === 'multi-video' || uploadMode === 'batch') ? (
+        /* Mode 1 (Multi-Video) and Mode 2 (Batch) */
+        <div className="space-y-4">
+          {/* Drop Zone / File Input */}
+          <label 
+            htmlFor="multi-video-input" 
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            className={`group cursor-pointer flex flex-col items-center justify-center h-32 border-2 border-dashed transition-all rounded-md ${
+              isDragging 
+                ? 'border-[#007acc] bg-[#007acc]/10 scale-[1.02]' 
+                : 'border-[#444444] bg-[#2d2d2d] hover:bg-[#333333] hover:border-[#666666]'
+            }`}
+          >
+            <input
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={handleFileChange}
+              className="hidden"
+              id="multi-video-input"
+              disabled={loading}
+            />
+            <Upload className={`w-6 h-6 mb-2 transition-colors ${
+              isDragging ? 'text-[#007acc]' : 'text-[#666666] group-hover:text-[#999999]'
+            }`} />
+            <span className={`text-sm font-medium transition-colors ${
+              isDragging ? 'text-[#007acc]' : 'text-[#999999] group-hover:text-[#cccccc]'
+            }`}>
+              {isDragging ? 'Drop videos here' : 'Drop videos or click to browse'}
+            </span>
+            <span className="text-[10px] text-[#666666] mt-1">
+              {uploadMode === 'multi-video' ? 'All files → 1 project' : 'Each file → separate project'}
+            </span>
+          </label>
+
+          {/* File List */}
+          {files.length > 0 && (
+            <div className="bg-[#1e1e1e] border border-[#333333] rounded-md overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 bg-[#252526] border-b border-[#333333]">
+                <span className="text-xs text-[#888888]">
+                  {files.length} video{files.length !== 1 ? 's' : ''} staged
+                  {uploadMode === 'batch' && ` → ${files.length} project${files.length !== 1 ? 's' : ''}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFiles([])}
+                  className="text-[10px] text-[#666666] hover:text-[#f44336] transition-colors"
+                >
+                  Clear all
+                </button>
+              </div>
+              <div className="max-h-48 overflow-y-auto p-2 space-y-1">
+                {files.map((f, idx) => (
+                  <div 
+                    key={`${f.name}-${idx}`}
+                    className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
+                  >
+                    <GripVertical className="w-3 h-3 text-[#444444] cursor-grab" />
+                    <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
+                    <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
+                    <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
+                    {uploadMode === 'multi-video' && idx === 0 && (
+                      <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
+                    )}
+                    {uploadMode === 'batch' && (
+                      <span className="px-1.5 py-0.5 bg-[#3e3e42] text-[#888888] text-[8px] rounded">proj {idx + 1}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setFiles(prev => prev.filter((_, i) => i !== idx))}
+                      className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Process Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (files.length > 0) {
+                console.log(`Processing ${files.length} files in ${uploadMode} mode`);
+                // TODO: Implement actual processing logic
+                // For multi-video: create single project with all files
+                // For batch: create separate projects for each file
+                if (onMultiVideoUpload) {
+                  onMultiVideoUpload(files);
+                }
+              }
+            }}
+            disabled={loading || files.length === 0}
+            className="w-full py-3 bg-[#007acc] hover:bg-[#0062a3] disabled:bg-[#333333] disabled:text-[#666666] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 rounded-sm"
+          >
+            <ArrowUpFromLine className="w-4 h-4" />
+            <span>
+              {uploadMode === 'multi-video' 
+                ? `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → 1 Project`
+                : `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → ${files.length || 0} Project${files.length !== 1 ? 's' : ''}`
+              }
+            </span>
           </button>
         </div>
       ) : !file ? (
