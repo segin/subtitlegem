@@ -1,15 +1,33 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers } from "lucide-react";
+
+// Upload modes for multi-video support
+export type UploadMode = 
+  | 'single'           // Single video, single project (default/legacy)
+  | 'multi-video'      // Multiple videos → single project (Mode 1)
+  | 'batch'            // Multiple videos → separate projects (Mode 2)
+  | 'advanced';        // Advanced: custom assignment (Mode 3)
 
 interface VideoUploadProps {
   onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string) => void;
   pendingProjectFile?: File | null;
+  // Multi-video support
+  uploadMode?: UploadMode;
+  onUploadModeChange?: (mode: UploadMode) => void;
+  onMultiVideoUpload?: (files: File[]) => void;
 }
 
-export function VideoUpload({ onUploadComplete, pendingProjectFile }: VideoUploadProps) {
+export function VideoUpload({ 
+  onUploadComplete, 
+  pendingProjectFile,
+  uploadMode = 'single',
+  onUploadModeChange,
+  onMultiVideoUpload,
+}: VideoUploadProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]); // For multi-file modes
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
@@ -364,6 +382,71 @@ export function VideoUpload({ onUploadComplete, pendingProjectFile }: VideoUploa
           </div>
         </div>
       </div>
+
+      {/* Upload Mode Selector */}
+      {onUploadModeChange && (
+        <div className="mb-6">
+          <label className="text-[10px] uppercase font-bold text-[#666666] tracking-wider block mb-2">Upload Mode</label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <button
+              type="button"
+              onClick={() => onUploadModeChange('single')}
+              disabled={loading}
+              className={`p-3 rounded-md border transition-all text-left ${
+                uploadMode === 'single'
+                  ? 'bg-[#264f78] border-[#007acc] text-white'
+                  : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
+              }`}
+            >
+              <FileVideo className="w-4 h-4 mb-1" />
+              <div className="text-[10px] font-medium">Single</div>
+              <div className="text-[8px] opacity-60">1 video → 1 project</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUploadModeChange('multi-video')}
+              disabled={loading}
+              className={`p-3 rounded-md border transition-all text-left ${
+                uploadMode === 'multi-video'
+                  ? 'bg-[#264f78] border-[#007acc] text-white'
+                  : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
+              }`}
+            >
+              <FolderPlus className="w-4 h-4 mb-1" />
+              <div className="text-[10px] font-medium">Multi-Video</div>
+              <div className="text-[8px] opacity-60">N videos → 1 project</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUploadModeChange('batch')}
+              disabled={loading}
+              className={`p-3 rounded-md border transition-all text-left ${
+                uploadMode === 'batch'
+                  ? 'bg-[#264f78] border-[#007acc] text-white'
+                  : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
+              }`}
+            >
+              <Files className="w-4 h-4 mb-1" />
+              <div className="text-[10px] font-medium">Batch</div>
+              <div className="text-[8px] opacity-60">N videos → N projects</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onUploadModeChange('advanced')}
+              disabled={loading}
+              className={`p-3 rounded-md border transition-all text-left ${
+                uploadMode === 'advanced'
+                  ? 'bg-[#264f78] border-[#007acc] text-white'
+                  : 'bg-[#2d2d2d] border-[#3e3e42] text-[#888888] hover:border-[#555555] hover:text-[#cccccc]'
+              }`}
+            >
+              <Layers className="w-4 h-4 mb-1" />
+              <div className="text-[10px] font-medium">Advanced</div>
+              <div className="text-[8px] opacity-60">Custom assignment</div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {!file ? (
         <label 
