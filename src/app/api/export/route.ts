@@ -23,8 +23,77 @@ interface ExportRequest {
 
 export async function POST(req: NextRequest) {
   try {
-    const { videoPath, subtitles, config, sampleDuration, filename }: ExportRequest = await req.json();
+    const body = await req.json();
     const stagingDir = getStagingDir();
+
+    // Check for Multi-Video Project (V2)
+    if (body.project && body.project.version === 2) {
+       const { project, sampleDuration, filename } = body;
+       const { getFlattenedSubtitles } = await import("@/lib/timeline-utils");
+       
+       console.log(`[Export] Processing multi-video project (v2) with ${project.clips.length} clips`);
+       
+       // Generate flattened subtitles using the unified timeline model
+       // We use project.imageAssets if available, though getFlattenedSubtitles currently only cares about video clips
+       // for subtitle purposes (images don't have subtitles usually? or do they? 
+       // The current implementation of getFlattenedSubtitles iterates timeline clips and looks up video clips.
+       // It skips images implicitly if it checks for videoClipId.
+       
+       const flattenedSubtitles = getFlattenedSubtitles(project.clips, project.timeline);
+       
+       // Generate unique ID
+       const jobId = uuidv4();
+       const exportDir = path.join(stagingDir, "exports", jobId);
+       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+
+       const assPath = path.join(exportDir, "subtitles.ass");
+       const safeBaseName = (filename || 'project').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+       const outputName = `${safeBaseName}_export_${Date.now()}.mp4`;
+       const outputPath = path.join(exportDir, outputName);
+
+       // Video Dimensions from Project Config
+       const videoDimensions: VideoDimensions = {
+           width: project.projectConfig.width,
+           height: project.projectConfig.height
+       };
+
+       // Generate ASS
+       const assContent = generateAss(flattenedSubtitles, project.subtitleConfig, videoDimensions);
+       fs.writeFileSync(assPath, assContent);
+
+       // Queue Job
+       const queueItem = queueManager.addItem({
+          file: {
+             name: `Export: ${filename || 'Multi-Video Project'}`,
+             size: 0, // Unknown/Irrelevant for multi-video
+             type: "video/mp4"
+          },
+          model: `Export: ${filename || 'Project'}`,
+          metadata: {
+             type: 'multi-export',
+             projectState: project,
+             assPath,
+             outputPath,
+             // Dummy videoPath for validation inside job-processor if needed (though we branch before)
+             videoPath: project.clips[0]?.filePath || '', 
+             sampleDuration: sampleDuration || undefined,
+             ffmpegConfig: project.subtitleConfig.ffmpeg
+          }
+       });
+       
+       if (!queueManager.isProcessing() && !queueManager.getPausedState()) {
+          queueManager.resume();
+       }
+
+       return NextResponse.json({
+          success: true,
+          queueItemId: queueItem.id,
+          message: `Multi-video export job added`
+       });
+    }
+
+    // Single Video Export (Legacy/Simple)
+    const { videoPath, subtitles, config, sampleDuration, filename }: ExportRequest = body;
 
     if (!videoPath) {
       return NextResponse.json({ error: "Missing video path" }, { status: 400 });

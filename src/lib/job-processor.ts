@@ -39,25 +39,46 @@ export async function processJob(
   }
 
   // Determine what operation to run
-  // Currently we only support burning subtitles, but this could be expanded
   try {
-     const resultPath = await burnSubtitles(
-       videoPath,
-       assPath || '', 
-       outputPath,
-       {
-         ...ffmpegConfig,
-         onProgress: (progress) => {
-           onProgress(progress);
+     let resultPath: string;
+
+     if (item.metadata.type === 'multi-export') {
+         const { exportMultiVideo } = await import('./ffmpeg-concat');
+         // For multi-export, videoPath is ignored (it uses project state)
+         // We expect 'projectState' in metadata
+         if (!item.metadata.projectState) {
+             throw new Error('Missing projectState for multi-export job');
          }
-       }
-     );
+         
+         resultPath = await exportMultiVideo(
+             item.metadata.projectState,
+             assPath || '',
+             outputPath,
+             {
+                 ...ffmpegConfig,
+                 onProgress: (progress) => onProgress(progress)
+             }
+         );
+     } else {
+         // Default single video burn
+         resultPath = await burnSubtitles(
+           videoPath,
+           assPath || '', 
+           outputPath,
+           {
+             ...ffmpegConfig,
+             onProgress: (progress) => {
+               onProgress(progress);
+             }
+           }
+         );
+     }
 
      console.log(`[${new Date().toISOString()}] [JobProcessor] Job ${item.id} completed successfully`);
      
      return {
        videoPath: resultPath,
-       srtPath: undefined // We don't generate a new SRT generally, usually we used the existing one
+       srtPath: undefined 
      };
 
   } catch (error: any) {
