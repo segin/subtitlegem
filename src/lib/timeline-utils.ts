@@ -48,6 +48,30 @@ export function toSourceTime(projectTime: number, clip: TimelineClip): number | 
 }
 
 /**
+ * Convert a user-edited timeline time back to source-relative time.
+ * Used when user drags subtitle handles on the timeline.
+ * 
+ * Formula: Source Time = (Timeline Time - Clip Timeline Start) + Clip Source Start
+ * 
+ * @param timelineTime - The time on the project timeline (from user edit)
+ * @param clip - The TimelineClip this subtitle belongs to
+ * @returns The time relative to the source video
+ * 
+ * @example
+ * // User drags subtitle to 8:01 on timeline
+ * // Clip at project 8:00, sourceInPoint at 5s
+ * const sourceTime = toSourceTimeFromEdit(481, { 
+ *   projectStartTime: 480, sourceInPoint: 5, clipDuration: 30 
+ * });
+ * // Returns 6 (stored as 6s in source video)
+ */
+export function toSourceTimeFromEdit(timelineTime: number, clip: TimelineClip): number {
+  const offsetFromClipStart = timelineTime - clip.projectStartTime;
+  return clip.sourceInPoint + offsetFromClipStart;
+}
+
+
+/**
  * Get the end time of a timeline clip on the project timeline.
  */
 export function getClipEndTime(clip: TimelineClip): number {

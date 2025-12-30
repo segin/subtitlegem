@@ -8,6 +8,7 @@ import * as fc from 'fast-check';
 import {
   toProjectTime,
   toSourceTime,
+  toSourceTimeFromEdit,
   getClipEndTime,
   getProjectDuration,
   getActiveClipAt,
@@ -169,6 +170,96 @@ describe('toSourceTime', () => {
             
             const expected = sourceInPoint + subtitleTime;
             return Math.abs(sourceTime - expected) < 0.0001;
+          }
+        )
+      );
+    });
+  });
+});
+
+// ============================================================================
+// toSourceTimeFromEdit Tests
+// ============================================================================
+
+describe('toSourceTimeFromEdit', () => {
+  describe('unit tests', () => {
+    test('converts timeline time back to source time', () => {
+      // User drags subtitle to 8:01 (481s) on timeline
+      // Clip at project 8:00 (480s), sourceInPoint at 5s
+      const clip = createTimelineClip({ 
+        projectStartTime: 480, 
+        sourceInPoint: 5, 
+        clipDuration: 30 
+      });
+      // Expected: (481 - 480) + 5 = 6s in source
+      expect(toSourceTimeFromEdit(481, clip)).toBe(6);
+    });
+
+    test('handles zero offset case', () => {
+      const clip = createTimelineClip({ 
+        projectStartTime: 100, 
+        sourceInPoint: 0 
+      });
+      // Timeline time exactly at clip start -> source time 0
+      expect(toSourceTimeFromEdit(100, clip)).toBe(0);
+    });
+
+    test('handles sourceInPoint offset', () => {
+      const clip = createTimelineClip({ 
+        projectStartTime: 0, 
+        sourceInPoint: 10, 
+        clipDuration: 30 
+      });
+      // Timeline time 15 -> (15 - 0) + 10 = 25s in source
+      expect(toSourceTimeFromEdit(15, clip)).toBe(25);
+    });
+
+    test('example from timing diagram: 8:01 -> 6s', () => {
+      // From the timing model documentation:
+      // Clip at 8:00 (480s), sourceInPoint 5s
+      // User drags to 8:01 (481s)
+      // Source time = (481 - 480) + 5 = 6s
+      const clip = createTimelineClip({ 
+        projectStartTime: 480, 
+        sourceInPoint: 5, 
+        clipDuration: 30 
+      });
+      expect(toSourceTimeFromEdit(481, clip)).toBe(6);
+    });
+  });
+
+  describe('property tests', () => {
+    test('roundtrip: toSourceTimeFromEdit and back preserves relative position', () => {
+      fc.assert(
+        fc.property(
+          fc.float({ min: 0, max: 1000, noNaN: true }),
+          fc.float({ min: 0, max: 100, noNaN: true }),
+          fc.float({ min: 1, max: 1000, noNaN: true }),
+          (projectStartTime, sourceInPoint, clipDuration) => {
+            const clip = createTimelineClip({ projectStartTime, sourceInPoint, clipDuration });
+            
+            // Pick a time within the clip
+            const offsetInClip = clipDuration / 2;
+            const timelineTime = projectStartTime + offsetInClip;
+            
+            // Convert to source, then back to project
+            const sourceTime = toSourceTimeFromEdit(timelineTime, clip);
+            const backToProject = toProjectTime(sourceTime - sourceInPoint, clip);
+            
+            return Math.abs(backToProject - timelineTime) < 0.0001;
+          }
+        )
+      );
+    });
+
+    test('toSourceTimeFromEdit(projectStartTime, clip) === sourceInPoint', () => {
+      fc.assert(
+        fc.property(
+          fc.float({ min: 0, max: 1000, noNaN: true }),
+          fc.float({ min: 0, max: 100, noNaN: true }),
+          (projectStartTime, sourceInPoint) => {
+            const clip = createTimelineClip({ projectStartTime, sourceInPoint });
+            return toSourceTimeFromEdit(projectStartTime, clip) === sourceInPoint;
           }
         )
       );

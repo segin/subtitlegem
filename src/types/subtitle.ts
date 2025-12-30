@@ -149,6 +149,42 @@ export interface TimelineClip {
 }
 
 /**
+ * An image asset that can be placed on the timeline.
+ * Images display for a set duration (video gaps are black/silent by default).
+ */
+export interface ImageAsset {
+  id: string;
+  /** Path to image file on server */
+  filePath: string;
+  /** Original filename for display */
+  originalFilename: string;
+  /** Image dimensions */
+  width: number;
+  height: number;
+}
+
+/**
+ * An image placed on the timeline (fills gaps between video clips).
+ */
+export interface TimelineImage {
+  id: string;
+  type: 'image';
+  /** Reference to ImageAsset.id in the assets library */
+  imageAssetId: string;
+  /** Position on project timeline where this image starts (seconds) */
+  projectStartTime: number;
+  /** Duration to display the image (seconds) */
+  duration: number;
+}
+
+/**
+ * Union type for all items that can be on the timeline.
+ */
+export type TimelineItem = 
+  | (TimelineClip & { type?: 'video' })
+  | TimelineImage;
+
+/**
  * Master project configuration for multi-video projects.
  * Defines the output format and how clips are composited.
  */
@@ -174,18 +210,24 @@ export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
 
 /**
  * Multi-video project state (V2).
- * Supports multiple video clips arranged on a timeline.
+ * Supports multiple video clips and images arranged on a timeline.
  */
 export interface MultiVideoProjectState {
   /** Version 2 for multi-video format */
   version: 2;
   timestamp: number;
   
-  /** Video library - all clips available in this project */
+  /** Video library - all video clips available in this project */
   clips: VideoClip[];
   
-  /** Timeline arrangement - how clips are placed and trimmed */
+  /** Image library - all image assets available in this project */
+  imageAssets?: ImageAsset[];
+  
+  /** Timeline arrangement - how clips and images are placed */
   timeline: TimelineClip[];
+  
+  /** Timeline images - images placed in gaps (optional, null gaps = black/silent) */
+  timelineImages?: TimelineImage[];
   
   /** Project-level configuration (master resolution, fps, etc.) */
   projectConfig: ProjectConfig;
