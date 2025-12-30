@@ -3,7 +3,7 @@ import { formatSRTTime } from "./srt-utils";
 import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
 
 // Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)
-function hexToAssColor(hex: string | undefined): string {
+export function hexToAssColor(hex: string | undefined): string {
     if (!hex) return '&HFFFFFF&'; // Default to white if undefined
     if (hex.startsWith('#')) {
         const r = hex.substring(1, 3);
@@ -14,7 +14,7 @@ function hexToAssColor(hex: string | undefined): string {
     return '&HFFFFFF&'; // Default to white
 }
 
-function formatAssTime(seconds: number): string {
+export function formatAssTime(seconds: number): string {
     const date = new Date(0);
     date.setMilliseconds(seconds * 1000);
     const h = date.getUTCHours().toString();
@@ -50,8 +50,9 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1
 }
 
 // Sanitize text to prevent ASS tag injection
-function sanitizeAssText(text: string): string {
-    return text.replace(/\{.*\}/g, ''); // Strip out any {style-tags}
+export function sanitizeAssText(text: string): string {
+    // Use non-greedy match to strip each {...} block individually
+    return text.replace(/\{[^}]*\}/g, '');
 }
 
 export interface VideoDimensions {

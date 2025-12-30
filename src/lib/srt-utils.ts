@@ -2,13 +2,17 @@ import { SubtitleLine } from "@/types/subtitle";
 import { v4 as uuidv4 } from "uuid";
 
 export const formatSRTTime = (seconds: number): string => {
-  const date = new Date(0);
-  date.setMilliseconds(seconds * 1000);
-  const hh = date.getUTCHours().toString().padStart(2, '0');
-  const mm = date.getUTCMinutes().toString().padStart(2, '0');
-  const ss = date.getUTCSeconds().toString().padStart(2, '0');
-  const ms = date.getUTCMilliseconds().toString().padStart(3, '0');
-  return `${hh}:${mm}:${ss},${ms}`;
+  // Use integer milliseconds to avoid floating-point precision issues
+  // Clamp negative values to 0
+  const totalMs = Math.max(0, Math.round(seconds * 1000));
+  const ms = totalMs % 1000;
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const ss = totalSeconds % 60;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const mm = totalMinutes % 60;
+  const hh = Math.floor(totalMinutes / 60);
+  
+  return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
 };
 
 export const parseSRTTime = (timeStr: string): number => {

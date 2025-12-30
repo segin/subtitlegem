@@ -1,5 +1,7 @@
 # ARCHITECTURE.md
 
+> **This is a living document.** AI agents should read this file when starting work and update it whenever changes affect the system architecture, project structure, or data flows.
+
 ## Overview
 
 SubtitleGem is an AI-powered subtitle generation application that uses Google's Gemini API to automatically generate, translate, and style subtitles for video files. It supports bilingual subtitles, real-time preview, and FFmpeg-based video export with burned-in subtitles.
@@ -44,7 +46,7 @@ subtitlegem/
 │   │   ├── VideoPreview.tsx    # Video player with overlays
 │   │   └── VideoUpload.tsx     # Drag-drop file uploader
 │   │
-│   ├── lib/                    # Core Business Logic (16 files)
+│   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation
 │   │   ├── draft-store.ts      # SQLite draft persistence
 │   │   ├── ffmpeg-probe.ts     # FFmpeg capability detection
@@ -56,7 +58,8 @@ subtitlegem/
 │   │   ├── queue-manager.ts    # Job queue state machine
 │   │   ├── srt-utils.ts        # SRT subtitle generation
 │   │   ├── storage-config.ts   # File path configuration
-│   │   └── style-resolver.ts   # Style inheritance resolver
+│   │   ├── style-resolver.ts   # Style inheritance resolver
+│   │   └── timeline-utils.ts   # Multi-video timeline calculations
 │   │
 │   ├── hooks/                  # Custom React Hooks
 │   │   └── useSubtitleSync.ts  # Video-subtitle time sync
@@ -291,7 +294,7 @@ User clicks Export
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2025-12-28 |
+| **Date of Last Update** | 2025-12-29 |
 
 ---
 
