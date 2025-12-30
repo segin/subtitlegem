@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { VideoUpload } from "@/components/VideoUpload";
+import { VideoUpload, UploadMode } from "@/components/VideoUpload";
 import { SubtitleTimeline } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
@@ -13,7 +13,17 @@ import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
-import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { VideoLibrary } from "@/components/VideoLibrary";
+import { 
+  SubtitleLine, 
+  SubtitleConfig, 
+  DEFAULT_CONFIG, 
+  DEFAULT_GLOBAL_SETTINGS,
+  VideoClip,
+  TimelineClip,
+  DEFAULT_PROJECT_CONFIG,
+  ProjectConfig,
+} from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
 import { generateAss } from "@/lib/ass-utils";
@@ -68,6 +78,17 @@ export default function Home() {
   const [videoProperties, setVideoProperties] = useState<VideoProperties | null>(null);
   const [videoPropsLoading, setVideoPropsLoading] = useState(false);
   const [videoPropsError, setVideoPropsError] = useState<string | undefined>(undefined);
+
+  // Multi-video project state (V2)
+  const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
+  const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
+  const [projectConfig, setProjectConfig] = useState<ProjectConfig>(DEFAULT_PROJECT_CONFIG);
+  const [uploadMode, setUploadMode] = useState<UploadMode>('single');
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [showVideoLibrary, setShowVideoLibrary] = useState(false);
+
+  // Check if we're in multi-video mode
+  const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
 
   // Fetch and cache video properties
   const handleShowVideoProperties = async () => {
@@ -585,6 +606,8 @@ export default function Home() {
               <VideoUpload 
                 onUploadComplete={handleUploadComplete} 
                 pendingProjectFile={pendingProjectFile}
+                uploadMode={uploadMode}
+                onUploadModeChange={setUploadMode}
               />
               
               {/* Restore existing project option */}
@@ -802,12 +825,18 @@ export default function Home() {
                 <SubtitleTimeline 
                   subtitles={subtitles} 
                   duration={duration} 
-                  onUpdate={setSubtitles}
+                  onSubtitlesUpdate={setSubtitles}
                   currentTime={currentTime}
                   onSeek={setCurrentTime}
                   selectedIds={selectedSubtitleIds}
                   onSelect={handleSubtitleSelect}
                   onSplit={splitSubtitle}
+                  // Multi-video props
+                  videoClips={isMultiVideoMode ? videoClips : undefined}
+                  timelineClips={isMultiVideoMode ? timelineClips : undefined}
+                  onTimelineClipsUpdate={isMultiVideoMode ? setTimelineClips : undefined}
+                  selectedClipId={selectedClipId}
+                  onClipSelect={setSelectedClipId}
                 />
              </div>
           </div>
