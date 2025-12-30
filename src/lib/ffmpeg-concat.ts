@@ -259,7 +259,7 @@ export async function exportMultiVideo(
 
         const proc = spawn('ffmpeg', args);
         let stderr = '';
-        const totalDuration = getProjectDuration(project.timeline); // Approximation, images might extend it
+        const totalDuration = getProjectDuration(project.timeline, project.timelineImages || []);
 
         proc.stderr.on('data', (data) => {
             const line = data.toString();
