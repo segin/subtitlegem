@@ -54,6 +54,9 @@ export function VideoUpload({
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
   const [dragTargetIndex, setDragTargetIndex] = useState<number | null>(null);
   const [dragProjectId, setDragProjectId] = useState<string | null>(null);
+  // External drop insertion state  
+  const [insertProjectId, setInsertProjectId] = useState<string | null>(null);
+  const [insertIndex, setInsertIndex] = useState<number | null>(null); // null = append, number = insert before
   
   // Model Data & Global Selection State
   const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
@@ -652,74 +655,144 @@ export function VideoUpload({
                       <span className="text-[10px]">Drop videos here</span>
                     </div>
                   ) : (
-                    <div className="p-2 space-y-1">
+                    <div className="p-2 space-y-0">
                       {project.files.map((f, fileIndex) => (
-                        <div 
-                          key={`${f.name}-${fileIndex}`}
-                          draggable
-                          onDragStart={(e) => {
-                            setDragSourceIndex(fileIndex);
-                            setDragProjectId(project.id);
-                            e.dataTransfer.effectAllowed = 'move';
-                            e.dataTransfer.setData('text/plain', String(fileIndex));
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
-                              setDragTargetIndex(fileIndex);
-                            }
-                          }}
-                          onDragLeave={() => {
-                            setDragTargetIndex(null);
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
-                              setAdvancedProjects(prev => prev.map(p => {
-                                if (p.id !== project.id) return p;
-                                const newFiles = [...p.files];
-                                const [removed] = newFiles.splice(dragSourceIndex, 1);
-                                newFiles.splice(fileIndex, 0, removed);
-                                return { ...p, files: newFiles };
-                              }));
-                            }
-                            setDragSourceIndex(null);
-                            setDragTargetIndex(null);
-                            setDragProjectId(null);
-                          }}
-                          onDragEnd={() => {
-                            setDragSourceIndex(null);
-                            setDragTargetIndex(null);
-                            setDragProjectId(null);
-                          }}
-                          className={`flex items-center gap-2 px-2 py-1.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
-                            dragProjectId === project.id && dragTargetIndex === fileIndex
-                              ? 'border-[#007acc] bg-[#007acc]/10'
-                              : dragProjectId === project.id && dragSourceIndex === fileIndex
-                              ? 'opacity-50 border-[#555555]'
-                              : 'border-[#333333]'
-                          }`}
-                        >
-                          <GripVertical className="w-3 h-3 text-[#444444]" />
-                          <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
-                          <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
-                          {fileIndex === 0 && (
-                            <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
+                        <div key={`${f.name}-${fileIndex}`} className="relative">
+                          {/* Insertion line above this item */}
+                          {insertProjectId === project.id && insertIndex === fileIndex && (
+                            <div className="absolute -top-0.5 left-0 right-0 h-1 bg-[#007acc] rounded-full z-10 animate-pulse" />
                           )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setAdvancedProjects(prev => prev.map(p => 
-                                p.id === project.id 
-                                  ? { ...p, files: p.files.filter((_, i) => i !== fileIndex) }
-                                  : p
-                              ));
+                          <div
+                            draggable
+                            onDragStart={(e) => {
+                              setDragSourceIndex(fileIndex);
+                              setDragProjectId(project.id);
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('text/plain', String(fileIndex));
                             }}
-                            className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const y = e.clientY - rect.top;
+                              const isTopHalf = y < rect.height / 2;
+                              
+                              // Internal reorder (same project)
+                              if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
+                                setDragTargetIndex(fileIndex);
+                              }
+                              // Cross-project move OR external file drop - show insertion point
+                              if (dragProjectId !== project.id || !dragProjectId) {
+                                setInsertProjectId(project.id);
+                                setInsertIndex(isTopHalf ? fileIndex : fileIndex + 1);
+                              }
+                            }}
+                            onDragLeave={(e) => {
+                              // Only clear if actually leaving this element
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX, y = e.clientY;
+                              if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+                                setDragTargetIndex(null);
+                              }
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              
+                              // Internal reorder (same project)
+                              if (dragProjectId === project.id && dragSourceIndex !== null && dragSourceIndex !== fileIndex) {
+                                setAdvancedProjects(prev => prev.map(p => {
+                                  if (p.id !== project.id) return p;
+                                  const newFiles = [...p.files];
+                                  const [removed] = newFiles.splice(dragSourceIndex, 1);
+                                  newFiles.splice(fileIndex, 0, removed);
+                                  return { ...p, files: newFiles };
+                                }));
+                              }
+                              // Cross-project move - insert at specified position
+                              else if (dragProjectId && dragProjectId !== project.id && dragSourceIndex !== null && insertIndex !== null) {
+                                setAdvancedProjects(prev => {
+                                  let fileToMove: File | null = null;
+                                  // Remove from source project
+                                  const afterRemove = prev.map(p => {
+                                    if (p.id === dragProjectId) {
+                                      fileToMove = p.files[dragSourceIndex];
+                                      return { ...p, files: p.files.filter((_, i) => i !== dragSourceIndex) };
+                                    }
+                                    return p;
+                                  });
+                                  // Insert at position in target project
+                                  if (fileToMove) {
+                                    return afterRemove.map(p => {
+                                      if (p.id === project.id) {
+                                        const newFiles = [...p.files];
+                                        newFiles.splice(insertIndex, 0, fileToMove!);
+                                        return { ...p, files: newFiles };
+                                      }
+                                      return p;
+                                    });
+                                  }
+                                  return afterRemove;
+                                });
+                              }
+                              // External file drop at insertion point
+                              else if (!dragProjectId && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                                const newFiles = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('video/'));
+                                if (newFiles.length > 0 && insertIndex !== null) {
+                                  setAdvancedProjects(prev => prev.map(p => {
+                                    if (p.id !== project.id) return p;
+                                    const updatedFiles = [...p.files];
+                                    updatedFiles.splice(insertIndex, 0, ...newFiles);
+                                    return { ...p, files: updatedFiles };
+                                  }));
+                                }
+                              }
+                              
+                              setDragSourceIndex(null);
+                              setDragTargetIndex(null);
+                              setDragProjectId(null);
+                              setInsertProjectId(null);
+                              setInsertIndex(null);
+                            }}
+                            onDragEnd={() => {
+                              setDragSourceIndex(null);
+                              setDragTargetIndex(null);
+                              setDragProjectId(null);
+                              setInsertProjectId(null);
+                              setInsertIndex(null);
+                            }}
+                            className={`flex items-center gap-2 px-2 py-1.5 my-0.5 bg-[#252526] border rounded-sm group cursor-grab active:cursor-grabbing transition-all ${
+                              dragProjectId === project.id && dragTargetIndex === fileIndex
+                                ? 'border-[#007acc] bg-[#007acc]/10'
+                                : dragProjectId === project.id && dragSourceIndex === fileIndex
+                                ? 'opacity-50 border-[#555555]'
+                                : 'border-[#333333]'
+                            }`}
                           >
-                            <X className="w-3 h-3" />
-                          </button>
+                            <GripVertical className="w-3 h-3 text-[#444444]" />
+                            <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
+                            <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
+                            {fileIndex === 0 && (
+                              <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdvancedProjects(prev => prev.map(p => 
+                                  p.id === project.id 
+                                    ? { ...p, files: p.files.filter((_, i) => i !== fileIndex) }
+                                    : p
+                                ));
+                              }}
+                              className="p-0.5 text-[#555555] hover:text-[#f44336] opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {/* Insertion line after last item */}
+                          {fileIndex === project.files.length - 1 && insertProjectId === project.id && insertIndex === project.files.length && (
+                            <div className="absolute -bottom-0.5 left-0 right-0 h-1 bg-[#007acc] rounded-full z-10 animate-pulse" />
+                          )}
                         </div>
                       ))}
                     </div>
