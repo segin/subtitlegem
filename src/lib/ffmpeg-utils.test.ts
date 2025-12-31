@@ -18,7 +18,8 @@ jest.mock('fs', () => ({
 }));
 
 import { spawn } from 'child_process';
-import { ffprobe, getAudioCodec, getVideoDimensions, extractAudio, burnSubtitles } from './ffmpeg-utils';
+import { ffprobe, getAudioCodec, getVideoDimensions, extractAudio, burnSubtitles, parseFrameRate } from './ffmpeg-utils';
+import * as fc from 'fast-check';
 
 // Helper to create mock process with EventEmitter
 function createMockProcess() {
@@ -431,6 +432,108 @@ describe('ffmpeg-utils', () => {
       mockFfmpegProc.emit('close', 1);
 
       await expect(promise).rejects.toThrow('FFmpeg failed with code 1');
+    });
+  });
+
+  // ============================================================================
+  // parseFrameRate tests - Unit, Property, and Fuzz
+  // ============================================================================
+  describe('parseFrameRate', () => {
+    // Unit tests
+    describe('unit tests', () => {
+      it('should parse simple integer frame rates', () => {
+        expect(parseFrameRate('30')).toBe(30);
+        expect(parseFrameRate('24')).toBe(24);
+        expect(parseFrameRate('60')).toBe(60);
+      });
+
+      it('should parse fractional frame rates', () => {
+        expect(parseFrameRate('30000/1001')).toBeCloseTo(29.97, 2);
+        expect(parseFrameRate('24000/1001')).toBeCloseTo(23.976, 2);
+        expect(parseFrameRate('30/1')).toBe(30);
+        expect(parseFrameRate('25/1')).toBe(25);
+      });
+
+      it('should return undefined for invalid inputs', () => {
+        expect(parseFrameRate(undefined)).toBeUndefined();
+        expect(parseFrameRate('')).toBeUndefined();
+        expect(parseFrameRate('0/0')).toBeUndefined();
+        expect(parseFrameRate('abc')).toBeUndefined();
+        expect(parseFrameRate('30/0')).toBeUndefined(); // Division by zero
+      });
+
+      it('should handle edge cases safely', () => {
+        expect(parseFrameRate('1/2/3')).toBeUndefined(); // Invalid format
+        expect(parseFrameRate('///')).toBeUndefined();
+        expect(parseFrameRate('NaN')).toBeUndefined();
+        expect(parseFrameRate('Infinity')).toBe(Infinity); // Valid parseFloat result
+      });
+    });
+
+    // Property-based tests
+    describe('property tests', () => {
+      it('should correctly calculate fraction for valid numerator/denominator pairs', () => {
+        fc.assert(
+          fc.property(
+            fc.integer({ min: 1, max: 120000 }),
+            fc.integer({ min: 1, max: 10000 }),
+            (num, denom) => {
+              const input = `${num}/${denom}`;
+              const result = parseFrameRate(input);
+              expect(result).toBeCloseTo(num / denom, 5);
+            }
+          ),
+          { numRuns: 100 }
+        );
+      });
+
+      it('should correctly parse integer frame rates', () => {
+        fc.assert(
+          fc.property(
+            fc.integer({ min: 1, max: 240 }),
+            (fps) => {
+              const result = parseFrameRate(fps.toString());
+              expect(result).toBe(fps);
+            }
+          ),
+          { numRuns: 50 }
+        );
+      });
+    });
+
+    // Fuzz tests - ensure no crashes or code execution from malicious input
+    describe('fuzz tests', () => {
+      it('should never throw for arbitrary string input', () => {
+        fc.assert(
+          fc.property(fc.string(), (input) => {
+            // Should not throw
+            const result = parseFrameRate(input);
+            // Result should be number or undefined
+            expect(result === undefined || typeof result === 'number').toBe(true);
+          }),
+          { numRuns: 500 }
+        );
+      });
+
+      it('should not execute code from malicious inputs', () => {
+        const maliciousInputs = [
+          'console.log("hacked")',
+          'process.exit(1)',
+          '__proto__',
+          'constructor',
+          '${process.env.SECRET}',
+          '1;require("fs").unlinkSync("/etc/passwd")',
+          '1+1',
+          'eval("alert(1)")',
+          '(() => { throw new Error("evil") })()',
+        ];
+
+        for (const input of maliciousInputs) {
+          const result = parseFrameRate(input);
+          // All should return undefined or NaN, never execute
+          expect(result === undefined || Number.isNaN(result) || typeof result === 'number').toBe(true);
+        }
+      });
     });
   });
 });

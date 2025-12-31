@@ -28,6 +28,31 @@ export interface VideoMetadata {
 }
 
 /**
+ * Safely parse frame rate string from FFprobe (e.g., "30000/1001" or "30")
+ * Avoids eval() which could be exploited with malicious video metadata.
+ */
+export function parseFrameRate(rate: string | undefined): number | undefined {
+  if (!rate || rate === '0/0') return undefined;
+  
+  // Handle fraction format: "30000/1001"
+  if (rate.includes('/')) {
+    const parts = rate.split('/');
+    if (parts.length === 2) {
+      const numerator = parseFloat(parts[0]);
+      const denominator = parseFloat(parts[1]);
+      if (!isNaN(numerator) && !isNaN(denominator) && denominator !== 0) {
+        return numerator / denominator;
+      }
+    }
+    return undefined;
+  }
+  
+  // Handle simple number format: "30"
+  const parsed = parseFloat(rate);
+  return isNaN(parsed) ? undefined : parsed;
+}
+
+/**
  * Run ffprobe and return parsed JSON metadata
  */
 export async function ffprobe(filePath: string): Promise<VideoMetadata> {
@@ -64,7 +89,7 @@ export async function ffprobe(filePath: string): Promise<VideoMetadata> {
           height: videoStream?.height || 0,
           audioCodec: audioStream?.codec_name,
           videoCodec: videoStream?.codec_name,
-          fps: videoStream?.r_frame_rate ? eval(videoStream.r_frame_rate) : undefined,
+          fps: parseFrameRate(videoStream?.r_frame_rate),
         });
       } catch (e) {
         reject(new Error(`Failed to parse ffprobe output: ${e}`));
