@@ -4,6 +4,10 @@ import {
   AIProvider 
 } from "@/types/subtitle";
 import { generateSubtitles, translateSubtitles } from "./gemini";
+import { validateSubtitleArraySize, MAX_SUBTITLES } from "./validation-utils";
+
+// Re-export for backwards compatibility
+export { validateSubtitleArraySize, MAX_SUBTITLES };
 
 export interface AIResult {
   detectedLanguage?: string;
@@ -104,6 +108,11 @@ async function callGenerate(config: ModelConfig, params: any) {
 }
 
 async function callTranslate(config: ModelConfig, params: any) {
+  // Validate subtitle array size to prevent DoS
+  if (params.subtitles) {
+    validateSubtitleArraySize(params.subtitles);
+  }
+
   if (config.provider === 'gemini') {
     const subtitles = await translateSubtitles(
       params.subtitles,
