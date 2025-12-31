@@ -60,25 +60,19 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
       };
     }
 
-    // Get available space
-    // Note: This is a simplified version. For production, use a library like 'check-disk-space'
-    // For now, we'll estimate based on the file system
+    // Get available space using Node.js fs.statfs (available since Node 18.15.0)
     let availableSpaceGB = 0;
     
     try {
-      // On Node.js, we can use statfs on Unix systems
-      // For cross-platform, we'd need a native module
-      // For now, we'll return a placeholder
-      availableSpaceGB = 100; // Placeholder - in production use check-disk-space or similar
-      
-      // TODO: Implement proper disk space checking
-      // const diskSpace = require('check-disk-space').default;
-      // const space = await diskSpace(dirPath);
-      // availableSpaceGB = space.free / (1024 ** 3);
-      
-    } catch (spaceError) {
-      // If we can't check space, assume we have some
-      availableSpaceGB = 50;
+      // Use fs.statfs to get filesystem statistics
+      const stats = await fs.promises.statfs(dirPath);
+      // Available space = available blocks * block size
+      availableSpaceGB = (stats.bavail * stats.bsize) / (1024 ** 3);
+    } catch (spaceError: any) {
+      // If statfs fails (older Node versions or unsupported platforms), 
+      // fall back to a default estimate and log the issue
+      console.warn('[Storage] Could not check disk space:', spaceError.message);
+      availableSpaceGB = 50; // Conservative default
     }
 
     return {
