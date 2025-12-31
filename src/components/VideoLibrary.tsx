@@ -29,6 +29,7 @@ interface VideoLibraryProps {
   timelineImages?: TimelineImage[];
   onAddImageToTimeline?: (imageId: string, duration?: number) => void;
   onRemoveImage?: (imageId: string) => void;
+  onRelinkClip?: (clipId: string, file: File) => void;
 }
 
 // ============================================================================
@@ -48,6 +49,7 @@ export function VideoLibrary({
   timelineImages = [],
   onAddImageToTimeline,
   onRemoveImage,
+  onRelinkClip,
 }: VideoLibraryProps) {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'videos' | 'images'>('videos');
@@ -160,6 +162,7 @@ export function VideoLibrary({
                 onSelect={() => onClipSelect(clip.id === selectedClipId ? null : clip.id)}
                 onAddToTimeline={() => onAddToTimeline(clip.id)}
                 onRemove={() => onRemoveClip(clip.id)}
+                onRelink={(file) => onRelinkClip?.(clip.id, file)}
                 onDragStart={(e) => handleDragStart(e, clip.id)}
                 onDragEnd={handleDragEnd}
               />
@@ -206,6 +209,7 @@ interface ClipCardProps {
   onSelect: () => void;
   onAddToTimeline: () => void;
   onRemove: () => void;
+  onRelink?: (file: File) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
@@ -219,9 +223,26 @@ function ClipCard({
   onSelect,
   onAddToTimeline,
   onRemove,
+  onRelink,
   onDragStart,
   onDragEnd,
 }: ClipCardProps) {
+  const relinkInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleRelinkClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    relinkInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && onRelink) {
+      onRelink(file);
+    }
+    // Reset input
+    if (e.target) e.target.value = '';
+  };
+
   return (
     <div
       draggable
@@ -250,14 +271,34 @@ function ClipCard({
           {clip.originalFilename}
         </div>
         <div className="flex items-center justify-between mt-1">
-          <span className="text-[10px] text-[#888888]">
-            {formatDuration(clip.duration)}
-          </span>
-          <span className="text-[10px] text-[#888888]">
-            {clip.width}×{clip.height}
-          </span>
+          {clip.missing ? (
+            <div className="flex items-center gap-1">
+              <svg className="w-3 h-3 text-[#ff4444]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="text-xs font-medium text-[#ff4444]">Missing File</span>
+            </div>
+          ) : (
+             <>
+               <span className="text-[10px] text-[#888888]">
+                 {formatDuration(clip.duration)}
+               </span>
+               <span className="text-[10px] text-[#888888]">
+                 {clip.width}×{clip.height}
+               </span>
+             </>
+          )}
         </div>
       </div>
+
+       {/* Relink Input */}
+       <input
+         type="file"
+         ref={relinkInputRef}
+         className="hidden"
+         onChange={handleFileChange}
+         accept="video/*"
+       />
 
       {/* Timeline indicator */}
       {isOnTimeline && (
@@ -280,6 +321,17 @@ function ClipCard({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
         </button>
+        {clip.missing && (
+          <button
+            onClick={handleRelinkClick}
+            className="p-2 rounded-full bg-[#ff4444] text-white hover:bg-[#cc3333] transition-colors"
+            title="Relink missing file"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={(e) => {
             e.stopPropagation();
