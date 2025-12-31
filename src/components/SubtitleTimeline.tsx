@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SubtitleLine, VideoClip, TimelineClip } from "@/types/subtitle";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Magnet } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -26,7 +26,7 @@ interface TimelineProps {
   
   // Selection (shared with SubtitleList)
   selectedIds: string[];
-  onSelect: (id: string, shiftKey: boolean) => void;
+  onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
   onSplit: (id: string) => void;
   
   // Multi-video support (optional - V2 mode)
@@ -35,6 +35,18 @@ interface TimelineProps {
   onTimelineClipsUpdate?: (clips: TimelineClip[]) => void;
   selectedClipId?: string | null;
   onClipSelect?: (clipId: string | null) => void;
+  
+  // Images
+  imageAssets?: import("@/types/subtitle").ImageAsset[];
+  timelineImages?: import("@/types/subtitle").TimelineImage[];
+  onTimelineImagesUpdate?: (images: import("@/types/subtitle").TimelineImage[]) => void;
+  selectedImageId?: string | null;
+  onImageSelect?: (imageId: string | null) => void;
+  
+  // Advanced operations
+  onDuplicateClip?: (id: string, type: 'video' | 'image') => void;
+  onSplitClip?: (id: string, time: number) => void;
+  onRemoveTimelineItem?: (id: string, type: 'video' | 'image') => void;
 }
 
 // Legacy props for backwards compatibility
@@ -45,7 +57,7 @@ interface LegacyTimelineProps {
   currentTime: number;
   onSeek: (time: number) => void;
   selectedIds: string[];
-  onSelect: (id: string, shiftKey: boolean) => void;
+  onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
   onSplit: (id: string) => void;
 }
 
@@ -73,6 +85,16 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   const onTimelineClipsUpdate = isLegacyProps(props) ? undefined : props.onTimelineClipsUpdate;
   const selectedClipId = isLegacyProps(props) ? null : props.selectedClipId;
   const onClipSelect = isLegacyProps(props) ? undefined : props.onClipSelect;
+
+  const imageAssets = isLegacyProps(props) ? undefined : props.imageAssets;
+  const timelineImages = isLegacyProps(props) ? undefined : props.timelineImages;
+  const onTimelineImagesUpdate = isLegacyProps(props) ? undefined : props.onTimelineImagesUpdate;
+  const selectedImageId = isLegacyProps(props) ? null : props.selectedImageId;
+  const onImageSelect = isLegacyProps(props) ? undefined : props.onImageSelect;
+
+  const onDuplicateClip = isLegacyProps(props) ? undefined : props.onDuplicateClip;
+  const onSplitClip = isLegacyProps(props) ? undefined : props.onSplitClip;
+  const onRemoveTimelineItem = isLegacyProps(props) ? undefined : props.onRemoveTimelineItem;
   
   const isMultiVideoMode = videoClips && timelineClips && timelineClips.length > 0;
 
@@ -80,62 +102,128 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [followPlayhead, setFollowPlayhead] = useState(true);
+  
+  // Context Menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    targetId: string;
+    targetType: 'video' | 'image';
+  } | null>(null);
+  const [snappingEnabled, setSnappingEnabled] = useState(true);
+
+  // Snapping helper: snaps time to playhead, other boundaries, or 1s intervals
+  const getSnappedTime = useCallback((time: number, excludeId?: string) => {
+    if (!snappingEnabled) return time;
+    
+    const threshold = 10 / pixelsPerSecond; // 10 pixels threshold
+    const snapTargets = [
+      0,
+      duration,
+      currentTime,
+      ...subtitles.filter(s => s.id !== excludeId).flatMap(s => [s.startTime, s.endTime]),
+      ...(timelineClips?.filter(c => c.id !== excludeId).flatMap(c => [c.projectStartTime, c.projectStartTime + c.clipDuration]) || []),
+      ...(timelineImages?.filter(i => i.id !== excludeId).flatMap(i => [i.projectStartTime, i.projectStartTime + i.duration]) || [])
+    ];
+    
+    let closestSnap = time;
+    let minDiff = threshold;
+    
+    for (const target of snapTargets) {
+      const diff = Math.abs(time - target);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestSnap = target;
+      }
+    }
+    
+    return closestSnap;
+  }, [snappingEnabled, pixelsPerSecond, duration, currentTime, subtitles, timelineClips, timelineImages]);
 
   // Subtitle drag handler
   const handleSubtitleDrag = useCallback((id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
     const deltaSeconds = deltaX / pixelsPerSecond;
-    const newSubtitles = subtitles.map(s => {
-      if (s.id !== id) return s;
-      
-      let newStart = s.startTime;
-      let newEnd = s.endTime;
+    const sub = subtitles.find(s => s.id === id);
+    if (!sub) return;
+    
+    let newStart = sub.startTime;
+    let newEnd = sub.endTime;
 
-      if (side === 'left' || side === 'both') newStart = Math.max(0, s.startTime + deltaSeconds);
-      if (side === 'right' || side === 'both') newEnd = Math.min(duration, s.endTime + deltaSeconds);
+    if (side === 'left' || side === 'both') {
+      newStart = getSnappedTime(sub.startTime + deltaSeconds, id);
+      if (side === 'both') {
+        const duration = sub.endTime - sub.startTime;
+        newEnd = newStart + duration;
+      }
+    } else if (side === 'right') {
+      newEnd = getSnappedTime(sub.endTime + deltaSeconds, id);
+    }
 
-      // Prevent negative duration
-      if (newEnd - newStart < 0.1) return s;
+    // Prevent negative duration or out of bounds
+    newStart = Math.max(0, newStart);
+    newEnd = Math.min(duration, newEnd);
+    if (newEnd - newStart < 0.1) return;
 
-      return { ...s, startTime: newStart, endTime: newEnd };
-    });
+    const newSubtitles = subtitles.map(s => s.id === id ? { ...s, startTime: newStart, endTime: newEnd } : s);
     onSubtitlesUpdate(newSubtitles);
-  }, [subtitles, pixelsPerSecond, duration, onSubtitlesUpdate]);
+  }, [subtitles, pixelsPerSecond, duration, onSubtitlesUpdate, getSnappedTime]);
 
   // Video clip drag handler
   const handleClipDrag = useCallback((clipId: string, side: 'left' | 'right' | 'both', deltaX: number) => {
     if (!timelineClips || !onTimelineClipsUpdate) return;
     
     const deltaSeconds = deltaX / pixelsPerSecond;
-    const newClips = timelineClips.map(clip => {
-      if (clip.id !== clipId) return clip;
-      
-      let newStart = clip.projectStartTime;
-      let newDuration = clip.clipDuration;
-      let newInPoint = clip.sourceInPoint;
+    const currentClip = timelineClips.find(c => c.id === clipId);
+    if (!currentClip) return;
 
-      if (side === 'both') {
-        // Move entire clip
-        newStart = Math.max(0, clip.projectStartTime + deltaSeconds);
-      } else if (side === 'left') {
-        // Trim start (adjusts inPoint and duration)
-        const adjustment = deltaSeconds;
-        newInPoint = Math.max(0, clip.sourceInPoint + adjustment);
-        newDuration = Math.max(0.1, clip.clipDuration - adjustment);
-        newStart = clip.projectStartTime + adjustment;
-      } else if (side === 'right') {
-        // Trim end (adjusts duration only)
-        newDuration = Math.max(0.1, clip.clipDuration + deltaSeconds);
-      }
+    let newStart = currentClip.projectStartTime;
+    let newDuration = currentClip.clipDuration;
+    let newInPoint = currentClip.sourceInPoint;
 
-      return { 
-        ...clip, 
-        projectStartTime: Math.max(0, newStart),
-        sourceInPoint: newInPoint,
-        clipDuration: newDuration,
-      };
-    });
+    if (side === 'both') {
+      newStart = getSnappedTime(currentClip.projectStartTime + deltaSeconds, clipId);
+    } else if (side === 'left') {
+      const snappedStart = getSnappedTime(currentClip.projectStartTime + deltaSeconds, clipId);
+      const adjustment = snappedStart - currentClip.projectStartTime;
+      newInPoint = Math.max(0, currentClip.sourceInPoint + adjustment);
+      newDuration = Math.max(0.1, currentClip.clipDuration - (snappedStart - currentClip.projectStartTime));
+      newStart = snappedStart;
+    } else if (side === 'right') {
+      const newEndTime = getSnappedTime(currentClip.projectStartTime + currentClip.clipDuration + deltaSeconds, clipId);
+      newDuration = Math.max(0.1, newEndTime - currentClip.projectStartTime);
+    }
+
+    const newClips = timelineClips.map(clip => 
+      clip.id === clipId ? { ...clip, projectStartTime: Math.max(0, newStart), sourceInPoint: newInPoint, clipDuration: newDuration } : clip
+    );
     onTimelineClipsUpdate(newClips);
-  }, [timelineClips, pixelsPerSecond, onTimelineClipsUpdate]);
+  }, [timelineClips, pixelsPerSecond, onTimelineClipsUpdate, getSnappedTime]);
+
+  // Image clip drag handler
+  const handleImageDrag = useCallback((id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
+    if (!onTimelineImagesUpdate || !timelineImages) return;
+    const deltaSeconds = deltaX / pixelsPerSecond;
+    const img = timelineImages.find(i => i.id === id);
+    if (!img) return;
+
+    let newStart = img.projectStartTime;
+    let newDur = img.duration;
+
+    if (side === 'both') {
+      newStart = getSnappedTime(img.projectStartTime + deltaSeconds, id);
+    } else if (side === 'left') {
+      newStart = getSnappedTime(img.projectStartTime + deltaSeconds, id);
+      newDur = Math.max(0.1, img.duration - (newStart - img.projectStartTime));
+    } else if (side === 'right') {
+      const newEnd = getSnappedTime(img.projectStartTime + img.duration + deltaSeconds, id);
+      newDur = Math.max(0.1, newEnd - img.projectStartTime);
+    }
+
+    const newImages = timelineImages.map(i => 
+      i.id === id ? { ...i, projectStartTime: Math.max(0, newStart), duration: newDur } : i
+    );
+    onTimelineImagesUpdate(newImages);
+  }, [timelineImages, pixelsPerSecond, onTimelineImagesUpdate, getSnappedTime]);
 
   // Seek to position based on mouse X
   const seekFromEvent = useCallback((e: React.MouseEvent | MouseEvent, rect: DOMRect) => {
@@ -233,6 +321,23 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
       }
     }
   }, [currentTime, pixelsPerSecond, followPlayhead, isScrubbing]);
+  
+  const handleContextMenu = (e: React.MouseEvent, id: string, type: 'video' | 'image') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      targetId: id,
+      targetType: type
+    });
+  };
+
+  useEffect(() => {
+    const handleClick = () => setContextMenu(null);
+    window.addEventListener('click', handleClick);
+    return () => window.removeEventListener('click', handleClick);
+  }, []);
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[#1e1e1e]">
@@ -326,6 +431,26 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
                       selected={selectedClipId === clip.id}
                       onDrag={(side, deltaX) => handleClipDrag(clip.id, side, deltaX)}
                       onClick={() => onClipSelect?.(clip.id)}
+                      onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')}
+                    />
+                  );
+                })}
+
+                {/* Timeline Images */}
+                {isMultiVideoMode && timelineImages?.map(img => {
+                  const asset = imageAssets?.find(a => a.id === img.imageAssetId);
+                  if (!asset) return null;
+                  
+                  return (
+                    <ImageClipBlock
+                      key={img.id}
+                      item={img}
+                      asset={asset}
+                      pixelsPerSecond={pixelsPerSecond}
+                      selected={selectedImageId === img.id}
+                      onDrag={(side, deltaX) => handleImageDrag(img.id, side, deltaX)}
+                      onClick={() => onImageSelect?.(img.id)}
+                      onContextMenu={(e) => handleContextMenu(e, img.id, 'image')}
                     />
                   );
                 })}
@@ -338,7 +463,10 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
               <span className="text-[10px] text-[#888888] font-medium">SUBS</span>
             </div>
-            <div className="ml-16 relative h-full px-0">
+            <div 
+              className="ml-16 relative h-full px-0"
+              onClick={() => onSelect("", false, false)}
+            >
               {subtitles.map((sub) => (
                 <SubtitleBubble 
                   key={sub.id} 
@@ -347,7 +475,7 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
                   onDrag={(side, deltaX) => handleSubtitleDrag(sub.id, side, deltaX)}
                   active={currentTime >= sub.startTime && currentTime <= sub.endTime}
                   selected={selectedIds.includes(sub.id)}
-                  onClick={(e) => onSelect(sub.id, e.shiftKey)}
+                  onClick={(e) => onSelect(sub.id, e.shiftKey, e.ctrlKey || e.metaKey)}
                 />
               ))}
             </div>
@@ -391,20 +519,23 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
 // Video Clip Block
 // ============================================================================
 
-function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onClick }: {
+function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onClick, onContextMenu }: {
   clip: TimelineClip;
   videoClip: VideoClip;
   pixelsPerSecond: number;
   selected: boolean;
   onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void;
   onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const [isDragging, setIsDragging] = useState<'left' | 'right' | 'both' | null>(null);
+  const [originalClip, setOriginalClip] = useState<TimelineClip | null>(null);
   const startX = useRef(0);
 
   const handleMouseDown = (e: React.MouseEvent, side: 'left' | 'right' | 'both') => {
     e.stopPropagation();
     setIsDragging(side);
+    setOriginalClip({ ...clip });
     startX.current = e.clientX;
   };
 
@@ -419,6 +550,7 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
 
     const handleMouseUp = () => {
       setIsDragging(null);
+      setOriginalClip(null);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -450,7 +582,25 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
         onClick();
       }}
       onMouseDown={(e) => handleMouseDown(e, 'both')}
+      onContextMenu={onContextMenu}
     >
+      {/* Ghost Representation */}
+      {isDragging && originalClip && (
+        <div 
+          className="absolute inset-y-0 opacity-20 bg-white border border-white/50 pointer-events-none z-0 rounded-sm"
+          style={{ 
+            left: `${(originalClip.projectStartTime - clip.projectStartTime) * pixelsPerSecond}px`, 
+            width: `${originalClip.clipDuration * pixelsPerSecond}px` 
+          }}
+        />
+      )}
+
+      {/* Dragging Tooltip */}
+      {isDragging && (
+        <div className="absolute -top-6 left-0 bg-[#007acc] text-white text-[9px] px-1 rounded shadow-lg z-50 whitespace-nowrap font-mono py-0.5">
+           {isDragging === 'both' ? formatTime(clip.projectStartTime) : formatTime(clip.clipDuration)}
+        </div>
+      )}
       {/* Clip content */}
       <div className="flex-1 min-w-0 relative">
         <div className="text-[10px] font-medium truncate pointer-events-none">
@@ -481,23 +631,26 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
 }
 
 // ============================================================================
-// Subtitle Bubble
+// Image Clip Block
 // ============================================================================
 
-function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, onClick }: { 
-  subtitle: SubtitleLine, 
-  pixelsPerSecond: number, 
-  onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void,
-  active: boolean,
-  selected: boolean,
-  onClick: (e: React.MouseEvent) => void
+function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onClick, onContextMenu }: {
+  item: import("@/types/subtitle").TimelineImage;
+  asset: import("@/types/subtitle").ImageAsset;
+  pixelsPerSecond: number;
+  selected: boolean;
+  onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void;
+  onClick: () => void;
+  onContextMenu: (e: React.MouseEvent) => void;
 }) {
   const [isDragging, setIsDragging] = useState<'left' | 'right' | 'both' | null>(null);
+  const [originalItem, setOriginalItem] = useState<import("@/types/subtitle").TimelineImage | null>(null);
   const startX = useRef(0);
 
   const handleMouseDown = (e: React.MouseEvent, side: 'left' | 'right' | 'both') => {
     e.stopPropagation();
     setIsDragging(side);
+    setOriginalItem({ ...item });
     startX.current = e.clientX;
   };
 
@@ -512,6 +665,162 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, o
 
     const handleMouseUp = () => {
       setIsDragging(null);
+      setOriginalItem(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, onDrag]);
+
+  return (
+    <div 
+      data-draggable
+      className={cn(
+        "absolute top-1 bottom-1 cursor-move flex items-center px-2 overflow-hidden select-none group transition-colors rounded-sm",
+        selected
+          ? "bg-[#4e3a7c] ring-2 ring-[#8b5cf6] text-white z-10"
+          : "bg-[#4c1d95] border border-[#5b21b6] text-[#cccccc] hover:bg-[#5b21b6]",
+        isDragging && "ring-1 ring-white z-20"
+      )}
+      style={{ 
+        left: `${item.projectStartTime * pixelsPerSecond}px`, 
+        width: `${Math.max(item.duration * pixelsPerSecond, 20)}px`,
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onMouseDown={(e) => handleMouseDown(e, 'both')}
+      onContextMenu={onContextMenu}
+    >
+      {/* Ghost Representation */}
+      {isDragging && originalItem && (
+        <div 
+          className="absolute inset-y-0 opacity-20 bg-white border border-white/50 pointer-events-none z-0 rounded-sm"
+          style={{ 
+            left: `${(originalItem.projectStartTime - item.projectStartTime) * pixelsPerSecond}px`, 
+            width: `${originalItem.duration * pixelsPerSecond}px` 
+          }}
+        />
+      )}
+
+      {/* Dragging Tooltip */}
+      {isDragging && (
+        <div className="absolute -top-6 left-0 bg-[#8b5cf6] text-white text-[9px] px-1 rounded shadow-lg z-50 whitespace-nowrap font-mono py-0.5">
+           {isDragging === 'both' ? formatTime(item.projectStartTime) : formatTime(item.duration)}
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] font-medium truncate pointer-events-none">
+          {asset.originalFilename}
+        </div>
+        <div className="text-[8px] opacity-60 pointer-events-none">
+          {formatTime(item.duration)} duration
+        </div>
+      </div>
+      
+      {/* Resize handles */}
+      <div 
+        className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20 z-20 opacity-0 group-hover:opacity-100 transition-opacity" 
+        onMouseDown={(e) => handleMouseDown(e, 'left')}
+      />
+      <div 
+        className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20 z-20 opacity-0 group-hover:opacity-100 transition-opacity" 
+        onMouseDown={(e) => handleMouseDown(e, 'right')}
+      />
+    </div>
+  );
+}
+
+// ============================================================================
+// Timeline Context Menu
+// ============================================================================
+
+function TimelineContextMenu({ x, y, onDuplicate, onSplit, onRemove, onClose }: {
+  x: number;
+  y: number;
+  onDuplicate?: () => void;
+  onSplit?: () => void;
+  onRemove?: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div 
+      className="fixed z-[100] bg-[#252526] border border-[#454545] rounded shadow-xl py-1 min-w-[140px] text-sm text-[#cccccc]"
+      style={{ top: y, left: x }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {onDuplicate && (
+        <button 
+          className="w-full text-left px-3 py-1.5 hover:bg-[#094771] hover:text-white flex items-center"
+          onClick={() => { onDuplicate(); onClose(); }}
+        >
+          <span className="flex-1">Duplicate</span>
+          <span className="text-[10px] opacity-50 ml-2">Ctrl+D</span>
+        </button>
+      )}
+      {onSplit && (
+        <button 
+          className="w-full text-left px-3 py-1.5 hover:bg-[#094771] hover:text-white flex items-center"
+          onClick={() => { onSplit(); onClose(); }}
+        >
+          <span className="flex-1">Split at Playhead</span>
+          <span className="text-[10px] opacity-50 ml-2">S</span>
+        </button>
+      )}
+      <div className="h-px bg-[#454545] my-1" />
+      {onRemove && (
+        <button 
+          className="w-full text-left px-3 py-1.5 hover:bg-red-900/50 hover:text-red-200 flex items-center text-red-400"
+          onClick={() => { onRemove(); onClose(); }}
+        >
+          <span className="flex-1">Remove</span>
+          <span className="text-[10px] opacity-50 ml-2">Del</span>
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// Subtitle Bubble
+// ============================================================================
+
+function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, onClick }: { 
+  subtitle: SubtitleLine, 
+  pixelsPerSecond: number, 
+  onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void,
+  active: boolean,
+  selected: boolean,
+  onClick: (e: React.MouseEvent) => void
+}) {
+  const [isDragging, setIsDragging] = useState<'left' | 'right' | 'both' | null>(null);
+  const [originalSub, setOriginalSub] = useState<SubtitleLine | null>(null);
+  const startX = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent, side: 'left' | 'right' | 'both') => {
+    e.stopPropagation();
+    setIsDragging(side);
+    setOriginalSub({ ...subtitle });
+    startX.current = e.clientX;
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = e.clientX - startX.current;
+      onDrag(isDragging, deltaX);
+      startX.current = e.clientX;
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(null);
+      setOriginalSub(null);
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -544,6 +853,23 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, o
       }}
       onMouseDown={(e) => handleMouseDown(e, 'both')}
     >
+      {/* Ghost Representation */}
+      {isDragging && originalSub && (
+        <div 
+          className="absolute inset-y-0 opacity-20 bg-white border border-white/50 pointer-events-none z-0 rounded-sm"
+          style={{ 
+            left: `${(originalSub.startTime - subtitle.startTime) * pixelsPerSecond}px`, 
+            width: `${(originalSub.endTime - originalSub.startTime) * pixelsPerSecond}px` 
+          }}
+        />
+      )}
+
+      {/* Dragging Tooltip */}
+      {isDragging && (
+        <div className="absolute -top-6 left-0 bg-[#22c55e] text-white text-[9px] px-1 rounded shadow-lg z-50 whitespace-nowrap font-mono py-0.5">
+           {isDragging === 'both' ? formatTime(subtitle.startTime) : formatTime(subtitle.endTime - subtitle.startTime)}
+        </div>
+      )}
       <div className="text-[10px] font-medium truncate pointer-events-none">{subtitle.text}</div>
       {subtitle.secondaryText && (
         <div className="text-[9px] opacity-75 truncate pointer-events-none text-[#d7ba7d]">{subtitle.secondaryText}</div>

@@ -97,7 +97,7 @@ describe('SubtitleTimeline', () => {
     render(<SubtitleTimeline {...defaultProps} onSelect={onSelect} />);
 
     fireEvent.click(screen.getByText('Hello'));
-    expect(onSelect).toHaveBeenCalledWith('1', false);
+    expect(onSelect).toHaveBeenCalledWith('1', false, false);
   });
 
   it('handles clip selection in multi-video mode', () => {

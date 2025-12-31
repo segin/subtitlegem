@@ -14,7 +14,7 @@ interface SubtitleListProps {
   secondaryLanguage: string;
   // Selection props (lifted to parent for cross-component sync)
   selectedIds: string[];
-  onSelect: (id: string, shiftKey: boolean) => void;
+  onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
   onSplit: (id: string) => void;
 }
 
@@ -80,7 +80,7 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
   };
 
   const toggleSelection = (id: string, e: React.MouseEvent) => {
-    onSelect(id, e.shiftKey);
+    onSelect(id, e.shiftKey, e.ctrlKey || e.metaKey);
   };
 
   const mergeSelectedSubtitles = () => {

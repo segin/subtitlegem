@@ -95,6 +95,7 @@ export default function Home() {
   const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
   const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
   const [timelineImages, setTimelineImages] = useState<TimelineImage[]>([]);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
 
   // Check if we're in multi-video mode
   const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
@@ -707,7 +708,11 @@ export default function Home() {
   };
 
   // Handle subtitle selection with Shift+click range selection
-  const handleSubtitleSelect = (id: string, shiftKey: boolean) => {
+  const handleSubtitleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
+    if (id === "") {
+      setSelectedSubtitleIds([]);
+      return;
+    }
     if (shiftKey && lastSelectedIdRef.current) {
       // Range selection
       const lastIndex = subtitles.findIndex(s => s.id === lastSelectedIdRef.current);
@@ -717,20 +722,33 @@ export default function Home() {
         const start = Math.min(lastIndex, currentIndex);
         const end = Math.max(lastIndex, currentIndex);
         const rangeIds = subtitles.slice(start, end + 1).map(s => s.id);
-        setSelectedSubtitleIds(rangeIds);
+        
+        if (ctrlKey) {
+          // Add range to existing selection
+          setSelectedSubtitleIds(prev => Array.from(new Set([...prev, ...rangeIds])));
+        } else {
+          // Replace selection with range
+          setSelectedSubtitleIds(rangeIds);
+        }
         return;
       }
     }
     
-    // Toggle single selection
-    setSelectedSubtitleIds(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(i => i !== id);
-      } else {
-        lastSelectedIdRef.current = id;
-        return [...prev, id];
-      }
-    });
+    if (ctrlKey) {
+      // Toggle single selection
+      setSelectedSubtitleIds(prev => {
+        if (prev.includes(id)) {
+          return prev.filter(i => i !== id);
+        } else {
+          lastSelectedIdRef.current = id;
+          return [...prev, id];
+        }
+      });
+    } else {
+      // Select single (reset others)
+      lastSelectedIdRef.current = id;
+      setSelectedSubtitleIds([id]);
+    }
   };
 
   // Split a subtitle at its midpoint
@@ -1074,6 +1092,62 @@ export default function Home() {
                   onTimelineClipsUpdate={isMultiVideoMode ? setTimelineClips : undefined}
                   selectedClipId={selectedClipId}
                   onClipSelect={setSelectedClipId}
+                  
+                  // Image props
+                  imageAssets={imageAssets}
+                  timelineImages={timelineImages}
+                  onTimelineImagesUpdate={setTimelineImages}
+                  selectedImageId={selectedImageId}
+                  onImageSelect={setSelectedImageId}
+                  
+                  // Context Menu actions
+                  onDuplicateClip={(id, type) => {
+                    if (type === 'video') {
+                      const clip = timelineClips.find(c => c.id === id);
+                      if (clip) {
+                        const newClip = { ...clip, id: uuidv4(), projectStartTime: clip.projectStartTime + clip.clipDuration };
+                        setTimelineClips([...timelineClips, newClip]);
+                      }
+                    } else {
+                      const img = timelineImages.find(i => i.id === id);
+                      if (img) {
+                        const newImg = { ...img, id: uuidv4(), projectStartTime: img.projectStartTime + img.duration };
+                        setTimelineImages([...timelineImages, newImg]);
+                      }
+                    }
+                  }}
+                  onSplitClip={(id, time) => {
+                    const index = timelineClips.findIndex(c => c.id === id);
+                    if (index === -1) return;
+                    const clip = timelineClips[index];
+                    
+                    // Calculate split point relative to clip start
+                    const relativeSplitTime = time - clip.projectStartTime;
+                    if (relativeSplitTime <= 0.5 || relativeSplitTime >= clip.clipDuration - 0.5) return;
+                    
+                    const firstPart: TimelineClip = {
+                      ...clip,
+                      clipDuration: relativeSplitTime
+                    };
+                    const secondPart: TimelineClip = {
+                      ...clip,
+                      id: uuidv4(),
+                      projectStartTime: time,
+                      sourceInPoint: clip.sourceInPoint + relativeSplitTime,
+                      clipDuration: clip.clipDuration - relativeSplitTime
+                    };
+                    
+                    const newClips = [...timelineClips];
+                    newClips.splice(index, 1, firstPart, secondPart);
+                    setTimelineClips(newClips);
+                  }}
+                  onRemoveTimelineItem={(id, type) => {
+                    if (type === 'video') {
+                      setTimelineClips(timelineClips.filter(c => c.id !== id));
+                    } else {
+                      setTimelineImages(timelineImages.filter(i => i.id !== id));
+                    }
+                  }}
                 />
              </div>
           </div>
