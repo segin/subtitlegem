@@ -14,13 +14,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Missing path' }, { status: 400 });
   }
 
-  // Security check
+  // Security check: strict path validation to prevent traversal attacks
+  // Resolve both paths to handle symlinks and relative paths like ../
   const config = getStorageConfig();
-  if (!filePath.startsWith(config.stagingDir) && !filePath.includes('subtitlegem')) {
-     return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+  const resolvedPath = path.resolve(filePath);
+  const resolvedStagingDir = path.resolve(config.stagingDir);
+  
+  // Only allow files within the staging directory
+  if (!resolvedPath.startsWith(resolvedStagingDir + path.sep) && resolvedPath !== resolvedStagingDir) {
+    console.warn(`[Stream] Blocked unauthorized path access: ${filePath} (resolved: ${resolvedPath})`);
+    return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
   }
 
-  if (!fs.existsSync(filePath)) {
+  if (!fs.existsSync(resolvedPath)) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 });
   }
 
@@ -32,7 +38,7 @@ export async function GET(req: NextRequest) {
   // FFmpeg arguments for H.264/AAC Fragmented MP4 (streamable)
   // -movflags frag_keyframe+empty_moov+default_base_moof to make it streamable without seeking
   const ffmpegArgs = [
-    '-i', filePath,
+    '-i', resolvedPath,
     '-c:v', 'libx264',
     '-preset', 'ultrafast',  // Prioritize speed for preview
     '-tune', 'zerolatency',
