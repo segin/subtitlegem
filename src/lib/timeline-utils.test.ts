@@ -16,7 +16,7 @@ import {
   findOverlappingClips,
   arrangeSequentially,
 } from './timeline-utils';
-import { TimelineClip, VideoClip, SubtitleLine } from '@/types/subtitle';
+import { TimelineClip, VideoClip, SubtitleLine, TimelineImage } from '@/types/subtitle';
 
 // Test fixtures
 const createTimelineClip = (overrides: Partial<TimelineClip> = {}): TimelineClip => ({
@@ -288,22 +288,73 @@ describe('getClipEndTime', () => {
 // ============================================================================
 
 describe('getProjectDuration', () => {
+  const createTimelineImage = (overrides: Partial<TimelineImage> = {}): TimelineImage => ({
+    id: 'image-1',
+    imageAssetId: 'asset-1',
+    projectStartTime: 0,
+    duration: 5,
+    type: 'image',
+    ...overrides,
+  } as TimelineImage);
+
   test('returns 0 for empty timeline', () => {
-    expect(getProjectDuration([])).toBe(0);
+    expect(getProjectDuration([], [])).toBe(0);
   });
 
   test('returns correct duration for single clip', () => {
     const timeline = [createTimelineClip({ projectStartTime: 0, clipDuration: 60 })];
-    expect(getProjectDuration(timeline)).toBe(60);
+    expect(getProjectDuration(timeline, [])).toBe(60);
   });
 
-  test('returns end of latest clip', () => {
+  test('returns correct duration for single image', () => {
+    const images = [createTimelineImage({ projectStartTime: 10, duration: 5 })];
+    expect(getProjectDuration([], images)).toBe(15);
+  });
+
+  test('returns end of latest item (clips and images)', () => {
     const timeline = [
       createTimelineClip({ id: '1', projectStartTime: 0, clipDuration: 30 }),
       createTimelineClip({ id: '2', projectStartTime: 50, clipDuration: 40 }), // Ends at 90
-      createTimelineClip({ id: '3', projectStartTime: 20, clipDuration: 20 }), // Ends at 40
     ];
-    expect(getProjectDuration(timeline)).toBe(90);
+    const images = [
+      createTimelineImage({ id: '3', projectStartTime: 95, duration: 10 }), // Ends at 105
+    ];
+    expect(getProjectDuration(timeline, images)).toBe(105);
+  });
+
+  test('handles case where clip is latest', () => {
+    const timeline = [
+      createTimelineClip({ id: '1', projectStartTime: 0, clipDuration: 100 }), // Ends at 100
+    ];
+    const images = [
+      createTimelineImage({ id: '2', projectStartTime: 50, duration: 30 }), // Ends at 80
+    ];
+    expect(getProjectDuration(timeline, images)).toBe(100);
+  });
+
+  describe('property tests', () => {
+    test('result is always >= end of any clip or image', () => {
+      fc.assert(
+        fc.property(
+          fc.array(fc.record({ start: fc.float({min:0, max:1000}), dur: fc.float({min:1, max:100}) })),
+          fc.array(fc.record({ start: fc.float({min:0, max:1000}), dur: fc.float({min:1, max:100}) })),
+          (clipData, imageData) => {
+            const timeline = clipData.map((d, i) => createTimelineClip({ id: `c${i}`, projectStartTime: d.start, clipDuration: d.dur }));
+            const images = imageData.map((d, i) => createTimelineImage({ id: `i${i}`, projectStartTime: d.start, duration: d.dur }));
+            
+            const duration = getProjectDuration(timeline, images);
+            
+            for (const clip of timeline) {
+               if (duration < clip.projectStartTime + clip.clipDuration) return false;
+            }
+            for (const img of images) {
+               if (duration < img.projectStartTime + img.duration) return false;
+            }
+            return true;
+          }
+        )
+      );
+    });
   });
 });
 

@@ -185,6 +185,14 @@ subtitlegem/
 - `videos/` - Uploaded source videos
 - `exports/` - Rendered output videos
 - `temp/` - Processing intermediates
+- `backups/` - Project configuration backups
+
+### 4.5. File Integrity Index
+**Mechanism:** `VideoClip` objects store `fileSize` (bytes) and `originalFilename`.
+**Verification:** On project load, the system probes the staging directory.
+- **Status OK:** File exists and size matches.
+- **Status MISSING:** File not found at recorded path.
+- **Status MISMATCH:** File exists but size differs (potentially corrupted or replaced).
 
 ---
 
@@ -283,6 +291,17 @@ User clicks Export
         - Progress callbacks
     → Completed file in {STAGING_DIR}/exports/
     → User downloads via /api/download
+
+### 9.3. Re-link / Re-upload Flow
+```
+User detects "Missing File" in Video Library
+    → Clicks "Relinks" button
+    → Selects replacement file
+    → Frontend validates filename and size (integrity check)
+    → If valid: Uploads replacement (or updates path)
+    → State updated: missing=false, filePath=newPath
+    → Subtitles preserved (no regeneration)
+```
 ```
 
 ---
@@ -294,7 +313,7 @@ User clicks Export
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2025-12-29 |
+| **Date of Last Update** | 2025-12-30 |
 
 ---
 
