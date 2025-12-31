@@ -104,6 +104,8 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
   // Preview Aspect Ratio State
   const [previewAspect, setPreviewAspect] = useState<'16:9' | '9:16'>('16:9');
 
+  if (!isOpen) return null;
+
   // Get current style being edited
   const currentStyle = stylesSubTab === 'primary' ? settings.defaultPrimaryStyle : settings.defaultSecondaryStyle;
   const updateCurrentStyle = (updates: Partial<typeof currentStyle>) => {
