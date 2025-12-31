@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
+import { normalizeToPx } from "@/lib/style-resolver";
 
 interface GlobalSettingsDialogProps {
   isOpen: boolean;
@@ -99,8 +100,9 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
       console.error('Failed to reset settings:', err);
     }
   };
-
-  if (!isOpen) return null;
+  
+  // Preview Aspect Ratio State
+  const [previewAspect, setPreviewAspect] = useState<'16:9' | '9:16'>('16:9');
 
   // Get current style being edited
   const currentStyle = stylesSubTab === 'primary' ? settings.defaultPrimaryStyle : settings.defaultSecondaryStyle;
@@ -110,6 +112,24 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
   };
 
 
+
+  // Resolution details for "true to life" simulation
+  const previewWidth = 320; 
+  const previewHeight = previewAspect === '16:9' ? previewWidth * (9/16) : previewWidth * (16/9);
+  
+  const referenceHeight = previewAspect === '16:9' ? 1080 : 1920; 
+  const scale = previewHeight / referenceHeight;
+
+  // Helper to normalize style values for preview
+  const getPreviewFontSize = (val: string | number) => {
+    // 1. Normalize to 1080p pixels (e.g. "5%" -> 54px)
+    const px = typeof val === 'string' && val.endsWith('%') 
+      ? (parseFloat(val) / 100) * 1080 
+      : (typeof val === 'number' ? val : parseFloat(String(val)) || 0);
+      
+    // 2. Scale to preview size
+    return (px / 1080) * referenceHeight * scale;
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -157,36 +177,79 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
               {activeTab === 'styles' && (
                 <div className="flex gap-6">
                   {/* Preview Panel */}
-                  <div className="w-64 shrink-0">
-                    <div className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm aspect-video relative overflow-hidden">
+                  <div className="space-y-2">
+                    <div className="flex justify-center gap-2 mb-2">
+                         <button 
+                           onClick={() => setPreviewAspect('16:9')}
+                           className={`px-2 py-1 text-[10px] rounded border ${previewAspect === '16:9' ? 'bg-[#007acc] border-[#007acc] text-white' : 'border-[#333] text-[#888]'}`}
+                         >
+                           16:9
+                         </button>
+                         <button 
+                           onClick={() => setPreviewAspect('9:16')}
+                           className={`px-2 py-1 text-[10px] rounded border ${previewAspect === '9:16' ? 'bg-[#007acc] border-[#007acc] text-white' : 'border-[#333] text-[#888]'}`}
+                         >
+                           9:16
+                         </button>
+                    </div>
+
+                    <div 
+                        className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm relative overflow-hidden transition-all mx-auto"
+                        style={{ width: previewWidth, height: previewHeight }}
+                    >
                       {/* Simulated video background */}
                       <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222]" />
                       
+                      {/* Reference Grid */}
+                      <div className="absolute inset-0 opacity-10 pointer-events-none grid grid-cols-3 grid-rows-3">
+                        {[...Array(9)].map((_, i) => (
+                            <div key={i} className="border border-white/20"></div>
+                        ))}
+                      </div>
+
                       {/* Preview subtitles */}
                       <div 
-                        className="absolute left-1/2 -translate-x-1/2 text-center max-w-[90%]"
+                        className="absolute inset-0 pointer-events-none p-4"
                         style={{
-                          bottom: `${typeof currentStyle.marginV === 'number' ? currentStyle.marginV : parseFloat(String(currentStyle.marginV)) || 5}%`,
-                          fontFamily: currentStyle.fontFamily,
+                            paddingTop: currentStyle.alignment >= 7 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / 1080) * 100}%`) : 0,
+                            paddingBottom: currentStyle.alignment <= 3 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / 1080) * 100}%`) : 0,
+                            paddingLeft: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / 1920) * 100}%`,
+                            paddingRight: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / 1920) * 100}%`,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: [1, 4, 7].includes(currentStyle.alignment) ? 'flex-start' : 
+                                        [3, 6, 9].includes(currentStyle.alignment) ? 'flex-end' : 'center',
+                            justifyContent: [7, 8, 9].includes(currentStyle.alignment) ? 'flex-start' : 
+                                            [1, 2, 3].includes(currentStyle.alignment) ? 'flex-end' : 'center',
                         }}
                       >
                         <span 
                           style={{
-                            fontSize: `${(typeof currentStyle.fontSize === 'number' ? currentStyle.fontSize : parseFloat(String(currentStyle.fontSize)) || 5) * 5}px`,
+                            fontFamily: currentStyle.fontFamily || 'Arial',
+                            // Use correct scaling logic matching ASS renderer
+                            fontSize: `${getPreviewFontSize(currentStyle.fontSize)}px`,
                             color: currentStyle.color,
                             backgroundColor: currentStyle.backgroundColor,
-                            padding: '2px 6px',
+                            padding: '0.1em 0.3em',
                             textShadow: currentStyle.outlineWidth 
-                              ? `0 0 ${(typeof currentStyle.outlineWidth === 'number' ? currentStyle.outlineWidth : parseFloat(String(currentStyle.outlineWidth)) || 0.2) * 5}px ${currentStyle.outlineColor || '#000'}` 
+                              ? `0 0 ${getPreviewFontSize(currentStyle.outlineWidth || 0)}px ${currentStyle.outlineColor || '#000'}` 
+                              : 'none',
+                            boxShadow: currentStyle.shadowDistance 
+                              ? `${getPreviewFontSize(currentStyle.shadowDistance || 0)}px ${getPreviewFontSize(currentStyle.shadowDistance || 0)}px 0px rgba(0,0,0,0.5)`
                               : 'none',
                             display: 'inline-block',
+                            textAlign: [1, 4, 7].includes(currentStyle.alignment) ? 'left' : 
+                                       [3, 6, 9].includes(currentStyle.alignment) ? 'right' : 'center', 
+                            maxWidth: '100%',
+                            wordBreak: 'break-word',
+                            lineHeight: 1.5,
                           }}
                         >
-                          {stylesSubTab === 'primary' ? 'Sample Text' : '样本文字'}
+                          {stylesSubTab === 'primary' ? 'Sample Text Line 1\nExample Line 2' : '样本文字第一行\n示例文字第二行'}
                         </span>
                       </div>
                     </div>
-                    <p className="text-[9px] text-[#555] mt-2 text-center">Live Preview</p>
+                    <p className="text-[9px] text-[#555] mt-1 text-center">Live Preview ({Math.round(referenceHeight)}p base)</p>
                   </div>
 
                   {/* Controls Panel */}
@@ -244,6 +307,7 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
                         <TrackStyleEditor 
                             style={currentStyle} 
                             onChange={updateCurrentStyle}
+                            mode="percentage"
                         />
                     </div>
                   </div>
