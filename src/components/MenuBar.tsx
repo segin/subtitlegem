@@ -150,7 +150,7 @@ export function MenuBar({
   onToggleVideoLibrary,
 }: MenuBarProps) {
   const fileItems: MenuItem[] = [
-    { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject },
+    { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject, disabled: isUploadScreen },
     { label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenProject },
     { label: "Save Project", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveProject },
     { divider: true },
