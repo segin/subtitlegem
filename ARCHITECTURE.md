@@ -31,15 +31,18 @@ subtitlegem/
 │   │   ├── layout.tsx          # Root layout
 │   │   └── page.tsx            # Main application page
 │   │
-│   ├── components/             # React UI Components (18 files)
+│   ├── components/             # React UI Components (21 files)
 │   │   ├── ConfigPanel.tsx     # Subtitle style configuration
 │   │   ├── DraftsSidebar.tsx   # Project drafts list
 │   │   ├── ExportControls.tsx  # Export button + options
 │   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
+│   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
 │   │   ├── GlobalSettingsDialog.tsx # App-wide settings
-│   │   ├── MenuBar.tsx         # Top navigation bar
+│   │   ├── KeyboardShortcutsDialog.tsx # Shortcut reference overlay
+│   │   ├── MenuBar.tsx         # Top navigation bar (File, Edit, View, Help)
 │   │   ├── ProjectSettingsDialog.tsx # Per-project settings
 │   │   ├── QueueDrawer.tsx     # Export queue overlay
+│   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
 │   │   ├── SubtitleList.tsx    # Editable subtitle lines
 │   │   ├── SubtitleTimeline.tsx # Visual timeline editor
 │   │   ├── TrackStyleEditor.tsx # Font/color/margin controls

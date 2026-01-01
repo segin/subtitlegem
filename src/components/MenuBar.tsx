@@ -6,7 +6,7 @@ import {
   FileVideo, FolderOpen, Save, Download, X, RefreshCw,
   Undo2, Redo2, Scissors, Copy, ClipboardPaste, Search, 
   Merge, Split, Clock, PanelLeft, PanelBottom, 
-  ZoomIn, ZoomOut, Palette, Keyboard, Settings 
+  ZoomIn, ZoomOut, Palette, Keyboard, Settings, HelpCircle, ExternalLink, Info
 } from "lucide-react";
 
 // ============================================================================
@@ -111,8 +111,11 @@ export function MenuBar({
   const fileTriggerRef = useRef<HTMLButtonElement>(null);
   const editTriggerRef = useRef<HTMLButtonElement>(null);
   const viewTriggerRef = useRef<HTMLButtonElement>(null);
-  const triggerRefs = [fileTriggerRef, editTriggerRef, viewTriggerRef];
-  const menuCount = 3; // File, Edit, View
+  const helpTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRefs = [fileTriggerRef, editTriggerRef, viewTriggerRef, helpTriggerRef];
+  const menuCount = isUploadScreen ? 3 : 4; // File, Edit, View (if shown), Help
+
+  const isAnyMenuOpen = activeMenuIndex !== null;
 
   const handleNavigateLeft = useCallback((currentIndex: number) => {
     let prevIndex = (currentIndex - 1 + menuCount) % menuCount;
@@ -189,11 +192,11 @@ export function MenuBar({
     { id: "copy", label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true, showOnUploadScreen: false },
     { id: "paste", label: "Paste", icon: <ClipboardPaste className="w-4 h-4" />, shortcut: "Ctrl+V", disabled: true, showOnUploadScreen: false },
     { divider: true },
-    { id: "find-replace", label: "Find & Replace...", icon: <Search className="w-4 h-4" />, shortcut: "Ctrl+H", onClick: onFindReplace, disabled: true, showOnUploadScreen: false },
+    { id: "find-replace", label: "Find & Replace...", icon: <Search className="w-4 h-4" />, shortcut: "Ctrl+H", onClick: onFindReplace, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
     { id: "merge", label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
     { id: "split", label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
-    { id: "shift-timings", label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: true, showOnUploadScreen: false },
+    { id: "shift-timings", label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
     { id: "project-settings", label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
@@ -212,7 +215,7 @@ export function MenuBar({
     { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: true },
     { divider: true },
     { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, disabled: true },
-    { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts, disabled: true },
+    { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
   ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible]);
 
   // ========== FILTER FOR UPLOAD SCREEN ==========
@@ -228,7 +231,15 @@ export function MenuBar({
   const cleanedEditItems = useMemo(() => cleanDividers(filterForUploadScreen(editItems)), [editItems, filterForUploadScreen]);
   const cleanedViewItems = useMemo(() => cleanDividers(filterForUploadScreen(viewItems)), [viewItems, filterForUploadScreen]);
 
-  const isAnyMenuOpen = activeMenuIndex !== null;
+  // ========== HELP MENU ==========
+  const helpItems = useMemo<MenuItem[]>(() => [
+    { id: "documentation", label: "Documentation", icon: <ExternalLink className="w-4 h-4" />, onClick: () => window.open('https://github.com/segin/subtitlegem#readme', '_blank') },
+    { divider: true },
+    { id: "shortcuts-help", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
+    { divider: true },
+    { id: "about", label: "About SubtitleGem", icon: <Info className="w-4 h-4" />, onClick: () => alert('SubtitleGem v0.1.0\n\nAI-powered subtitle generation using Google Gemini.\n\nhttps://github.com/segin/subtitlegem') },
+  ], [onShowShortcuts]);
+  const cleanedHelpItems = useMemo(() => cleanDividers(helpItems), [helpItems]);
 
   return (
     <nav className="flex space-x-1 flex-1 items-center">
@@ -264,6 +275,16 @@ export function MenuBar({
           triggerRef={viewTriggerRef}
         />
       )}
+      <Menu 
+        label="Help" 
+        items={cleanedHelpItems}
+        isOpen={activeMenuIndex === 3}
+        onOpenChange={(open) => setActiveMenuIndex(open ? 3 : null)}
+        onNavigateLeft={() => handleNavigateLeft(3)}
+        onNavigateRight={() => handleNavigateRight(3)}
+        isAnyMenuOpen={isAnyMenuOpen}
+        triggerRef={helpTriggerRef}
+      />
     </nav>
   );
 }

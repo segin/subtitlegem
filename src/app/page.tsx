@@ -14,6 +14,9 @@ import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
 import { VideoLibrary } from "@/components/VideoLibrary";
+import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
+import { ShiftTimingsDialog } from "@/components/ShiftTimingsDialog";
+import { FindReplaceDialog, FindOptions, FindResult } from "@/components/FindReplaceDialog";
 import { 
   SubtitleLine, 
   SubtitleConfig, 
@@ -74,6 +77,11 @@ export default function Home() {
   
   // Global settings dialog
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+  
+  // New dialogs
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showShiftTimings, setShowShiftTimings] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
   
   // Queue Drawer State
   const [showQueue, setShowQueue] = useState(true);
@@ -803,6 +811,7 @@ export default function Home() {
           <MenuBar 
             isUploadScreen={true}
             onGlobalSettings={() => setShowGlobalSettings(true)}
+            onShowShortcuts={() => setShowShortcuts(true)}
           />
         </div>
 
@@ -919,6 +928,78 @@ export default function Home() {
           onClose={() => setShowGlobalSettings(false)}
         />
         
+        <KeyboardShortcutsDialog
+          isOpen={showShortcuts}
+          onClose={() => setShowShortcuts(false)}
+        />
+        
+        <ShiftTimingsDialog
+          isOpen={showShiftTimings}
+          onClose={() => setShowShiftTimings(false)}
+          subtitleCount={subtitles.length}
+          onShift={(offsetMs) => {
+            const shifted = subtitles.map(s => ({
+              ...s,
+              startTime: Math.max(0, s.startTime + offsetMs),
+              endTime: Math.max(0, s.endTime + offsetMs),
+            }));
+            setSubtitles(shifted);
+          }}
+        />
+        
+        <FindReplaceDialog
+          isOpen={showFindReplace}
+          onClose={() => setShowFindReplace(false)}
+          onFind={(query, options) => {
+            // TODO: Implement find logic
+            return null;
+          }}
+          onReplace={(query, replacement, options) => {
+            // Simple replace implementation
+            let count = 0;
+            const updated = subtitles.map(s => {
+              let modified = { ...s };
+              if (options.searchPrimary && s.text.includes(query)) {
+                modified.text = s.text.replace(query, replacement);
+                count++;
+              }
+              if (options.searchSecondary && s.secondaryText?.includes(query)) {
+                modified.secondaryText = s.secondaryText.replace(query, replacement);
+                count++;
+              }
+              return modified;
+            });
+            if (count > 0) setSubtitles(updated);
+            return count;
+          }}
+          onReplaceAll={(query, replacement, options) => {
+            let count = 0;
+            const regex = new RegExp(options.caseSensitive ? query : query, options.caseSensitive ? 'g' : 'gi');
+            const updated = subtitles.map(s => {
+              let modified = { ...s };
+              if (options.searchPrimary) {
+                const matches = s.text.match(regex);
+                if (matches) {
+                  count += matches.length;
+                  modified.text = s.text.replace(regex, replacement);
+                }
+              }
+              if (options.searchSecondary && s.secondaryText) {
+                const matches = s.secondaryText.match(regex);
+                if (matches) {
+                  count += matches.length;
+                  modified.secondaryText = s.secondaryText.replace(regex, replacement);
+                }
+              }
+              return modified;
+            });
+            if (count > 0) setSubtitles(updated);
+            return count;
+          }}
+          onFindNext={() => null}
+          onFindPrevious={() => null}
+        />
+        
         <ProjectSettingsDialog
             isOpen={showProjectSettings}
             onClose={() => setShowProjectSettings(false)}
@@ -976,6 +1057,9 @@ export default function Home() {
             onRedo={redo}
             canUndo={canUndo}
             canRedo={canRedo}
+            onShowShortcuts={() => setShowShortcuts(true)}
+            onFindReplace={() => setShowFindReplace(true)}
+            onShiftTimings={() => setShowShiftTimings(true)}
           />
           <input 
             type="file" 
