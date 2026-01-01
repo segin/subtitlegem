@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef } from "react";
 import { Menu, MenuItem, MenuItemBase } from "./ui/Menu";
 import { 
   FileVideo, FolderOpen, Save, Download, X, RefreshCw,
@@ -106,27 +106,39 @@ export function MenuBar({
   
   // Track which menu is open (for cross-menu navigation)
   const [activeMenuIndex, setActiveMenuIndex] = useState<number | null>(null);
+  
+  // Refs for menu triggers (for keyboard focus management)
+  const fileTriggerRef = useRef<HTMLButtonElement>(null);
+  const editTriggerRef = useRef<HTMLButtonElement>(null);
+  const viewTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRefs = [fileTriggerRef, editTriggerRef, viewTriggerRef];
   const menuCount = 3; // File, Edit, View
 
   const handleNavigateLeft = useCallback((currentIndex: number) => {
-    const prevIndex = (currentIndex - 1 + menuCount) % menuCount;
+    let prevIndex = (currentIndex - 1 + menuCount) % menuCount;
     // Skip View menu if on upload screen
     if (isUploadScreen && prevIndex === 2) {
-      setActiveMenuIndex(1); // Skip to Edit
-    } else {
-      setActiveMenuIndex(prevIndex);
+      prevIndex = 1; // Skip to Edit
     }
-  }, [isUploadScreen]);
+    setActiveMenuIndex(prevIndex);
+    // Focus the adjacent trigger
+    requestAnimationFrame(() => {
+      triggerRefs[prevIndex]?.current?.focus();
+    });
+  }, [isUploadScreen, triggerRefs]);
 
   const handleNavigateRight = useCallback((currentIndex: number) => {
-    const nextIndex = (currentIndex + 1) % menuCount;
+    let nextIndex = (currentIndex + 1) % menuCount;
     // Skip View menu if on upload screen
     if (isUploadScreen && nextIndex === 2) {
-      setActiveMenuIndex(0); // Wrap to File
-    } else {
-      setActiveMenuIndex(nextIndex);
+      nextIndex = 0; // Wrap to File
     }
-  }, [isUploadScreen]);
+    setActiveMenuIndex(nextIndex);
+    // Focus the adjacent trigger
+    requestAnimationFrame(() => {
+      triggerRefs[nextIndex]?.current?.focus();
+    });
+  }, [isUploadScreen, triggerRefs]);
 
   // ========== FILE MENU ==========
   const fileItems = useMemo<MenuItem[]>(() => {
@@ -228,6 +240,7 @@ export function MenuBar({
         onNavigateLeft={() => handleNavigateLeft(0)}
         onNavigateRight={() => handleNavigateRight(0)}
         isAnyMenuOpen={isAnyMenuOpen}
+        triggerRef={fileTriggerRef}
       />
       <Menu 
         label="Edit" 
@@ -237,6 +250,7 @@ export function MenuBar({
         onNavigateLeft={() => handleNavigateLeft(1)}
         onNavigateRight={() => handleNavigateRight(1)}
         isAnyMenuOpen={isAnyMenuOpen}
+        triggerRef={editTriggerRef}
       />
       {cleanedViewItems.length > 0 && (
         <Menu 
@@ -247,6 +261,7 @@ export function MenuBar({
           onNavigateLeft={() => handleNavigateLeft(2)}
           onNavigateRight={() => handleNavigateRight(2)}
           isAnyMenuOpen={isAnyMenuOpen}
+          triggerRef={viewTriggerRef}
         />
       )}
     </nav>

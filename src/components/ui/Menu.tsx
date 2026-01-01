@@ -31,6 +31,7 @@ export interface MenuProps {
   onNavigateLeft?: () => void;
   onNavigateRight?: () => void;
   isAnyMenuOpen?: boolean;
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
 }
 
 // ============================================================================
@@ -77,6 +78,7 @@ export function Menu({
   onNavigateLeft,
   onNavigateRight,
   isAnyMenuOpen = false,
+  triggerRef: externalTriggerRef,
 }: MenuProps) {
   // Use controlled or uncontrolled state
   const [internalIsOpen, setInternalIsOpen] = useState(false);
@@ -92,7 +94,8 @@ export function Menu({
 
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+  const internalTriggerRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = externalTriggerRef || internalTriggerRef;
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   
   const menuId = useId();
@@ -186,6 +189,31 @@ export function Menu({
     }
   }, [isOpen, items, focusedIndex, setIsOpen, onNavigateLeft, onNavigateRight]);
 
+  // Handle keyboard on trigger button (when menu is closed)
+  const handleTriggerKeyDown = useCallback((e: React.KeyboardEvent) => {
+    switch (e.key) {
+      case "ArrowLeft":
+        e.preventDefault();
+        onNavigateLeft?.();
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        onNavigateRight?.();
+        break;
+      case "ArrowDown":
+      case "ArrowUp":
+        e.preventDefault();
+        setIsOpen(true);
+        break;
+      case "Escape":
+        if (isOpen) {
+          e.preventDefault();
+          setIsOpen(false);
+        }
+        break;
+    }
+  }, [onNavigateLeft, onNavigateRight, setIsOpen, isOpen]);
+
   // Hover-to-open when another menu is already open
   const handleTriggerMouseEnter = () => {
     if (isAnyMenuOpen && !isOpen) {
@@ -200,6 +228,7 @@ export function Menu({
         id={triggerId}
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={handleTriggerMouseEnter}
+        onKeyDown={handleTriggerKeyDown}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
