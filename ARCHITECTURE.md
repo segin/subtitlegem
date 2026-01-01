@@ -31,25 +31,25 @@ subtitlegem/
 │   │   ├── layout.tsx          # Root layout
 │   │   └── page.tsx            # Main application page
 │   │
-│   ├── components/             # React UI Components (21 files)
-│   │   ├── ConfigPanel.tsx     # Subtitle style configuration
-│   │   ├── DraftsSidebar.tsx   # Project drafts list
-│   │   ├── ExportControls.tsx  # Export button + options
-│   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
-│   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
-│   │   ├── GlobalSettingsDialog.tsx # App-wide settings
-│   │   ├── KeyboardShortcutsDialog.tsx # Shortcut reference overlay
-│   │   ├── MenuBar.tsx         # Top navigation bar (File, Edit, View, Help)
-│   │   ├── ProjectSettingsDialog.tsx # Per-project settings
-│   │   ├── QueueDrawer.tsx     # Export queue overlay
-│   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
-│   │   ├── SubtitleList.tsx    # Editable subtitle lines
-│   │   ├── SubtitleTimeline.tsx # Visual timeline editor
+  │   ├── components/             # React UI Components (21 files)
+  │   │   ├── ConfigPanel.tsx     # Subtitle style configuration
+  │   │   ├── DraftsSidebar.tsx   # Project drafts list (collapsible sidebar)
+  │   │   ├── ExportControls.tsx  # Export button + options
+  │   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
+  │   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
+  │   │   ├── GlobalSettingsDialog.tsx # App-wide settings
+  │   │   ├── KeyboardShortcutsDialog.tsx # Shortcut reference overlay
+  │   │   ├── MenuBar.tsx         # Top navigation bar (File, Edit, View, Help) with Recent Drafts submenu
+  │   │   ├── ProjectSettingsDialog.tsx # Per-project settings
+  │   │   ├── QueueDrawer.tsx     # Export queue overlay
+  │   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
+  │   │   ├── SubtitleList.tsx    # Editable subtitle lines
+  │   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable)
 │   │   ├── TrackStyleEditor.tsx # Font/color/margin controls
 │   │   ├── VideoPreview.tsx    # Video player with overlays
 │   │   ├── VideoUpload.tsx     # Drag-drop file uploader
-│   │   └── ui/                 # Reusable UI primitives
-│   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA)
+  │   │   └── ui/                 # Reusable UI primitives
+  │   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA, nested flyouts)
 │   │
 │   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation
@@ -83,39 +83,39 @@ subtitlegem/
 ## 2. High-Level System Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                              USER BROWSER                                │
-│  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                         React Frontend                              │ │
-│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────────────────┐  │ │
-│  │  │VideoUpload│ │SubtitleList│ │Timeline │ │   VideoPreview      │  │ │
-│  │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └───────────┬───────────┘  │ │
-│  └───────┼────────────┴────────────┴───────────────────┼──────────────┘ │
-└──────────┼─────────────────────────────────────────────┼────────────────┘
-           │                                             │
-           ▼                                             ▼
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          Next.js API Routes                               │
-│  ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────────────┐  │
-│  │ /api/process│  │ /api/export│  │ /api/queue │  │  /api/stream      │  │
-│  │  (Upload)   │  │ (Burn Subs)│  │ (Job Mgmt) │  │ (Live Transcode)  │  │
-│  └──────┬─────┘  └──────┬─────┘  └──────┬─────┘  └─────────┬──────────┘  │
-│         │               │               │                   │             │
-│  ┌──────▼───────────────▼───────────────▼───────────────────▼──────────┐ │
-│  │                         lib/ (Business Logic)                        │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌──────────────────┐  │ │
-│  │  │ gemini.ts │  │ffmpeg-   │  │queue-manager│  │   ass-utils.ts   │  │ │
-│  │  │(AI Trans) │  │utils.ts  │  │    .ts      │  │ (Subtitle Gen)   │  │ │
-│  │  └─────┬────┘  └────┬─────┘  └──────┬──────┘  └──────────────────┘  │ │
-│  └────────┼────────────┼───────────────┼────────────────────────────────┘ │
-└───────────┼────────────┼───────────────┼────────────────────────────────┘
-            │            │               │
-            ▼            ▼               ▼
-┌─────────────────┐ ┌─────────────┐ ┌─────────────────────────────────────┐
-│   Google Gemini │ │   FFmpeg    │ │   SQLite (better-sqlite3)           │
-│   (AI Service)  │ │  (System)   │ │  • queue.db  • drafts.db            │
-└─────────────────┘ └─────────────┘ │  • settings.db                      │
-                                    └─────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────┐
+│                             USER BROWSER                              │
+│ ┌───────────────────────────────────────────────────────────────────┐ │
+│ │                        React Frontend                             │ │
+│ │ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌────────────────┐│ │
+│ │ │ VideoUpload│  │SubtitleList│  │  Timeline  │  │  VideoPreview  ││ │
+│ │ └─┬──────────┘  └─┬──────────┘  └─┬──────────┘  └──────┬─────────┘│ │
+│ └───┼───────────────┼───────────────┼────────────────────┼──────────┘ │
+└─────┼───────────────┼───────────────┼────────────────────┼────────────┘
+      │               │               │                    │
+      ▼               ▼               ▼                    ▼
+┌───────────────────────────────────────────────────────────────────────┐
+│                         Next.js API Routes                            │
+│ ┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────────────┐  │
+│ │/api/process│  │/api/export │  │/api/queue  │  │   /api/stream    │  │
+│ │  (Upload)  │  │(Burn Subs) │  │ (Job Mgmt) │  │ (Live Transcode) │  │
+│ └─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └────────┬─────────┘  │
+│       │               │               │                  │            │
+│ ┌─────▼───────────────▼───────────────▼──────────────────▼──────────┐ │
+│ │                        lib/ (Business Logic)                      │ │
+│ │ ┌──────────┐  ┌──────────┐  ┌─────────────┐  ┌────────────────┐   │ │
+│ │ │gemini.ts │  │ffmpeg-   │  │queue-manager│  │  ass-utils.ts  │   │ │
+│ │ │(AI Trans)│  │utils.ts  │  │    .ts      │  │ (Subtitle Gen) │   │ │
+│ │ └────┬─────┘  └────┬─────┘  └──────┬──────┘  └────────────────┘   │ │
+│ └──────┼────────────┼────────────────┼──────────────────────────────┘ │
+└────────┼────────────┼────────────────┼────────────────────────────────┘
+         │            │                │
+         ▼            ▼                ▼
+┌─────────────────┐  ┌─────────────┐  ┌─────────────────────────────────┐
+│  Google Gemini  │  │   FFmpeg    │  │     SQLite (better-sqlite3)     │
+│  (AI Service)   │  │  (System)   │  │ • queue.db    • drafts.db       │
+└─────────────────┘  └─────────────┘  │ • settings.db                   │
+                                      └─────────────────────────────────┘
 ```
 
 ---
@@ -318,7 +318,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2025-12-30 |
+| **Date of Last Update** | 2026-01-01 |
 
 ---
 

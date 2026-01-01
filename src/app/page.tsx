@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { VideoUpload, UploadMode } from "@/components/VideoUpload";
-import { SubtitleTimeline } from "@/components/SubtitleTimeline";
+import { SubtitleTimeline, TimelineRef } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
@@ -83,6 +83,9 @@ export default function Home() {
   const [showShiftTimings, setShowShiftTimings] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   
+  // Clipboard for subtitle Cut/Copy/Paste
+  const [clipboardSubtitles, setClipboardSubtitles] = useState<SubtitleLine[]>([]);
+  
   // Queue Drawer State
   const [showQueue, setShowQueue] = useState(true);
   const [queueWidth, setQueueWidth] = useState(300);
@@ -104,6 +107,39 @@ export default function Home() {
   const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
   const [timelineImages, setTimelineImages] = useState<TimelineImage[]>([]);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  
+  // Timeline Zoom Ref
+  const timelineRef = useRef<TimelineRef>(null);
+
+  // Recent Drafts state
+  const [drafts, setDrafts] = useState<any[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(true);
+  
+  const fetchDrafts = useCallback(async () => {
+    setDraftsLoading(true);
+    try {
+      const res = await fetch("/api/drafts");
+      const data = await res.json();
+      setDrafts(data.drafts || []);
+    } catch (err) {
+      console.error("Failed to load drafts:", err);
+    } finally {
+      setDraftsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
+
+  const handleDeleteDraft = async (id: string) => {
+    try {
+      await fetch(`/api/drafts?id=${id}`, { method: "DELETE" });
+      setDrafts(prev => prev.filter(d => d.id !== id));
+    } catch (err) {
+      console.error("Failed to delete draft:", err);
+    }
+  };
 
   // Check if we're in multi-video mode
   const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
@@ -206,6 +242,7 @@ export default function Home() {
         if (data.id && !currentDraftId) {
           setCurrentDraftId(data.id);
         }
+        fetchDrafts(); // Refresh drafts list to update Recent Projects
       } catch (err) {
         console.error("Auto-save failed:", err);
       }
@@ -715,6 +752,103 @@ export default function Home() {
     setSelectedSubtitleIds([]);
   };
 
+  // === Clipboard Operations ===
+  const handleCopySubtitles = useCallback(() => {
+    if (selectedSubtitleIds.length === 0) return;
+    const toCopy = subtitles.filter(s => selectedSubtitleIds.includes(s.id));
+    setClipboardSubtitles(toCopy);
+  }, [selectedSubtitleIds, subtitles]);
+
+  const handleCutSubtitles = useCallback(() => {
+    if (selectedSubtitleIds.length === 0) return;
+    const toCopy = subtitles.filter(s => selectedSubtitleIds.includes(s.id));
+    setClipboardSubtitles(toCopy);
+    const remaining = subtitles.filter(s => !selectedSubtitleIds.includes(s.id));
+    setSubtitles(remaining);
+    setSelectedSubtitleIds([]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+
+  const handlePasteSubtitles = useCallback(() => {
+    if (clipboardSubtitles.length === 0) return;
+    // Generate new IDs for pasted subtitles to avoid conflicts
+    const pasted = clipboardSubtitles.map(s => ({
+      ...s,
+      id: `${s.id}-paste-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    }));
+    // Insert after last selected, or at end if none selected
+    if (selectedSubtitleIds.length > 0) {
+      const lastSelectedIndex = subtitles.findIndex(s => s.id === selectedSubtitleIds[selectedSubtitleIds.length - 1]);
+      const newSubtitles = [
+        ...subtitles.slice(0, lastSelectedIndex + 1),
+        ...pasted,
+        ...subtitles.slice(lastSelectedIndex + 1),
+      ];
+      setSubtitles(newSubtitles);
+    } else {
+      setSubtitles([...subtitles, ...pasted]);
+    }
+  }, [clipboardSubtitles, selectedSubtitleIds, subtitles, setSubtitles]);
+
+  // === Merge/Split Operations ===
+  const handleMergeSubtitles = useCallback(() => {
+    if (selectedSubtitleIds.length < 2) return;
+    const toMerge = subtitles.filter(s => selectedSubtitleIds.includes(s.id))
+      .sort((a, b) => a.startTime - b.startTime);
+    if (toMerge.length < 2) return;
+    
+    const merged: SubtitleLine = {
+      id: toMerge[0].id,
+      startTime: toMerge[0].startTime,
+      endTime: toMerge[toMerge.length - 1].endTime,
+      text: toMerge.map(s => s.text).join(' '),
+      secondaryText: toMerge.some(s => s.secondaryText) 
+        ? toMerge.map(s => s.secondaryText || '').join(' ').trim() || undefined
+        : undefined,
+    };
+    
+    const mergedIds = new Set(toMerge.map(s => s.id));
+    const newSubtitles = subtitles.filter(s => !mergedIds.has(s.id) || s.id === merged.id)
+      .map(s => s.id === merged.id ? merged : s);
+    setSubtitles(newSubtitles);
+    setSelectedSubtitleIds([merged.id]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+
+  const handleSplitSubtitle = useCallback(() => {
+    if (selectedSubtitleIds.length !== 1) return;
+    const toSplit = subtitles.find(s => s.id === selectedSubtitleIds[0]);
+    if (!toSplit) return;
+    
+    const midTime = (toSplit.startTime + toSplit.endTime) / 2;
+    const words = toSplit.text.split(' ');
+    const midWord = Math.floor(words.length / 2);
+    
+    const first: SubtitleLine = {
+      id: toSplit.id,
+      startTime: toSplit.startTime,
+      endTime: midTime,
+      text: words.slice(0, midWord).join(' ') || toSplit.text,
+      secondaryText: toSplit.secondaryText,
+    };
+    
+    const second: SubtitleLine = {
+      id: `${toSplit.id}-split-${Date.now()}`,
+      startTime: midTime,
+      endTime: toSplit.endTime,
+      text: words.slice(midWord).join(' ') || '...',
+      secondaryText: undefined,
+    };
+    
+    const idx = subtitles.findIndex(s => s.id === toSplit.id);
+    const newSubtitles = [
+      ...subtitles.slice(0, idx),
+      first,
+      second,
+      ...subtitles.slice(idx + 1),
+    ];
+    setSubtitles(newSubtitles);
+    setSelectedSubtitleIds([first.id, second.id]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+
   // Handle subtitle selection with Shift+click range selection
   const handleSubtitleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {
     if (id === "") {
@@ -812,6 +946,15 @@ export default function Home() {
             isUploadScreen={true}
             onGlobalSettings={() => setShowGlobalSettings(true)}
             onShowShortcuts={() => setShowShortcuts(true)}
+            recentDrafts={drafts.map(d => ({
+              id: d.id,
+              name: d.name,
+              date: d.updatedAt
+            }))}
+            onLoadDraft={(id) => {
+              const draft = drafts.find(d => d.id === id);
+              if (draft) handleLoadDraft(draft);
+            }}
           />
         </div>
 
@@ -830,7 +973,10 @@ export default function Home() {
         <div className="flex-1 flex overflow-hidden">
           {/* Draft Projects Sidebar - Left side */}
           <DraftsSidebar 
+            drafts={drafts}
+            loading={draftsLoading}
             onLoadDraft={handleLoadDraft}
+            onDelete={handleDeleteDraft}
           />
 
           {/* Main Upload Area - Center */}
@@ -1060,6 +1206,26 @@ export default function Home() {
             onShowShortcuts={() => setShowShortcuts(true)}
             onFindReplace={() => setShowFindReplace(true)}
             onShiftTimings={() => setShowShiftTimings(true)}
+            onCut={handleCutSubtitles}
+            onCopy={handleCopySubtitles}
+            onPaste={handlePasteSubtitles}
+            onMerge={handleMergeSubtitles}
+            onSplit={handleSplitSubtitle}
+            hasSelection={selectedSubtitleIds.length > 0}
+            hasClipboard={clipboardSubtitles.length > 0}
+            canMerge={selectedSubtitleIds.length >= 2}
+            canSplit={selectedSubtitleIds.length === 1}
+            onZoomIn={() => timelineRef.current?.zoomIn()}
+            onZoomOut={() => timelineRef.current?.zoomOut()}
+            recentDrafts={drafts.map(d => ({
+              id: d.id,
+              name: d.name,
+              date: d.updatedAt
+            }))}
+            onLoadDraft={(id) => {
+              const draft = drafts.find(d => d.id === id);
+              if (draft) handleLoadDraft(draft);
+            }}
           />
           <input 
             type="file" 
@@ -1162,6 +1328,7 @@ export default function Home() {
              </div>
              <div className="flex-1 relative overflow-hidden">
                 <SubtitleTimeline 
+                  ref={timelineRef}
                   subtitles={subtitles} 
                   duration={duration} 
                   onSubtitlesUpdate={setSubtitles}

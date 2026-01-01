@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback, useId } from "react";
+import { Check, ChevronRight } from "lucide-react";
 
 // ============================================================================
 // Types
@@ -15,6 +16,7 @@ export interface MenuItemBase {
   disabled?: boolean;
   checked?: boolean;
   showOnUploadScreen?: boolean;
+  items?: MenuItem[];
 }
 
 export interface MenuDivider {
@@ -152,6 +154,12 @@ export function Menu({
         break;
         
       case "ArrowRight":
+        // If the current item has a sub-menu, don't move left/right between main menus
+        const currentItem = items[focusedIndex];
+        if (currentItem && !('divider' in currentItem) && currentItem.items) {
+           // Submenu handling is inside SubMenuItem
+           return;
+        }
         e.preventDefault();
         setIsOpen(false);
         onNavigateRight?.();
@@ -182,12 +190,14 @@ export function Menu({
         e.preventDefault();
         const item = items[focusedIndex];
         if (item && isActionableItem(item)) {
-          setIsOpen(false);
-          item.onClick?.();
+          if (!item.items) {
+            setIsOpen(false);
+            item.onClick?.();
+          }
         }
         break;
     }
-  }, [isOpen, items, focusedIndex, setIsOpen, onNavigateLeft, onNavigateRight]);
+  }, [isOpen, items, focusedIndex, setIsOpen, onNavigateLeft, onNavigateRight, triggerRef]);
 
   // Handle keyboard on trigger button (when menu is closed)
   const handleTriggerKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -247,27 +257,35 @@ export function Menu({
           onKeyDown={handleKeyDown}
           className="absolute top-full left-0 mt-0.5 w-56 bg-[#252526] border border-[#454545] shadow-xl z-50 py-1 origin-top animate-in fade-in-0 zoom-in-95 duration-100"
         >
-          {items.map((item, index) =>
-            'divider' in item ? (
-              <div key={index} role="separator" className="h-px bg-[#454545] my-1" />
-            ) : (
+          {items.map((item, index) => {
+            if ('divider' in item) {
+              return <div key={index} className="h-px bg-[#454545] my-1 mx-2" role="separator" />;
+            }
+
+            if (item.items) {
+              return (
+                <SubMenuItem 
+                  key={index} 
+                  item={item} 
+                  onClose={() => setIsOpen(false)} 
+                  ref={(el) => { itemRefs.current[index] = el; }}
+                  tabIndex={focusedIndex === index ? 0 : -1}
+                />
+              );
+            }
+
+            return (
               <button
-                key={item.id || index}
+                key={index}
                 ref={(el) => { itemRefs.current[index] = el; }}
                 role="menuitem"
                 tabIndex={focusedIndex === index ? 0 : -1}
-                aria-disabled={item.disabled}
-                onClick={(e) => {
-                  if (item.disabled) return;
-                  setIsOpen(false);
-                  item.onClick?.(e);
-                }}
-                onMouseEnter={() => {
-                  if (!item.disabled) {
-                    setFocusedIndex(index);
-                  }
-                }}
                 disabled={item.disabled}
+                onClick={() => {
+                  setIsOpen(false);
+                  item.onClick?.();
+                }}
+                onMouseEnter={() => setFocusedIndex(index)}
                 className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
                   item.disabled
                     ? "text-[#555555] cursor-not-allowed"
@@ -277,22 +295,163 @@ export function Menu({
                 }`}
               >
                 <span className="flex items-center gap-2">
-                  {item.checked !== undefined && (
-                    <span className="w-4 text-center">
-                      {item.checked ? "✓" : ""}
-                    </span>
-                  )}
-                  {item.icon && <span className="w-4 h-4">{item.icon}</span>}
+                  <span className="w-4 flex items-center justify-center">
+                    {item.checked ? <Check className="w-3 h-3 text-[#007acc]" /> : item.icon}
+                  </span>
                   {item.label}
                 </span>
                 {item.shortcut && (
-                  <span className="text-[#888888] text-[10px]">{item.shortcut}</span>
+                  <span className={`text-[10px] ${focusedIndex === index ? "text-white/70" : "text-[#888888]"}`}>
+                    {item.shortcut}
+                  </span>
                 )}
               </button>
-            )
-          )}
+            );
+          })}
         </div>
       )}
     </div>
   );
 }
+
+// ============= SUBMENU COMPONENT =============
+
+interface SubMenuItemProps {
+  item: MenuItemBase;
+  onClose: () => void;
+  tabIndex: number;
+}
+
+const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ item, onClose, tabIndex }, ref) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(-1);
+  const subItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const timeoutRef = useRef<NodeJS.Timeout>(null);
+
+  const handleMouseEnter = () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    setIsOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => setIsOpen(false), 300);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!isOpen) {
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        setIsOpen(true);
+        const first = getFirstFocusableIndex(item.items!);
+        setFocusedIndex(first);
+        setTimeout(() => subItemRefs.current[first]?.focus(), 10);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case "ArrowUp":
+        e.preventDefault();
+        const prev = getNextFocusableIndex(item.items!, focusedIndex, -1);
+        setFocusedIndex(prev);
+        subItemRefs.current[prev]?.focus();
+        break;
+      case "ArrowDown":
+        e.preventDefault();
+        const next = getNextFocusableIndex(item.items!, focusedIndex, 1);
+        setFocusedIndex(next);
+        subItemRefs.current[next]?.focus();
+        break;
+      case "ArrowLeft":
+      case "Escape":
+        e.preventDefault();
+        setIsOpen(false);
+        (ref as React.MutableRefObject<HTMLButtonElement | null>).current?.focus();
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        const subItem = item.items![focusedIndex];
+        if (subItem && isActionableItem(subItem)) {
+          onClose();
+          subItem.onClick?.();
+        }
+        break;
+    }
+  };
+
+  return (
+    <div 
+      className="relative" 
+      onMouseEnter={handleMouseEnter} 
+      onMouseLeave={handleMouseLeave}
+    >
+      <button
+        ref={ref}
+        role="menuitem"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        tabIndex={tabIndex}
+        onKeyDown={handleKeyDown}
+        className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
+          isOpen || tabIndex === 0
+            ? "bg-[#094771] text-white"
+            : "text-[#cccccc] hover:bg-[#094771]"
+        }`}
+      >
+        <span className="flex items-center gap-2">
+          <span className="w-4 flex items-center justify-center">{item.icon}</span>
+          {item.label}
+        </span>
+        <ChevronRight className="w-3 h-3 text-[#888888]" />
+      </button>
+
+      {isOpen && item.items && (
+        <div 
+          className="absolute left-full top-0 ml-[-2px] w-56 bg-[#252526] border border-[#454545] shadow-xl z-[60] py-1"
+          role="menu"
+        >
+          {item.items.map((subItem, index) => {
+            if ('divider' in subItem) {
+              return <div key={index} className="h-px bg-[#454545] my-1 mx-2" role="separator" />;
+            }
+            return (
+              <button
+                key={index}
+                ref={(el) => { subItemRefs.current[index] = el; }}
+                role="menuitem"
+                tabIndex={focusedIndex === index ? 0 : -1}
+                disabled={subItem.disabled}
+                onClick={() => {
+                  onClose();
+                  subItem.onClick?.();
+                }}
+                onMouseEnter={() => setFocusedIndex(index)}
+                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
+                  subItem.disabled
+                    ? "text-[#555555] cursor-not-allowed"
+                    : focusedIndex === index
+                      ? "bg-[#094771] text-white"
+                      : "text-[#cccccc] hover:bg-[#094771]"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="w-4 flex items-center justify-center">
+                    {subItem.checked ? <Check className="w-3 h-3 text-[#007acc]" /> : subItem.icon}
+                  </span>
+                  {subItem.label}
+                </span>
+                {subItem.shortcut && (
+                  <span className={`text-[10px] ${focusedIndex === index ? "text-white/70" : "text-[#888888]"}`}>
+                    {subItem.shortcut}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+SubMenuItem.displayName = "SubMenuItem";

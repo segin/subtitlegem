@@ -13,6 +13,9 @@ interface Draft {
 
 interface DraftsSidebarProps {
   onLoadDraft: (draft: Draft) => void;
+  drafts: Draft[];
+  loading?: boolean;
+  onDelete?: (id: string) => void;
   className?: string;
 }
 
@@ -32,36 +35,15 @@ function useIsDesktop() {
   return isDesktop;
 }
 
-export function DraftsSidebar({ onLoadDraft, className = "" }: DraftsSidebarProps) {
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [loading, setLoading] = useState(true);
+export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, className = "" }: DraftsSidebarProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
-  const fetchDrafts = async () => {
-    try {
-      const res = await fetch("/api/drafts");
-      const data = await res.json();
-      setDrafts(data.drafts || []);
-    } catch (err) {
-      console.error("Failed to load drafts:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDrafts();
-  }, []);
-
   const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/drafts?id=${id}`, { method: "DELETE" });
-      setDrafts(drafts.filter(d => d.id !== id));
+    if (onDelete) {
+      onDelete(id);
       setDeleteConfirm(null);
-    } catch (err) {
-      console.error("Failed to delete draft:", err);
     }
   };
 

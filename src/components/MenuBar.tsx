@@ -13,6 +13,12 @@ import {
 // Types
 // ============================================================================
 
+interface RecentDraft {
+  id: string;
+  name: string;
+  date: string;
+}
+
 interface MenuBarProps {
   onNewProject?: () => void;
   onOpenDraft?: () => void;
@@ -42,6 +48,19 @@ interface MenuBarProps {
   onToggleQueue?: () => void;
   onVideoProperties?: () => void;
   onToggleVideoLibrary?: () => void;
+  // Cut/Copy/Paste/Merge/Split
+  onCut?: () => void;
+  onCopy?: () => void;
+  onPaste?: () => void;
+  onMerge?: () => void;
+  onSplit?: () => void;
+  hasSelection?: boolean;
+  hasClipboard?: boolean;
+  canMerge?: boolean;
+  canSplit?: boolean;
+  // Recent Drafts
+  recentDrafts?: RecentDraft[];
+  onLoadDraft?: (id: string) => void;
   // Toggle states for checkmarks
   isTimelineVisible?: boolean;
   isSubtitleListVisible?: boolean;
@@ -102,6 +121,9 @@ export function MenuBar({
   isTimelineVisible,
   isSubtitleListVisible,
   isVideoLibraryVisible,
+  onCut, onCopy, onPaste, onMerge, onSplit,
+  hasSelection = false, hasClipboard = false, canMerge = false, canSplit = false,
+  recentDrafts = [], onLoadDraft
 }: MenuBarProps) {
   
   // Track which menu is open (for cross-menu navigation)
@@ -146,11 +168,17 @@ export function MenuBar({
   // ========== FILE MENU ==========
   const fileItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
-      { id: "new-project", label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject, disabled: isUploadScreen, showOnUploadScreen: true },
-      { id: "open-project", label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenProject, showOnUploadScreen: false },
-      { id: "save-project", label: "Save Project", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveProject, showOnUploadScreen: false },
+      { id: "new", label: "New Project", icon: <FileVideo className="w-4 h-4" />, onClick: onNewProject, shortcut: "Ctrl+N" },
+      { id: "open", label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenProject, shortcut: "Ctrl+O" },
+      { id: "open-draft", label: "Open Draft", icon: <FolderOpen className="w-4 h-4" />, 
+        items: recentDrafts.length > 0 ? recentDrafts.map(d => ({
+          id: `draft-${d.id}`,
+          label: d.name,
+          onClick: () => onLoadDraft?.(d.id),
+        })) : [{ id: "no-drafts", label: "No Recent Drafts", disabled: true }]
+      },
+      { id: "save-project", label: "Save Project", icon: <Save className="w-4 h-4" />, onClick: onSaveProject, shortcut: "Ctrl+S", showOnUploadScreen: false },
       { divider: true },
-      { id: "open-draft", label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenDraft, showOnUploadScreen: true },
       { id: "save-draft", label: "Save Draft", icon: <Save className="w-4 h-4" />, onClick: onSaveDraft, showOnUploadScreen: false },
       { divider: true },
       { id: "export-ass", label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass'), showOnUploadScreen: false },
@@ -181,27 +209,27 @@ export function MenuBar({
     );
 
     return items;
-  }, [onNewProject, onOpenProject, onSaveProject, onOpenDraft, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, isUploadScreen]);
+  }, [onNewProject, onOpenProject, onSaveProject, onOpenDraft, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, isUploadScreen, recentDrafts, onLoadDraft]);
 
   // ========== EDIT MENU ==========
   const editItems = useMemo<MenuItem[]>(() => [
     { id: "undo", label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo || isUploadScreen, showOnUploadScreen: false },
     { id: "redo", label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo || isUploadScreen, showOnUploadScreen: false },
     { divider: true },
-    { id: "cut", label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", disabled: true, showOnUploadScreen: false },
-    { id: "copy", label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true, showOnUploadScreen: false },
-    { id: "paste", label: "Paste", icon: <ClipboardPaste className="w-4 h-4" />, shortcut: "Ctrl+V", disabled: true, showOnUploadScreen: false },
+    { id: "cut", label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", onClick: onCut, disabled: !hasSelection || isUploadScreen, showOnUploadScreen: false },
+    { id: "copy", label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", onClick: onCopy, disabled: !hasSelection || isUploadScreen, showOnUploadScreen: false },
+    { id: "paste", label: "Paste", icon: <ClipboardPaste className="w-4 h-4" />, shortcut: "Ctrl+V", onClick: onPaste, disabled: !hasClipboard || isUploadScreen, showOnUploadScreen: false },
     { divider: true },
     { id: "find-replace", label: "Find & Replace...", icon: <Search className="w-4 h-4" />, shortcut: "Ctrl+H", onClick: onFindReplace, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
-    { id: "merge", label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
-    { id: "split", label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
+    { id: "merge", label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, onClick: onMerge, disabled: !canMerge || isUploadScreen, showOnUploadScreen: false },
+    { id: "split", label: "Split Subtitle", icon: <Split className="w-4 h-4" />, onClick: onSplit, disabled: !canSplit || isUploadScreen, showOnUploadScreen: false },
     { id: "shift-timings", label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
     { id: "project-settings", label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings, disabled: isUploadScreen, showOnUploadScreen: false },
     { divider: true },
     { id: "global-settings", label: "Global Settings...", icon: <Settings className="w-4 h-4" />, onClick: onGlobalSettings, showOnUploadScreen: true },
-  ], [onUndo, onRedo, canUndo, canRedo, onFindReplace, onShiftTimings, onProjectSettings, onGlobalSettings, isUploadScreen]);
+  ], [onUndo, onRedo, canUndo, canRedo, onFindReplace, onShiftTimings, onProjectSettings, onGlobalSettings, isUploadScreen, onCut, onCopy, onPaste, onMerge, onSplit, hasSelection, hasClipboard, canMerge, canSplit]);
 
   // ========== VIEW MENU ==========
   const viewItems = useMemo<MenuItem[]>(() => [
@@ -211,8 +239,8 @@ export function MenuBar({
     { id: "toggle-timeline", label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true, checked: isTimelineVisible },
     { id: "toggle-subtitle-list", label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: true, checked: isSubtitleListVisible },
     { divider: true },
-    { id: "zoom-in", label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: true },
-    { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: true },
+    { id: "zoom-in", label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: isUploadScreen },
+    { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: isUploadScreen },
     { divider: true },
     { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, disabled: true },
     { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },

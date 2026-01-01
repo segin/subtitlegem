@@ -73,7 +73,12 @@ function isLegacyProps(props: SubtitleTimelineProps): props is LegacyTimelinePro
 // Main Component
 // ============================================================================
 
-export function SubtitleTimeline(props: SubtitleTimelineProps) {
+export type TimelineRef = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+};
+
+export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelineProps>((props, ref) => {
   // Normalize props to new interface
   const subtitles = props.subtitles;
   const onSubtitlesUpdate = isLegacyProps(props) ? props.onUpdate : props.onSubtitlesUpdate;
@@ -283,6 +288,11 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
   // Zoom handlers
   const handleZoomIn = () => setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
   const handleZoomOut = () => setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
+
+  React.useImperativeHandle(ref, () => ({
+    zoomIn: handleZoomIn,
+    zoomOut: handleZoomOut,
+  }));
   
   // Fit to View: Calculate zoom level to fit entire duration in visible area
   const handleFitToView = useCallback(() => {
@@ -485,7 +495,9 @@ export function SubtitleTimeline(props: SubtitleTimelineProps) {
       </div>
     </div>
   );
-}
+});
+
+SubtitleTimeline.displayName = "SubtitleTimeline";
 
 // ============================================================================
 // Time Ruler
