@@ -61,10 +61,9 @@ function Menu({ label, items }: MenuProps) {
               <button
                 key={index}
                 onClick={(e) => {
-                  if (!item.disabled && item.onClick) {
-                    item.onClick(e);
-                    setIsOpen(false);
-                  }
+                  if (item.disabled) return;
+                  setIsOpen(false);
+                  item.onClick?.(e);
                 }}
                 disabled={item.disabled}
                 className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors ${
