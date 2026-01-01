@@ -18,11 +18,19 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
   const updateStyle = (key: keyof TrackStyle, value: any) => {
     if (activeTab === 'encoding') return;
     
+    // Force percentage string for numeric inputs
+    let finalValue = value;
+    const percentageKeys = ['fontSize', 'marginV', 'marginH', 'outlineWidth', 'shadowDistance'];
+    
+    if (percentageKeys.includes(key) && typeof value === 'number') {
+        finalValue = `${value}%`;
+    }
+
     onChange({
       ...config,
       [activeTab]: {
         ...config[activeTab],
-        [key]: value
+        [key]: finalValue
       }
     });
   };
@@ -87,9 +95,9 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                       <label className="text-[10px] text-[#888888] mb-1 block">Size (%)</label>
                       <input 
                         type="number" 
-                        step="0.01"
+                        step="0.5"
                         min="0.5"
-                        max="20"
+                        max="50"
                         value={currentStyle.fontSize} 
                         onChange={(e) => updateStyle('fontSize', parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"

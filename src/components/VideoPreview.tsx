@@ -317,7 +317,7 @@ export function VideoPreview({
                     fontSize: `${getScaledFontSize(resolvedPrimaryStyle.fontSize)}px`,
                     fontFamily: resolvedPrimaryStyle.fontFamily,
                     borderRadius: '2px',
-                    textShadow: activeSubtitle.primaryColor ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none',
+                    textShadow: 'none',
                   }}
                 >
                   {activeSubtitle.text}
@@ -335,7 +335,7 @@ export function VideoPreview({
                       fontSize: `${getScaledFontSize(resolvedSecondaryStyle.fontSize)}px`,
                       fontFamily: resolvedSecondaryStyle.fontFamily,
                       borderRadius: '2px',
-                      textShadow: activeSubtitle.secondaryColor ? '1px 1px 2px rgba(0,0,0,0.8)' : 'none',
+                    textShadow: 'none',
                     }}
                   >
                     {activeSubtitle.secondaryText}
