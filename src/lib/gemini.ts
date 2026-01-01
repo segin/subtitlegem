@@ -48,6 +48,34 @@ const subtitleSchema = {
   required: ["detectedLanguage", "subtitles"],
 };
 
+// Helper to strip markdown code blocks from JSON response
+function cleanJsonOutput(text: string): string {
+  // Remove markdown code blocks (```json ... ``` or just ``` ... ```)
+  let clean = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1');
+  // Remove any leading/trailing whitespace
+  return clean.trim();
+}
+
+const translationSchema = {
+  type: "OBJECT",
+  properties: {
+    subtitles: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          startTime: { type: "STRING" },
+          endTime: { type: "STRING" },
+          text: { type: "STRING" },
+          secondaryText: { type: "STRING" },
+        },
+        required: ["startTime", "endTime", "text", "secondaryText"],
+      },
+    },
+  },
+  required: ["subtitles"],
+};
+
 export async function uploadToGemini(filePath: string, mimeType: string) {
   // Upload file using new SDK
   const uploadResult = await ai.files.upload({
@@ -143,7 +171,7 @@ export async function generateSubtitles(
     });
 
     const text = response.text!;
-    return JSON.parse(text);
+    return JSON.parse(cleanJsonOutput(text));
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
@@ -215,7 +243,7 @@ export async function generateSubtitlesInline(
     });
 
     const text = response.text!;
-    return JSON.parse(text);
+    return JSON.parse(cleanJsonOutput(text));
   } catch (error: any) {
     if (error.status === 429 && attempt < 3) {
       const delayMatch = error.message.match(/retry in ([\d.]+)s/);
@@ -252,7 +280,7 @@ export async function translateSubtitles(
     Rules:
     1. PRESERVE 'startTime' and 'endTime' EXACTLY.
     2. PRESERVE the number of objects and their order.
-    3. Output JSON ONLY.
+    3. Output JSON object with a 'subtitles' array.
     
     Input JSON:
     ${JSON.stringify(subtitles)}
@@ -264,15 +292,17 @@ export async function translateSubtitles(
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: { 
         responseMimeType: "application/json",
+        responseSchema: translationSchema as any,
         safetySettings,
       },
     });
 
     const text = response.text!;
-    const result = JSON.parse(text);
+    const result = JSON.parse(cleanJsonOutput(text));
     
-    if (Array.isArray(result)) return result;
     if (result.subtitles) return result.subtitles;
+    // Fallback if schema wasn't fully respected (unlikely with responseSchema)
+    if (Array.isArray(result)) return result;
     return result; 
   } catch (error) {
     console.error("Translation error:", error);

@@ -146,9 +146,9 @@ subtitlegem/
 **Description:** Sends audio/video to Google Gemini for automatic speech recognition and bilingual translation.  
 **Technologies:** `@google/genai` SDK, Gemini 2.0 Flash  
 **Key Functions:**
-- `generateSubtitles()` - Full video transcription
+- `generateSubtitles()` - Full video transcription (Robust JSON parsing with markdown stripping)
 - `generateSubtitlesInline()` - Small file (<10MB) inline processing
-- `translateSubtitles()` - Re-translation to different language
+- `translateSubtitles()` - Re-translation (Enforced Structured Output Schema)
 
 #### 3.2.3. Export Queue Service
 **Endpoints:** `/api/queue`, `/api/export`  

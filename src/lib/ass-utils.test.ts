@@ -183,8 +183,9 @@ describe('sanitizeAssText', () => {
       expect(sanitizeAssText('{a}text{b}')).toBe('text');
     });
 
-    test('preserves newlines', () => {
-      expect(sanitizeAssText('Line 1\\nLine 2')).toBe('Line 1\\nLine 2');
+    test('escapes newlines', () => {
+      expect(sanitizeAssText('Line 1\nLine 2')).toBe('Line 1\\NLine 2');
+      expect(sanitizeAssText('Line 1\r\nLine 2')).toBe('Line 1\\NLine 2');
     });
   });
 

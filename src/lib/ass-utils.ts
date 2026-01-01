@@ -49,8 +49,9 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1
 
 // Sanitize text to prevent ASS tag injection
 export function sanitizeAssText(text: string): string {
-    // Use non-greedy match to strip each {...} block individually
-    return text.replace(/\{[^}]*\}/g, '');
+    // 1. Replace newlines with ASS line break \N
+    // 2. Strip standard ASS tags {...}
+    return text.replace(/\r?\n/g, '\\N').replace(/\{[^}]*\}/g, '');
 }
 
 export interface VideoDimensions {
