@@ -223,6 +223,26 @@ subtitlegem/
 **CI/CD:** None (manual deployment)  
 **Monitoring:** Console logging only
 
+### Production Deployment
+
+1. **Build the application**:
+   ```bash
+   npm run build
+   ```
+
+2. **Start the server**:
+   ```bash
+   # Runs on port 3050, accessible from all network interfaces
+   npm run start -- -p 3050 -H 0.0.0.0
+   ```
+
+3. **Process Management (Recommended)**:
+   Use PM2 to keep the service running in the background.
+   ```bash
+   npm install -g pm2
+   pm2 start npm --name "subtitlegem" -- start -- -p 3050
+   ```
+
 ---
 
 ## 7. Security Considerations
