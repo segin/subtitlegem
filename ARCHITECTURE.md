@@ -31,7 +31,7 @@ subtitlegem/
 │   │   ├── layout.tsx          # Root layout
 │   │   └── page.tsx            # Main application page
 │   │
-│   ├── components/             # React UI Components (17 files)
+│   ├── components/             # React UI Components (18 files)
 │   │   ├── ConfigPanel.tsx     # Subtitle style configuration
 │   │   ├── DraftsSidebar.tsx   # Project drafts list
 │   │   ├── ExportControls.tsx  # Export button + options
@@ -44,7 +44,9 @@ subtitlegem/
 │   │   ├── SubtitleTimeline.tsx # Visual timeline editor
 │   │   ├── TrackStyleEditor.tsx # Font/color/margin controls
 │   │   ├── VideoPreview.tsx    # Video player with overlays
-│   │   └── VideoUpload.tsx     # Drag-drop file uploader
+│   │   ├── VideoUpload.tsx     # Drag-drop file uploader
+│   │   └── ui/                 # Reusable UI primitives
+│   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA)
 │   │
 │   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation

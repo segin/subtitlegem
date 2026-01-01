@@ -1,92 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback } from "react";
+import { Menu, MenuItem, MenuItemBase } from "./ui/Menu";
 import { 
   FileVideo, FolderOpen, Save, Download, X, RefreshCw,
   Undo2, Redo2, Scissors, Copy, ClipboardPaste, Search, 
   Merge, Split, Clock, PanelLeft, PanelBottom, 
-  ZoomIn, Palette, Keyboard, Settings 
+  ZoomIn, ZoomOut, Palette, Keyboard, Settings 
 } from "lucide-react";
 
-interface MenuItemBase {
-  label: string;
-  icon?: React.ReactNode;
-  shortcut?: string;
-  onClick?: (e?: React.MouseEvent) => void;
-  disabled?: boolean;
-}
-
-interface MenuDivider {
-  divider: true;
-}
-
-type MenuItem = MenuItemBase | MenuDivider;
-
-interface MenuProps {
-  label: string;
-  items: MenuItem[];
-}
-
-function Menu({ label, items }: MenuProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  return (
-    <div ref={menuRef} className="relative">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className={`px-2 py-0.5 text-xs rounded-sm transition-colors ${
-          isOpen ? "bg-[#3e3e42]" : "hover:bg-[#3e3e42]"
-        }`}
-      >
-        {label}
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-0.5 w-56 bg-[#252526] border border-[#454545] shadow-xl z-50">
-          {items.map((item, index) =>
-            'divider' in item ? (
-              <div key={index} className="h-px bg-[#454545] my-1" />
-            ) : (
-              <button
-                key={index}
-                onClick={(e) => {
-                  if (item.disabled) return;
-                  setIsOpen(false);
-                  item.onClick?.(e);
-                }}
-                disabled={item.disabled}
-                className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors ${
-                  item.disabled
-                    ? "text-[#555555] cursor-not-allowed"
-                    : "text-[#cccccc] hover:bg-[#094771]"
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  {item.icon && <span className="w-4 h-4">{item.icon}</span>}
-                  {item.label}
-                </span>
-                {item.shortcut && (
-                  <span className="text-[#888888] text-[10px]">{item.shortcut}</span>
-                )}
-              </button>
-            )
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+// ============================================================================
+// Types
+// ============================================================================
 
 interface MenuBarProps {
   onNewProject?: () => void;
@@ -117,7 +42,33 @@ interface MenuBarProps {
   onToggleQueue?: () => void;
   onVideoProperties?: () => void;
   onToggleVideoLibrary?: () => void;
+  // Toggle states for checkmarks
+  isTimelineVisible?: boolean;
+  isSubtitleListVisible?: boolean;
+  isVideoLibraryVisible?: boolean;
 }
+
+// ============================================================================
+// Helper: Clean consecutive/edge dividers
+// ============================================================================
+
+function cleanDividers(items: MenuItem[]): MenuItem[] {
+  let result = items.filter((item, i, arr) => {
+    if (!('divider' in item)) return true;
+    if (i === 0) return false;
+    if (i === arr.length - 1) return false;
+    if ('divider' in arr[i - 1]) return false;
+    return true;
+  });
+  while (result.length > 0 && 'divider' in result[result.length - 1]) {
+    result.pop();
+  }
+  return result;
+}
+
+// ============================================================================
+// MenuBar Component
+// ============================================================================
 
 export function MenuBar({
   onNewProject,
@@ -148,113 +99,156 @@ export function MenuBar({
   onToggleQueue,
   onVideoProperties,
   onToggleVideoLibrary,
+  isTimelineVisible,
+  isSubtitleListVisible,
+  isVideoLibraryVisible,
 }: MenuBarProps) {
-  const fileItems: MenuItem[] = [
-    { label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject, disabled: isUploadScreen },
-    { label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenProject },
-    { label: "Save Project", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveProject },
-    { divider: true },
-    { label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenDraft },
-    { label: "Save Draft", icon: <Save className="w-4 h-4" />, onClick: onSaveDraft },
-    { divider: true },
-    { label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass') },
-    
-    // Split SRT Export with Dynamic Labels
-    { 
-      label: hasSecondarySubtitles ? `Export ${primaryLanguage} (.srt)` : "Export Subtitles (.srt)", 
-      icon: <Download className="w-4 h-4" />, 
-      onClick: () => onExport?.(hasSecondarySubtitles ? 'srt-primary' : 'srt') 
-    },
-    ...(hasSecondarySubtitles ? [{
-      label: `Export ${secondaryLanguage} (.srt)`, 
-      icon: <Download className="w-4 h-4" />, 
-      onClick: () => onExport?.('srt-secondary') 
-    }] : []),
+  
+  // Track which menu is open (for cross-menu navigation)
+  const [activeMenuIndex, setActiveMenuIndex] = useState<number | null>(null);
+  const menuCount = 3; // File, Edit, View
 
-    { label: "Export Transcript (.txt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('txt') },
-    { divider: true },
-    { label: "Reprocess Video...", icon: <RefreshCw className="w-4 h-4" />, onClick: onReprocessVideo },
-    { label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject },
-  ];
-
-  const editItems: MenuItem[] = [
-    { label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo || isUploadScreen },
-    { label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo || isUploadScreen },
-    { divider: true },
-    { label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", disabled: true },
-    { label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true },
-    { label: "Paste", icon: <ClipboardPaste className="w-4 h-4" />, shortcut: "Ctrl+V", disabled: true },
-    { divider: true },
-    { label: "Find & Replace...", icon: <Search className="w-4 h-4" />, shortcut: "Ctrl+H", onClick: onFindReplace, disabled: true },
-    { divider: true },
-    { label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, disabled: true },
-    { label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true },
-    { label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: true },
-    { divider: true },
-    { label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings, disabled: isUploadScreen },
-    { divider: true },
-    { label: "Global Settings...", icon: <Settings className="w-4 h-4" />, onClick: onGlobalSettings },
-  ];
-
-  const viewItems: MenuItem[] = [
-    { label: "Video Assets", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen },
-    { label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
-    { divider: true },
-    { label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true },
-    { label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: true },
-    { divider: true },
-    { label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: true },
-    { label: "Zoom Out", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: true },
-    { divider: true },
-    { label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, disabled: true },
-    { label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts, disabled: true },
-  ];
-
-  // Cleanup consecutive and edge dividers
-  const cleanDividers = (items: MenuItem[]): MenuItem[] => {
-    let result = items.filter((item, i, arr) => {
-      if (!('divider' in item)) return true;
-      // Remove if: first item, last item, or previous item was also a divider
-      if (i === 0) return false;
-      if (i === arr.length - 1) return false;
-      if ('divider' in arr[i - 1]) return false;
-      return true;
-    });
-    // Also remove trailing dividers after filtering
-    while (result.length > 0 && 'divider' in result[result.length - 1]) {
-      result.pop();
+  const handleNavigateLeft = useCallback((currentIndex: number) => {
+    const prevIndex = (currentIndex - 1 + menuCount) % menuCount;
+    // Skip View menu if on upload screen
+    if (isUploadScreen && prevIndex === 2) {
+      setActiveMenuIndex(1); // Skip to Edit
+    } else {
+      setActiveMenuIndex(prevIndex);
     }
-    return result;
-  };
+  }, [isUploadScreen]);
 
-  // Filter items for upload screen
-  const visibleFileItems = fileItems.filter(item => {
-    if (!isUploadScreen) return true;
-    if ('divider' in item) return true;
-    return ['New Project', 'Open Draft...'].includes(item.label);
-  });
+  const handleNavigateRight = useCallback((currentIndex: number) => {
+    const nextIndex = (currentIndex + 1) % menuCount;
+    // Skip View menu if on upload screen
+    if (isUploadScreen && nextIndex === 2) {
+      setActiveMenuIndex(0); // Wrap to File
+    } else {
+      setActiveMenuIndex(nextIndex);
+    }
+  }, [isUploadScreen]);
 
-  const visibleEditItems = editItems.filter(item => {
-    if (!isUploadScreen) return true;
-    if ('divider' in item) return true;
-    return ['Global Settings...'].includes(item.label);
-  });
+  // ========== FILE MENU ==========
+  const fileItems = useMemo<MenuItem[]>(() => {
+    const items: MenuItem[] = [
+      { id: "new-project", label: "New Project", icon: <FileVideo className="w-4 h-4" />, shortcut: "Ctrl+N", onClick: onNewProject, disabled: isUploadScreen, showOnUploadScreen: true },
+      { id: "open-project", label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, shortcut: "Ctrl+O", onClick: onOpenProject, showOnUploadScreen: false },
+      { id: "save-project", label: "Save Project", icon: <Save className="w-4 h-4" />, shortcut: "Ctrl+S", onClick: onSaveProject, showOnUploadScreen: false },
+      { divider: true },
+      { id: "open-draft", label: "Open Draft...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenDraft, showOnUploadScreen: true },
+      { id: "save-draft", label: "Save Draft", icon: <Save className="w-4 h-4" />, onClick: onSaveDraft, showOnUploadScreen: false },
+      { divider: true },
+      { id: "export-ass", label: "Export Project (.ass)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('ass'), showOnUploadScreen: false },
+      { 
+        id: "export-srt-primary",
+        label: hasSecondarySubtitles ? `Export ${primaryLanguage} (.srt)` : "Export Subtitles (.srt)", 
+        icon: <Download className="w-4 h-4" />, 
+        onClick: () => onExport?.(hasSecondarySubtitles ? 'srt-primary' : 'srt'),
+        showOnUploadScreen: false
+      },
+    ];
 
-  const visibleViewItems = viewItems.filter(item => {
-    if (!isUploadScreen) return true;
-    return false; // Hide View menu entirely on upload screen
-  });
+    if (hasSecondarySubtitles) {
+      items.push({
+        id: "export-srt-secondary",
+        label: `Export ${secondaryLanguage} (.srt)`, 
+        icon: <Download className="w-4 h-4" />, 
+        onClick: () => onExport?.('srt-secondary'),
+        showOnUploadScreen: false
+      });
+    }
 
-  // Apply separator cleanup to all visible item lists
-  const cleanedFileItems = cleanDividers(visibleFileItems);
-  const cleanedEditItems = cleanDividers(visibleEditItems);
-  const cleanedViewItems = cleanDividers(visibleViewItems);
+    items.push(
+      { id: "export-txt", label: "Export Transcript (.txt)", icon: <Download className="w-4 h-4" />, onClick: () => onExport?.('txt'), showOnUploadScreen: false },
+      { divider: true },
+      { id: "reprocess", label: "Reprocess Video...", icon: <RefreshCw className="w-4 h-4" />, onClick: onReprocessVideo, showOnUploadScreen: false },
+      { id: "close-project", label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject, showOnUploadScreen: false }
+    );
+
+    return items;
+  }, [onNewProject, onOpenProject, onSaveProject, onOpenDraft, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, isUploadScreen]);
+
+  // ========== EDIT MENU ==========
+  const editItems = useMemo<MenuItem[]>(() => [
+    { id: "undo", label: "Undo", icon: <Undo2 className="w-4 h-4" />, shortcut: "Ctrl+Z", onClick: onUndo, disabled: !canUndo || isUploadScreen, showOnUploadScreen: false },
+    { id: "redo", label: "Redo", icon: <Redo2 className="w-4 h-4" />, shortcut: "Ctrl+Y", onClick: onRedo, disabled: !canRedo || isUploadScreen, showOnUploadScreen: false },
+    { divider: true },
+    { id: "cut", label: "Cut", icon: <Scissors className="w-4 h-4" />, shortcut: "Ctrl+X", disabled: true, showOnUploadScreen: false },
+    { id: "copy", label: "Copy", icon: <Copy className="w-4 h-4" />, shortcut: "Ctrl+C", disabled: true, showOnUploadScreen: false },
+    { id: "paste", label: "Paste", icon: <ClipboardPaste className="w-4 h-4" />, shortcut: "Ctrl+V", disabled: true, showOnUploadScreen: false },
+    { divider: true },
+    { id: "find-replace", label: "Find & Replace...", icon: <Search className="w-4 h-4" />, shortcut: "Ctrl+H", onClick: onFindReplace, disabled: true, showOnUploadScreen: false },
+    { divider: true },
+    { id: "merge", label: "Merge Subtitles", icon: <Merge className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
+    { id: "split", label: "Split Subtitle", icon: <Split className="w-4 h-4" />, disabled: true, showOnUploadScreen: false },
+    { id: "shift-timings", label: "Shift All Timings...", icon: <Clock className="w-4 h-4" />, onClick: onShiftTimings, disabled: true, showOnUploadScreen: false },
+    { divider: true },
+    { id: "project-settings", label: "Project Settings...", icon: <Settings className="w-4 h-4" />, onClick: onProjectSettings, disabled: isUploadScreen, showOnUploadScreen: false },
+    { divider: true },
+    { id: "global-settings", label: "Global Settings...", icon: <Settings className="w-4 h-4" />, onClick: onGlobalSettings, showOnUploadScreen: true },
+  ], [onUndo, onRedo, canUndo, canRedo, onFindReplace, onShiftTimings, onProjectSettings, onGlobalSettings, isUploadScreen]);
+
+  // ========== VIEW MENU ==========
+  const viewItems = useMemo<MenuItem[]>(() => [
+    { id: "video-assets", label: "Video Assets", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen, checked: isVideoLibraryVisible },
+    { id: "video-props", label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
+    { divider: true },
+    { id: "toggle-timeline", label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true, checked: isTimelineVisible },
+    { id: "toggle-subtitle-list", label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: true, checked: isSubtitleListVisible },
+    { divider: true },
+    { id: "zoom-in", label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: true },
+    { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: true },
+    { divider: true },
+    { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, disabled: true },
+    { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts, disabled: true },
+  ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible]);
+
+  // ========== FILTER FOR UPLOAD SCREEN ==========
+  const filterForUploadScreen = useCallback((items: MenuItem[]): MenuItem[] => {
+    if (!isUploadScreen) return items;
+    return items.filter(item => {
+      if ('divider' in item) return true;
+      return (item as MenuItemBase).showOnUploadScreen === true;
+    });
+  }, [isUploadScreen]);
+
+  const cleanedFileItems = useMemo(() => cleanDividers(filterForUploadScreen(fileItems)), [fileItems, filterForUploadScreen]);
+  const cleanedEditItems = useMemo(() => cleanDividers(filterForUploadScreen(editItems)), [editItems, filterForUploadScreen]);
+  const cleanedViewItems = useMemo(() => cleanDividers(filterForUploadScreen(viewItems)), [viewItems, filterForUploadScreen]);
+
+  const isAnyMenuOpen = activeMenuIndex !== null;
 
   return (
     <nav className="flex space-x-1 flex-1 items-center">
-      <Menu label="File" items={cleanedFileItems} />
-      <Menu label="Edit" items={cleanedEditItems} />
-      {cleanedViewItems.length > 0 && <Menu label="View" items={cleanedViewItems} />}
+      <Menu 
+        label="File" 
+        items={cleanedFileItems}
+        isOpen={activeMenuIndex === 0}
+        onOpenChange={(open) => setActiveMenuIndex(open ? 0 : null)}
+        onNavigateLeft={() => handleNavigateLeft(0)}
+        onNavigateRight={() => handleNavigateRight(0)}
+        isAnyMenuOpen={isAnyMenuOpen}
+      />
+      <Menu 
+        label="Edit" 
+        items={cleanedEditItems}
+        isOpen={activeMenuIndex === 1}
+        onOpenChange={(open) => setActiveMenuIndex(open ? 1 : null)}
+        onNavigateLeft={() => handleNavigateLeft(1)}
+        onNavigateRight={() => handleNavigateRight(1)}
+        isAnyMenuOpen={isAnyMenuOpen}
+      />
+      {cleanedViewItems.length > 0 && (
+        <Menu 
+          label="View" 
+          items={cleanedViewItems}
+          isOpen={activeMenuIndex === 2}
+          onOpenChange={(open) => setActiveMenuIndex(open ? 2 : null)}
+          onNavigateLeft={() => handleNavigateLeft(2)}
+          onNavigateRight={() => handleNavigateRight(2)}
+          isAnyMenuOpen={isAnyMenuOpen}
+        />
+      )}
     </nav>
   );
 }
