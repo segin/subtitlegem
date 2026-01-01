@@ -236,9 +236,7 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
                             textShadow: currentStyle.outlineWidth 
                               ? `0 0 ${getPreviewFontSize(currentStyle.outlineWidth || 0)}px ${currentStyle.outlineColor || '#000'}` 
                               : 'none',
-                            boxShadow: currentStyle.shadowDistance 
-                              ? `${getPreviewFontSize(currentStyle.shadowDistance || 0)}px ${getPreviewFontSize(currentStyle.shadowDistance || 0)}px 0px rgba(0,0,0,0.5)`
-                              : 'none',
+                            boxShadow: 'none',
                             display: 'inline-block',
                             textAlign: [1, 4, 7].includes(currentStyle.alignment) ? 'left' : 
                                        [3, 6, 9].includes(currentStyle.alignment) ? 'right' : 'center', 

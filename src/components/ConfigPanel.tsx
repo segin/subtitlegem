@@ -20,7 +20,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
     
     // Force percentage string for numeric inputs
     let finalValue = value;
-    const percentageKeys = ['fontSize', 'marginV', 'marginH', 'outlineWidth', 'shadowDistance'];
+    const percentageKeys = ['fontSize', 'marginV', 'marginH', 'outlineWidth'];
     
     if (percentageKeys.includes(key) && typeof value === 'number') {
         finalValue = `${value}%`;

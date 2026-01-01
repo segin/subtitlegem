@@ -41,7 +41,7 @@ export function getPreviewStyle(style: TrackStyle, videoHeightPx: number = 360) 
     // 1. Resolve everything to 1080p Reference Pixels first
     const refFontSize = normalizeToPx(style.fontSize, 1080);
     const refOutline = normalizeToPx(style.outlineWidth ?? 2.0, 1080);
-    const refShadow = normalizeToPx(style.shadowDistance ?? 1.5, 1080);
+    
     // Margins - strictly speaking MarginH should be relative to width (1920) if %, 
     // but users might expect height-relative sizing for margins too? 
     // Standard is MarginH % of Width, MarginV % of Height.
@@ -55,7 +55,6 @@ export function getPreviewStyle(style: TrackStyle, videoHeightPx: number = 360) 
     
     const fontSizePx = refFontSize * scale;
     const outlinePx = refOutline * scale;
-    const shadowPx = refShadow * scale;
     
     return {
         fontFamily: style.fontFamily,
@@ -65,8 +64,6 @@ export function getPreviewStyle(style: TrackStyle, videoHeightPx: number = 360) 
         textShadow: outlinePx 
           ? `0 0 ${outlinePx}px ${style.outlineColor || '#000'}` 
           : 'none',
-        boxShadow: shadowPx
-          ? `${shadowPx}px ${shadowPx}px 0px rgba(0,0,0,0.5)`
-          : 'none',
+        boxShadow: 'none', 
     };
 }

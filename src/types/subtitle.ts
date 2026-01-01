@@ -33,10 +33,7 @@ export interface TrackStyle {
   marginH: number | string;
   backgroundColor: string; // rgba() format for transparency
   outlineColor?: string; // Optional outline color
-  /** Outline: Number = 1080p Pixels, String = Percentage */
   outlineWidth?: number | string;
-  /** Shadow: Number = 1080p Pixels, String = Percentage */
-  shadowDistance?: number | string;
 }
 
 export interface FFmpegConfig {
@@ -333,7 +330,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
     outlineWidth: "0.2%",
-    shadowDistance: "0.1%",
   },
   defaultSecondaryStyle: {
     alignment: 8, // Top Center
@@ -345,7 +341,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
     outlineWidth: "0.2%",
-    shadowDistance: "0.1%",
   },
   defaultPrimaryLanguage: 'English',
   defaultSecondaryLanguage: 'Simplified Chinese',

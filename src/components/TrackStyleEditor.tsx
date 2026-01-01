@@ -34,7 +34,7 @@ export function TrackStyleEditor({ style, onChange, onReset, compact = false, mo
         return;
     }
 
-    if (key === 'fontSize' || key === 'marginV' || key === 'marginH' || key === 'outlineWidth' || key === 'shadowDistance') {
+    if (key === 'fontSize' || key === 'marginV' || key === 'marginH' || key === 'outlineWidth') {
         if (mode === 'percentage') {
              onChange({ [key]: `${value}%` });
         } else {
@@ -190,7 +190,6 @@ export function TrackStyleEditor({ style, onChange, onReset, compact = false, mo
       </div>
 
       {/* Outline & Shadow */}
-      <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Outline {unitLabel}</label>
           <input
@@ -202,18 +201,6 @@ export function TrackStyleEditor({ style, onChange, onReset, compact = false, mo
             className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none placeholder:text-[#444]"
           />
         </div>
-        <div>
-          <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Shadow {unitLabel}</label>
-          <input
-            type="number"
-            step={fineStep}
-            value={getValue(style.shadowDistance)}
-            placeholder="Inherit"
-            onChange={(e) => update('shadowDistance', e.target.value)}
-            className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none placeholder:text-[#444]"
-          />
-        </div>
-      </div>
     </div>
   );
 }

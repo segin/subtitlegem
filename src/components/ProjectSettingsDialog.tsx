@@ -315,9 +315,7 @@ export function ProjectSettingsDialog({
                                     textShadow: resolvedStyle.outlineWidth 
                                         ? `0 0 ${(normalizeToPx(resolvedStyle.outlineWidth, 1080) / 1080 * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
                                         : 'none',
-                                    boxShadow: resolvedStyle.shadowDistance 
-                                        ? `${(normalizeToPx(resolvedStyle.shadowDistance, 1080) / 1080 * referenceHeight * scale)}px ${(normalizeToPx(resolvedStyle.shadowDistance, 1080) / 1080 * referenceHeight * scale)}px 0px rgba(0,0,0,0.5)`
-                                        : 'none',
+                                    boxShadow: 'none',
                                     display: 'inline-block',
                                     lineHeight: 1.5,
                                     textAlign: [1, 4, 7].includes(resolvedStyle.alignment) ? 'left' : 
