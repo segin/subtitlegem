@@ -213,7 +213,7 @@ describe('Menu Component', () => {
       render(<Menu label="Test Menu" items={items} />);
       fireEvent.click(screen.getByText('Test Menu'));
       
-      expect(screen.getByText('✓')).toBeInTheDocument();
+      expect(screen.getByTestId('check-icon')).toBeInTheDocument();
     });
   });
 });

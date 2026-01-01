@@ -231,7 +231,7 @@ describe('getPreviewStyle', () => {
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
     outlineWidth: 2,
-    shadowDistance: 1.5,
+    outlineWidth: 2,
   };
 
   describe('unit tests', () => {

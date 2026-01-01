@@ -296,7 +296,7 @@ export function Menu({
               >
                 <span className="flex items-center gap-2">
                   <span className="w-4 flex items-center justify-center">
-                    {item.checked ? <Check className="w-3 h-3 text-[#007acc]" /> : item.icon}
+                    {item.checked ? <Check className="w-3 h-3 text-[#007acc]" data-testid="check-icon" /> : item.icon}
                   </span>
                   {item.label}
                 </span>
