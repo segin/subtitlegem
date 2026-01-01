@@ -258,7 +258,7 @@ export default function Home() {
       if (res.ok) {
          const data = await res.json();
          setQueueItems(data.items);
-         setQueuePaused(data.paused);
+         setQueuePaused(data.isPaused);
       }
     } catch (error) {
       console.error("Queue poll failed:", error);
