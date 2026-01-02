@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect, useState } from "react";
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
+import { REFERENCE_WIDTH } from "@/types/constants";
 import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
 
 interface PreviewProps {
@@ -218,7 +219,7 @@ export function VideoPreview({
     
     // Normalize to 1080p pixels, then scale to container
     const pxMarginV = normalizeToPx(marginV, 1080);
-    const pxMarginH = normalizeToPx(marginH, 1920); // horizontal uses width ref
+    const pxMarginH = normalizeToPx(marginH, REFERENCE_WIDTH); // horizontal uses width ref
     
     const scaleFactor = containerHeight > 0 ? containerHeight / 1080 : 1;
     const scaledMarginV = pxMarginV * scaleFactor;

@@ -70,6 +70,7 @@ subtitlegem/
 │   │   └── useSubtitleSync.ts  # Video-subtitle time sync
 │   │
 │   └── types/                  # TypeScript Definitions
+│       ├── constants.ts        # Reference resolution constants (1920x1080)
 │       └── subtitle.ts         # Core data types
 │
 ├── public/                     # Static assets

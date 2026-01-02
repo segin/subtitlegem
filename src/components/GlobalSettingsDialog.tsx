@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { normalizeToPx } from "@/lib/style-resolver";
@@ -127,7 +128,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
   const previewWidth = 320; 
   const previewHeight = previewAspect === '16:9' ? previewWidth * (9/16) : previewWidth * (16/9);
   
-  const referenceHeight = previewAspect === '16:9' ? 1080 : 1920; 
+  const referenceHeight = previewAspect === '16:9' ? REFERENCE_HEIGHT : REFERENCE_WIDTH; 
   const scale = previewHeight / referenceHeight;
 
   // Helper to normalize style values for preview
@@ -221,10 +222,10 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                       <div 
                         className="absolute inset-0 pointer-events-none p-4"
                         style={{
-                            paddingTop: currentStyle.alignment >= 7 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / 1080) * 100}%`) : 0,
-                            paddingBottom: currentStyle.alignment <= 3 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / 1080) * 100}%`) : 0,
-                            paddingLeft: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / 1920) * 100}%`,
-                            paddingRight: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / 1920) * 100}%`,
+                            paddingTop: currentStyle.alignment >= 7 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / REFERENCE_HEIGHT) * 100}%`) : 0,
+                            paddingBottom: currentStyle.alignment <= 3 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / REFERENCE_HEIGHT) * 100}%`) : 0,
+                            paddingLeft: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / REFERENCE_WIDTH) * 100}%`,
+                            paddingRight: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / REFERENCE_WIDTH) * 100}%`,
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: [1, 4, 7].includes(currentStyle.alignment) ? 'flex-start' : 

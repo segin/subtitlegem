@@ -1,3 +1,5 @@
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_FPS } from './constants';
+
 export interface SubtitleLine {
   id: string;
   startTime: number; // in seconds
@@ -203,9 +205,9 @@ export interface ProjectConfig {
  * Default project configuration
  */
 export const DEFAULT_PROJECT_CONFIG: ProjectConfig = {
-  width: 1920,
-  height: 1080,
-  fps: 30,
+  width: REFERENCE_WIDTH,
+  height: REFERENCE_HEIGHT,
+  fps: DEFAULT_FPS,
   scalingMode: 'fit',
 };
 
@@ -256,8 +258,8 @@ export function migrateToMultiVideo(v1: ProjectState): MultiVideoProjectState {
     filePath: v1.videoPath || '',
     originalFilename: v1.config.originalFilename || 'Untitled',
     duration: 0, // Will be determined when video is loaded
-    width: 1920,
-    height: 1080,
+    width: REFERENCE_WIDTH,
+    height: REFERENCE_HEIGHT,
     geminiFileUri: v1.config.geminiFileUri,
     geminiFileExpiration: v1.config.geminiFileExpiration,
     fileId: v1.config.fileId,

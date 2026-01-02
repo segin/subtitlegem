@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Settings, X, RefreshCw, Type, Languages } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
 
 interface ProjectSettingsDialogProps {
@@ -150,7 +151,7 @@ export function ProjectSettingsDialog({
   const previewWidth = 400; 
   const previewHeight = previewAspect === '16:9' ? previewWidth * (9/16) : previewWidth * (16/9);
   
-  const referenceHeight = previewAspect === '16:9' ? 1080 : 1920; 
+  const referenceHeight = previewAspect === '16:9' ? REFERENCE_HEIGHT : REFERENCE_WIDTH; 
   const scale = previewHeight / referenceHeight;
 
   return (
@@ -308,12 +309,12 @@ export function ProjectSettingsDialog({
                                     style={{
                                     fontFamily: resolvedStyle.fontFamily || 'Arial',
                                     // Scale 1080p ref pixels to preview height
-                                    fontSize: `${(normalizeToPx(resolvedStyle.fontSize, 1080) / 1080) * referenceHeight * scale}px`, 
+                                    fontSize: `${(normalizeToPx(resolvedStyle.fontSize, REFERENCE_HEIGHT) / REFERENCE_HEIGHT) * referenceHeight * scale}px`, 
                                     color: resolvedStyle.color || '#FFF',
                                     backgroundColor: resolvedStyle.backgroundColor || 'transparent',
                                     padding: '0.1em 0.3em',
                                     textShadow: resolvedStyle.outlineWidth 
-                                        ? `0 0 ${(normalizeToPx(resolvedStyle.outlineWidth, 1080) / 1080 * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
+                                        ? `0 0 ${(normalizeToPx(resolvedStyle.outlineWidth, REFERENCE_HEIGHT) / REFERENCE_HEIGHT * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
                                         : 'none',
                                     boxShadow: 'none',
                                     display: 'inline-block',

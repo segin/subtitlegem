@@ -1,4 +1,5 @@
 import { TrackStyle, GlobalSettings, SubtitleConfig } from "@/types/subtitle";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 
 /**
  * Resolves the final style for a subtitle line by merging:
@@ -39,19 +40,19 @@ export function normalizeToPx(value: number | string | undefined, fullSize: numb
  */
 export function getPreviewStyle(style: TrackStyle, videoHeightPx: number = 360) {
     // 1. Resolve everything to 1080p Reference Pixels first
-    const refFontSize = normalizeToPx(style.fontSize, 1080);
-    const refOutline = normalizeToPx(style.outlineWidth ?? 2.0, 1080);
+    const refFontSize = normalizeToPx(style.fontSize, REFERENCE_HEIGHT);
+    const refOutline = normalizeToPx(style.outlineWidth ?? 2.0, REFERENCE_HEIGHT);
     
     // Margins - strictly speaking MarginH should be relative to width (1920) if %, 
     // but users might expect height-relative sizing for margins too? 
     // Standard is MarginH % of Width, MarginV % of Height.
     // However, if we store pixels, they are just pixels.
-    // Let's stick to standard behavior: H is % of Width (1920).
+    // Let's stick to standard behavior: H is % of Width (REFERENCE_WIDTH).
     // ...actually for preview CSS, we can pass raw % string if it is %, or px string if px.
     // BUT we need to scale "1080p pixels" to "360p pixels" for preview.
     
     // Scale from 1080p ref to preview height
-    const scale = videoHeightPx / 1080;
+    const scale = videoHeightPx / REFERENCE_HEIGHT;
     
     const fontSizePx = refFontSize * scale;
     const outlinePx = refOutline * scale;

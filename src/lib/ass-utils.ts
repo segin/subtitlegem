@@ -1,4 +1,5 @@
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { formatTimestamp } from "@/lib/time-utils";
 import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
 
@@ -24,7 +25,7 @@ export function formatAssTime(seconds: number): string {
     return `${h}:${mm}:${ss}.${cs}`;
 }
 
-function generateStyleLine(name: string, style: TrackStyle, playResX: number = 1920, playResY: number = 1080): string {
+function generateStyleLine(name: string, style: TrackStyle, playResX: number = REFERENCE_WIDTH, playResY: number = REFERENCE_HEIGHT): string {
     const { fontFamily, fontSize, color, backgroundColor, marginV, marginH, outlineWidth } = style;
     
     // Normalize all mixed units (pixels vs %) to Absolute ASS Pixels (based on PlayRes)
@@ -65,8 +66,8 @@ export function generateAss(
     videoDimensions?: VideoDimensions
 ): string {
     // Use actual video dimensions if provided, otherwise default to 1080p
-    const playResX = videoDimensions?.width || 1920;
-    const playResY = videoDimensions?.height || 1080;
+    const playResX = videoDimensions?.width || REFERENCE_WIDTH;
+    const playResY = videoDimensions?.height || REFERENCE_HEIGHT;
     
     // Resolve styles with inheritance (Global -> Project -> Line)
     const resolvedPrimary = resolveTrackStyle(

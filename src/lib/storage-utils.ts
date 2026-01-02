@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { REFERENCE_PIXELS } from '@/types/constants';
 
 // Minimal FS interface for our needs
 export interface IFileSystem {
@@ -87,7 +88,7 @@ export function estimateH264Size(params: EstimationParams): number {
   if (duration <= 0 || width <= 0 || height <= 0) return 0;
 
   const BASE_VIDEO_BITRATE_KBPS = 4500; // 1080p @ CRF 23
-  const BASE_PIXELS = 1920 * 1080;
+  const BASE_PIXELS = REFERENCE_PIXELS;
 
   const currentPixels = width * height;
   const pixelRatio = currentPixels / BASE_PIXELS;
