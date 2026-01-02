@@ -1,5 +1,6 @@
 import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import fs from "fs";
+import { SubtitleLine } from "@/types/subtitle";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
@@ -100,16 +101,17 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
     try {
       file = await ai.files.get({ name: fileName });
       retryCount = 0; // Reset on success
-    } catch (error: any) {
+    } catch (error: unknown) {
       retryCount++;
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(
         `\n[Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`,
-        error.message
+        errorMessage
       );
 
       if (retryCount >= maxRetries) {
         throw new Error(
-          `Failed to get file status after ${maxRetries} attempts: ${error.message}`
+          `Failed to get file status after ${maxRetries} attempts: ${errorMessage}`
         );
       }
 
@@ -172,9 +174,13 @@ export async function generateSubtitles(
 
     const text = response.text!;
     return JSON.parse(cleanJsonOutput(text));
-  } catch (error: any) {
-    if (error.status === 429 && attempt < 3) {
-      const delayMatch = error.message.match(/retry in ([\d.]+)s/);
+  } catch (error: unknown) {
+    // Basic rate limit check - type guard needed if we want to be strict about 'status'
+    const status = (error as any)?.status;
+    
+    if (status === 429 && attempt < 3) {
+      const msg = (error instanceof Error) ? error.message : String(error);
+      const delayMatch = msg.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
 
       console.log(
@@ -244,9 +250,12 @@ export async function generateSubtitlesInline(
 
     const text = response.text!;
     return JSON.parse(cleanJsonOutput(text));
-  } catch (error: any) {
-    if (error.status === 429 && attempt < 3) {
-      const delayMatch = error.message.match(/retry in ([\d.]+)s/);
+  } catch (error: unknown) {
+    const status = (error as any)?.status;
+    
+    if (status === 429 && attempt < 3) {
+      const msg = (error instanceof Error) ? error.message : String(error);
+      const delayMatch = msg.match(/retry in ([\d.]+)s/);
       const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
 
       console.log(
@@ -268,7 +277,7 @@ export async function generateSubtitlesInline(
 }
 
 export async function translateSubtitles(
-  subtitles: any[],
+  subtitles: SubtitleLine[],
   targetLanguage: string,
   modelName: string = "gemini-2.5-flash"
 ) {

@@ -255,7 +255,7 @@ export async function exportMultiVideo(
         // Overwrite
         args.push('-y', outputPath);
 
-        console.log(`[FFmpeg-Concat] Spawning: ffmpeg ${args.join(' ')}`);
+
 
         const proc = spawn('ffmpeg', args);
         let stderr = '';

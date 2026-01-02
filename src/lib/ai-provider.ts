@@ -28,7 +28,7 @@ export class AISafetyError extends Error {
  */
 export async function processWithFallback(
   task: 'generate' | 'translate',
-  params: any,
+  params: Record<string, any>,
   fallbackChain: ModelConfig[]
 ): Promise<AIResult> {
   const enabledChain = fallbackChain.filter(c => c.enabled);
@@ -36,26 +36,31 @@ export async function processWithFallback(
     throw new Error("No enabled AI models in fallback chain.");
   }
 
-  let lastError: any = null;
+  let lastError: unknown = null;
 
   for (const config of enabledChain) {
     try {
       console.log(`[AI-Provider] Trying ${config.provider} (${config.modelName}) for task: ${task}`);
       
-      let result: any;
+      let result: Partial<AIResult>;
       if (task === 'generate') {
         result = await callGenerate(config, params);
       } else {
         result = await callTranslate(config, params);
       }
 
+      if (!result.subtitles) {
+        throw new Error("AI provider returned no subtitles.");
+      }
+
       return {
-        ...result,
+        detectedLanguage: result.detectedLanguage,
+        subtitles: result.subtitles,
         provider: config.provider,
         modelName: config.modelName
       };
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
       
       const isSafetyRefusal = detectSafetyRefusal(config.provider, error);
@@ -66,10 +71,12 @@ export async function processWithFallback(
 
       // If it's not a safety refusal (e.g. network error, auth error), we might want to re-route anyway
       // but let's be specific for now.
-      console.error(`[AI-Provider] Error from ${config.provider}:`, error.message);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`[AI-Provider] Error from ${config.provider}:`, errorMessage);
       
       // For now, let's re-route on most transient/recoverable errors too
-      if (error.status === 429 || error.status >= 500) {
+      const status = (error as any)?.status;
+      if (status === 429 || (status && status >= 500)) {
         console.warn(`[AI-Provider] Recoverable error from ${config.provider}. Re-routing...`);
         continue;
       }
@@ -81,7 +88,7 @@ export async function processWithFallback(
   throw lastError || new Error("All AI models in chain failed.");
 }
 
-async function callGenerate(config: ModelConfig, params: any) {
+async function callGenerate(config: ModelConfig, params: Record<string, any>): Promise<any> {
   if (config.provider === 'gemini') {
     if (params.isInline) {
       const { generateSubtitlesInline } = await import("./gemini");
@@ -107,7 +114,7 @@ async function callGenerate(config: ModelConfig, params: any) {
   throw new Error(`Provider ${config.provider} does not support 'generate' task yet.`);
 }
 
-async function callTranslate(config: ModelConfig, params: any) {
+async function callTranslate(config: ModelConfig, params: Record<string, any>) {
   // Validate subtitle array size to prevent DoS
   if (params.subtitles) {
     validateSubtitleArraySize(params.subtitles);
@@ -129,7 +136,7 @@ async function callTranslate(config: ModelConfig, params: any) {
   throw new Error(`Provider ${config.provider} does not support 'translate' task yet.`);
 }
 
-async function callOpenAICompatible(config: ModelConfig, params: any) {
+async function callOpenAICompatible(config: ModelConfig, params: Record<string, any>) {
   const endpoint = config.endpoint || (config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1');
   const apiKey = config.apiKey || (config.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY);
 
@@ -173,7 +180,7 @@ async function callOpenAICompatible(config: ModelConfig, params: any) {
     const status = response.status;
     const message = errorData.error?.message || response.statusText;
     
-    const err: any = new Error(message);
+    const err = new Error(message) as any;
     err.status = status;
     err.data = errorData;
     throw err;

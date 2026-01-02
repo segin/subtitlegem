@@ -21,7 +21,7 @@ function getDb(): Database.Database {
   const stagingDir = getStagingDir();
   ensureStagingStructure(stagingDir);
   const dbPath = path.join(stagingDir, 'queue.db');
-  console.log(`[SQLite] Opening database at ${dbPath}`);
+
   
   db = new Database(dbPath);
   
@@ -57,7 +57,7 @@ function getDb(): Database.Database {
     );
   `);
   
-  console.log('[SQLite] Database initialized');
+
   return db;
 }
 
@@ -311,6 +311,6 @@ export function close(): void {
   if (db) {
     db.close();
     db = null;
-    console.log('[SQLite] Database closed');
+  // console.log('[SQLite] Database closed');
   }
 }

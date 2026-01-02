@@ -46,7 +46,13 @@ interface DraftItem {
   videoPath?: string;
   createdAt: string;
   updatedAt: string;
-  [key: string]: any;
+}
+
+interface RawSubtitleItem {
+  startTime: string;
+  endTime: string;
+  text: string;
+  secondaryText?: string;
 }
 
 
@@ -178,8 +184,8 @@ export default function Home() {
       } else {
         setVideoProperties(data);
       }
-    } catch (err: any) {
-      setVideoPropsError(err.message || 'Failed to fetch video properties');
+    } catch (err: unknown) {
+      setVideoPropsError((err instanceof Error ? err.message : String(err)) || 'Failed to fetch video properties');
     } finally {
       setVideoPropsLoading(false);
     }
@@ -207,7 +213,7 @@ export default function Home() {
   }, [timelineClips, timelineImages, isMultiVideoMode]);
 
   // Load draft functionality
-  const handleLoadDraft = async (draft: any) => {
+  const handleLoadDraft = async (draft: DraftItem) => {
     try {
       console.log("[Draft] Loading draft:", draft.id);
       const res = await fetch(`/api/drafts?id=${draft.id}`);
@@ -396,9 +402,9 @@ export default function Home() {
       }));
       
       alert("Relink successful!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert(`Relink failed: ${err.message}`);
+      alert(`Relink failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -472,7 +478,7 @@ export default function Home() {
   };
 
 
-  const handleUploadComplete = async (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
+  const handleUploadComplete = async (rawSubtitles: RawSubtitleItem[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
     // Check if we can auto-repair a missing clip
     if (fileSize && originalFilename) {
        const missingClipIndex = videoClips.findIndex(c => c.missing && c.originalFilename === originalFilename && c.fileSize === fileSize);
@@ -709,7 +715,7 @@ export default function Home() {
     if (data.subtitles) {
         setSubtitles(data.subtitles);
         // Add unique IDs if missing
-        const processed = data.subtitles.map((s: any) => ({
+        const processed = (data.subtitles as SubtitleLine[]).map((s) => ({
             ...s,
             id: s.id || uuidv4()
         }));
