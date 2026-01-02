@@ -62,6 +62,7 @@ interface MenuBarProps {
   // Recent Drafts
   recentDrafts?: RecentDraft[];
   onLoadDraft?: (id: string) => void;
+  onAbout?: () => void;
   // Toggle states for checkmarks
   isTimelineVisible?: boolean;
   isSubtitleListVisible?: boolean;
@@ -125,7 +126,7 @@ export function MenuBar({
   isVideoLibraryVisible,
   onCut, onCopy, onPaste, onMerge, onSplit,
   hasSelection = false, hasClipboard = false, canMerge = false, canSplit = false,
-  recentDrafts = [], onLoadDraft
+  recentDrafts = [], onLoadDraft, onAbout
 }: MenuBarProps) {
   
   // Track which menu is open (for cross-menu navigation)
@@ -267,8 +268,8 @@ export function MenuBar({
     { divider: true },
     { id: "shortcuts-help", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
     { divider: true },
-    { id: "about", label: "About SubtitleGem", icon: <Info className="w-4 h-4" />, onClick: () => alert('SubtitleGem v0.1.0\n\nAI-powered subtitle generation using Google Gemini.\n\nhttps://github.com/segin/subtitlegem') },
-  ], [onShowShortcuts]);
+    { id: "about", label: "About SubtitleGem", icon: <Info className="w-4 h-4" />, onClick: onAbout },
+  ], [onShowShortcuts, onAbout]);
   const cleanedHelpItems = useMemo(() => cleanDividers(helpItems), [helpItems]);
 
   return (

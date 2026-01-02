@@ -11,6 +11,7 @@ import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
 import { GlobalSettingsDialog, TabId } from "@/components/GlobalSettingsDialog";
+import { AboutDialog } from "@/components/AboutDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
 import { VideoLibrary } from "@/components/VideoLibrary";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
@@ -89,6 +90,7 @@ export default function Home() {
   
   // New dialogs
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [showShiftTimings, setShowShiftTimings] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   
@@ -977,6 +979,7 @@ export default function Home() {
               setShowGlobalSettings(true);
             }}
             onShowShortcuts={() => setShowShortcuts(true)}
+            onAbout={() => setShowAbout(true)}
             recentDrafts={drafts.slice(0, 10).map(d => ({
               id: d.id,
               name: d.name,
@@ -1109,6 +1112,11 @@ export default function Home() {
         <KeyboardShortcutsDialog
           isOpen={showShortcuts}
           onClose={() => setShowShortcuts(false)}
+        />
+
+        <AboutDialog
+          isOpen={showAbout}
+          onClose={() => setShowAbout(false)}
         />
         
         <ShiftTimingsDialog
@@ -1243,6 +1251,7 @@ export default function Home() {
             canUndo={canUndo}
             canRedo={canRedo}
             onShowShortcuts={() => setShowShortcuts(true)}
+            onAbout={() => setShowAbout(true)}
             onFindReplace={() => setShowFindReplace(true)}
             onShiftTimings={() => setShowShiftTimings(true)}
             onCut={handleCutSubtitles}
