@@ -67,7 +67,8 @@ subtitlegem/
 │   │   └── timeline-utils.ts   # Multi-video timeline calculations
 │   │
 │   ├── hooks/                  # Custom React Hooks
-│   │   └── useSubtitleSync.ts  # Video-subtitle time sync
+│   │   ├── useSubtitleSync.ts  # Video-subtitle time sync
+│   │   └── useHomeState.ts     # State hooks for home page (dialog, queue, drafts, video, multi-video, selection)
 │   │
 │   └── types/                  # TypeScript Definitions
 │       ├── constants.ts        # Reference resolution constants (1920x1080)
