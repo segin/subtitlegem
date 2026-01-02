@@ -10,7 +10,7 @@ import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
-import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
+import { GlobalSettingsDialog, TabId } from "@/components/GlobalSettingsDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
 import { VideoLibrary } from "@/components/VideoLibrary";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
@@ -85,6 +85,7 @@ export default function Home() {
   
   // Global settings dialog
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
+  const [globalSettingsTab, setGlobalSettingsTab] = useState<TabId>('styles');
   
   // New dialogs
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -967,7 +968,14 @@ export default function Home() {
           <div className="w-px h-3.5 bg-[#444444] mx-1" />
           <MenuBar 
             isUploadScreen={true}
-            onGlobalSettings={() => setShowGlobalSettings(true)}
+            onGlobalSettings={() => {
+              setGlobalSettingsTab('styles');
+              setShowGlobalSettings(true);
+            }}
+            onThemeSettings={() => {
+              setGlobalSettingsTab('appearance');
+              setShowGlobalSettings(true);
+            }}
             onShowShortcuts={() => setShowShortcuts(true)}
             recentDrafts={drafts.slice(0, 10).map(d => ({
               id: d.id,
@@ -1095,6 +1103,7 @@ export default function Home() {
         <GlobalSettingsDialog
           isOpen={showGlobalSettings}
           onClose={() => setShowGlobalSettings(false)}
+          initialTab={globalSettingsTab}
         />
         
         <KeyboardShortcutsDialog
@@ -1219,7 +1228,14 @@ export default function Home() {
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
             onReprocessVideo={() => setShowProjectSettings(true)}
-            onGlobalSettings={() => setShowGlobalSettings(true)}
+            onGlobalSettings={() => {
+              setGlobalSettingsTab('styles');
+              setShowGlobalSettings(true);
+            }}
+            onThemeSettings={() => {
+              setGlobalSettingsTab('appearance');
+              setShowGlobalSettings(true);
+            }}
             onVideoProperties={handleShowVideoProperties}
             onToggleVideoLibrary={handleToggleVideoLibrary}
             onUndo={undo}

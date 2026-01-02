@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
-import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown } from "lucide-react";
+import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { normalizeToPx } from "@/lib/style-resolver";
 
@@ -11,10 +11,17 @@ interface GlobalSettingsDialogProps {
   onClose: () => void;
 }
 
-type TabId = 'styles' | 'languages' | 'encoding' | 'ai';
+interface GlobalSettingsDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialTab?: TabId;
+}
+
+export type TabId = 'styles' | 'languages' | 'encoding' | 'ai' | 'appearance';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'styles', label: 'Styles', icon: <Type className="w-3.5 h-3.5" /> },
+  { id: 'appearance', label: 'Appearance', icon: <Palette className="w-3.5 h-3.5" /> },
   { id: 'languages', label: 'Languages', icon: <Languages className="w-3.5 h-3.5" /> },
   { id: 'encoding', label: 'Encoding', icon: <Cpu className="w-3.5 h-3.5" /> },
   { id: 'ai', label: 'AI Model', icon: <Sparkles className="w-3.5 h-3.5" /> },
@@ -28,8 +35,8 @@ const LANGUAGES = [
   'Hindi', 'Thai', 'Vietnamese', 'Indonesian', 'Dutch', 'Polish', 'Turkish', 'None'
 ];
 
-export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogProps) {
-  const [activeTab, setActiveTab] = useState<TabId>('styles');
+export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }: GlobalSettingsDialogProps) {
+  const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [stylesSubTab, setStylesSubTab] = useState<'primary' | 'secondary'>('primary');
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
   const [loading, setLoading] = useState(true);
@@ -40,8 +47,9 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
     if (isOpen) {
       loadSettings();
       loadModels();
+      if (initialTab) setActiveTab(initialTab);
     }
-  }, [isOpen]);
+  }, [isOpen, initialTab]);
 
   const loadSettings = async () => {
     setLoading(true);
@@ -309,6 +317,19 @@ export function GlobalSettingsDialog({ isOpen, onClose }: GlobalSettingsDialogPr
                             onChange={updateCurrentStyle}
                             mode="percentage"
                         />
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === 'appearance' && (
+                <div className="space-y-4">
+                  <div className="bg-[#1e1e1e] border border-[#333333] p-4 text-center rounded-sm">
+                    <Palette className="w-8 h-8 text-[#555] mx-auto mb-2" />
+                    <h4 className="text-sm font-medium text-[#e1e1e1] mb-1">Theme Settings</h4>
+                    <p className="text-xs text-[#666666] mb-4">Dark Mode is currently the only supported theme.</p>
+                    <div className="flex justify-center gap-2 pointer-events-none opacity-50">
+                        <button className="px-3 py-1.5 bg-[#0e639c] text-white text-xs rounded-sm border border-[#3e3e42]">Dark Mode</button>
+                        <button className="px-3 py-1.5 bg-[#e1e1e1] text-[#333] text-xs rounded-sm border border-[#ccc]">Light Mode</button>
                     </div>
                   </div>
                 </div>

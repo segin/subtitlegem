@@ -41,6 +41,7 @@ interface MenuBarProps {
   onProjectSettings?: () => void;
   onReprocessVideo?: () => void;
   onGlobalSettings?: () => void;
+  onThemeSettings?: () => void;
   hasSecondarySubtitles?: boolean;
   primaryLanguage?: string;
   secondaryLanguage?: string;
@@ -111,6 +112,7 @@ export function MenuBar({
   onProjectSettings,
   onReprocessVideo,
   onGlobalSettings,
+  onThemeSettings,
   hasSecondarySubtitles = false,
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
@@ -236,13 +238,13 @@ export function MenuBar({
     { id: "video-assets", label: "Video Assets", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen, checked: isVideoLibraryVisible },
     { id: "video-props", label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
     { divider: true },
-    { id: "toggle-timeline", label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: true, checked: isTimelineVisible },
-    { id: "toggle-subtitle-list", label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: true, checked: isSubtitleListVisible },
+    { id: "toggle-timeline", label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: isUploadScreen, checked: isTimelineVisible },
+    { id: "toggle-subtitle-list", label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: isUploadScreen, checked: isSubtitleListVisible },
     { divider: true },
     { id: "zoom-in", label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: isUploadScreen },
     { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: isUploadScreen },
     { divider: true },
-    { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, disabled: true },
+    { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, onClick: onThemeSettings, disabled: isUploadScreen },
     { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
   ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible]);
 
