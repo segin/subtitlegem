@@ -6,7 +6,6 @@ import { SubtitleTimeline, TimelineRef } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
-import { RawEditor } from "@/components/RawEditor";
 import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
@@ -30,7 +29,7 @@ import {
   ProjectConfig,
 } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
-import { parseSRTTime, stringifySRT } from "@/lib/srt-utils";
+import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useSubtitleHistory } from "@/hooks/useSubtitleHistory";
 import { getProjectDuration } from "@/lib/timeline-utils";
@@ -48,7 +47,6 @@ export default function Home() {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [config, setConfig] = useState<SubtitleConfig>(DEFAULT_CONFIG);
-  const [showRawEditor, setShowRawEditor] = useState(false);
   const [showProjectSettings, setShowProjectSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'list' | 'style'>('list');
   
@@ -461,7 +459,7 @@ export default function Home() {
   };
 
 
-  const handleUploadComplete = (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
+  const handleUploadComplete = async (rawSubtitles: any[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
     // Check if we can auto-repair a missing clip
     if (fileSize && originalFilename) {
        const missingClipIndex = videoClips.findIndex(c => c.missing && c.originalFilename === originalFilename && c.fileSize === fileSize);
@@ -487,8 +485,8 @@ export default function Home() {
 
     const mapped: SubtitleLine[] = rawSubtitles.map(s => ({
       id: uuidv4(),
-      startTime: parseSRTTime(s.startTime),
-      endTime: parseSRTTime(s.endTime),
+      startTime: parseTimestamp(s.startTime),
+      endTime: parseTimestamp(s.endTime),
       text: s.text,
       secondaryText: s.secondaryText
     }));
@@ -510,13 +508,28 @@ export default function Home() {
     // V2: Initialize clips if empty (Single Video Mode init)
     // If not in multi-video mode explicitly, we treat this as a fresh single project
     if (!uploadMode || uploadMode === 'single') {
+       let width = 0;
+       let height = 0;
+       let dur = 0;
+       
+       try {
+           const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(serverPath)}`);
+           const info = await infoRes.json();
+           width = info.width || 0;
+           height = info.height || 0;
+           dur = info.duration || 0;
+           setDuration(dur); // Set main duration state
+       } catch (err) {
+           console.error("Failed to fetch video info on upload complete", err);
+       }
+
        const newClip: VideoClip = {
           id: uuidv4(),
           filePath: serverPath,
           originalFilename: originalFilename || "Untitled",
-          duration: 0, // Will be updated on load
-          width: 0,
-          height: 0,
+          duration: dur,
+          width: width,
+          height: height,
           fileSize: fileSize,
           subtitles: mapped
        };
@@ -577,10 +590,10 @@ export default function Home() {
       content = generateAss(subtitles, config);
       fileName = 'project.ass';
     } else if (format === 'srt' || format === 'srt-primary') {
-      content = stringifySRT(subtitles, 'primary');
+      content = generateSrtContent(subtitles, 'primary');
       fileName = 'subtitles_en.srt';
     } else if (format === 'srt-secondary') {
-      content = stringifySRT(subtitles, 'secondary');
+      content = generateSrtContent(subtitles, 'secondary');
       fileName = 'subtitles_secondary.srt';
     } else if (format === 'txt') {
       content = subtitles.map(s => s.text).join('\n');
@@ -1248,15 +1261,7 @@ export default function Home() {
               <span>Queue</span>
           </button>
           
-          <div className="w-px h-3 bg-[#444444] mx-1" />
-          
-          <button 
-            onClick={() => setShowRawEditor(true)}
-            className="flex items-center space-x-1.5 px-2 py-1 text-xs bg-[#3e3e42] hover:bg-[#4e4e52] border border-[#2d2d2d] hover:border-[#555555] rounded-sm transition-all"
-          >
-            <Code className="w-3 h-3" />
-            <span>Edit RAW</span>
-          </button>
+          {/* Raw Editor button removed */}
           
           <button 
             onClick={() => {
@@ -1460,6 +1465,13 @@ export default function Home() {
                 config={config}
                 queueItems={queueItems}
                 onChangeConfig={setConfig}
+                videoMetaData={
+                    videoClips.length > 0 ? {
+                        width: videoClips[0].width,
+                        height: videoClips[0].height,
+                        duration: videoClips[0].duration || duration
+                    } : undefined
+                }
                 onExport={async (sampleDuration, ffmpegConfig) => {
                   if (!videoPath) return;
                   
@@ -1535,16 +1547,7 @@ export default function Home() {
         />
       </div>
 
-      {showRawEditor && (
-        <RawEditor 
-          subtitles={subtitles} 
-          onSave={(newSubs) => {
-            setSubtitles(newSubs);
-            setShowRawEditor(false);
-          }} 
-          onCancel={() => setShowRawEditor(false)} 
-        />
-      )}
+      {/* Raw Editor removed */}
       
       <ProjectSettingsDialog
         isOpen={showProjectSettings}

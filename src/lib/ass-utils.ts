@@ -1,5 +1,5 @@
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
-import { formatSRTTime } from "./srt-utils";
+import { formatTimestamp } from "@/lib/time-utils";
 import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
 
 // Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)

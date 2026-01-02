@@ -5,6 +5,7 @@ import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { Download, Play, Loader2 } from "lucide-react";
 import { FFmpegConfigPanel, ExportConfig, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
+import { estimateH264Size, formatBytes } from "@/lib/storage-utils";
 
 interface ExportControlsProps {
   subtitles: SubtitleLine[];
@@ -13,6 +14,11 @@ interface ExportControlsProps {
   queueItems: QueueItem[];
   onExport: (sampleDuration: number | null, ffmpegConfig: ExportConfig) => void;
   onChangeConfig?: (config: SubtitleConfig) => void;
+  videoMetaData?: {
+    duration: number;
+    width: number;
+    height: number;
+  };
 }
 
 export function ExportControls({
@@ -22,6 +28,7 @@ export function ExportControls({
   queueItems,
   onExport,
   onChangeConfig,
+  videoMetaData,
 }: ExportControlsProps) {
   const [selectedDuration, setSelectedDuration] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -40,15 +47,45 @@ export function ExportControls({
 
   const processingCount = queueItems.filter(i => i.status === 'processing' || i.status === 'pending').length;
 
+  const estimatedSize = React.useMemo(() => {
+    if (!videoMetaData || !videoMetaData.duration) return null;
+
+    let targetWidth = videoMetaData.width;
+    let targetHeight = videoMetaData.height;
+
+    if (config.ffmpeg.resolution !== 'original') {
+        const [w, h] = config.ffmpeg.resolution.split('x').map(Number);
+        targetWidth = w;
+        targetHeight = h;
+    }
+
+    const bytes = estimateH264Size({
+        duration: videoMetaData.duration,
+        width: targetWidth,
+        height: targetHeight,
+        crf: config.ffmpeg.crf
+    });
+
+    return formatBytes(bytes);
+  }, [videoMetaData, config.ffmpeg.resolution, config.ffmpeg.crf]);
+
   return (
     <div className="border-t border-[#333333] bg-[#252526] p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-bold text-[#888888] uppercase tracking-wider">Export Video</h3>
-        {processingCount > 0 && (
-          <span className="text-[10px] text-[#007acc] font-mono">
-            {processingCount} {processingCount === 1 ? 'job' : 'jobs'} in queue
-          </span>
-        )}
+        <div className="flex items-center space-x-3">
+            {estimatedSize && (
+                <span className="text-[10px] text-[#666666] flex items-center space-x-1" title="Estimated output size">
+                    <span className="uppercase font-bold tracking-wider">Est. Size:</span>
+                    <span className="text-[#cccccc] font-mono">{estimatedSize}</span>
+                </span>
+            )}
+            {processingCount > 0 && (
+              <span className="text-[10px] text-[#007acc] font-mono">
+                {processingCount} {processingCount === 1 ? 'job' : 'jobs'} in queue
+              </span>
+            )}
+        </div>
       </div>
 
       {/* FFmpeg Config Panel */}

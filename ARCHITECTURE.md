@@ -31,25 +31,25 @@ subtitlegem/
 │   │   ├── layout.tsx          # Root layout
 │   │   └── page.tsx            # Main application page
 │   │
-  │   ├── components/             # React UI Components (21 files)
-  │   │   ├── ConfigPanel.tsx     # Subtitle style configuration
-  │   │   ├── DraftsSidebar.tsx   # Project drafts list (collapsible sidebar)
-  │   │   ├── ExportControls.tsx  # Export button + options
-  │   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
-  │   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
-  │   │   ├── GlobalSettingsDialog.tsx # App-wide settings
-  │   │   ├── KeyboardShortcutsDialog.tsx # Shortcut reference overlay
-  │   │   ├── MenuBar.tsx         # Top navigation bar (File, Edit, View, Help) with Recent Drafts submenu
-  │   │   ├── ProjectSettingsDialog.tsx # Per-project settings
-  │   │   ├── QueueDrawer.tsx     # Export queue overlay
-  │   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
-  │   │   ├── SubtitleList.tsx    # Editable subtitle lines
-  │   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable)
+│   ├── components/             # React UI Components (21 files)
+│   │   ├── ConfigPanel.tsx     # Subtitle style configuration
+│   │   ├── DraftsSidebar.tsx   # Project drafts list (collapsible sidebar)
+│   │   ├── ExportControls.tsx  # Export button + options
+│   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
+│   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
+│   │   ├── GlobalSettingsDialog.tsx # App-wide settings
+│   │   ├── KeyboardShortcutsDialog.tsx # Shortcut reference overlay
+│   │   ├── MenuBar.tsx         # Top navigation bar (File, Edit, View, Help) with Recent Drafts submenu
+│   │   ├── ProjectSettingsDialog.tsx # Per-project settings
+│   │   ├── QueueDrawer.tsx     # Export queue overlay
+│   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
+│   │   ├── SubtitleList.tsx    # Editable subtitle lines
+│   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable)
 │   │   ├── TrackStyleEditor.tsx # Font/color/margin controls
 │   │   ├── VideoPreview.tsx    # Video player with overlays
 │   │   ├── VideoUpload.tsx     # Drag-drop file uploader
-  │   │   └── ui/                 # Reusable UI primitives
-  │   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA, nested flyouts)
+│   │   └── ui/                 # Reusable UI primitives
+│   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA, nested flyouts)
 │   │
 │   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation
@@ -61,7 +61,7 @@ subtitlegem/
 │   │   ├── job-processor.ts    # Export job execution
 │   │   ├── queue-db.ts         # SQLite queue persistence
 │   │   ├── queue-manager.ts    # Job queue state machine
-│   │   ├── srt-utils.ts        # SRT subtitle generation
+│   │   ├── time-utils.ts       # Timestamp utilities (formerly srt-utils.ts)
 │   │   ├── storage-config.ts   # File path configuration
 │   │   ├── style-resolver.ts   # Style inheritance resolver
 │   │   └── timeline-utils.ts   # Multi-video timeline calculations

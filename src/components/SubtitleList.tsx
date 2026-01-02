@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { SubtitleLine } from "@/types/subtitle";
 import { Plus, Trash2, Wand2, Clock, Trash, FileText, Code, Settings, List, MonitorPlay, LogOut, Check, Move, Type, Palette, Layout, Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Scissors } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
-import { formatSRTTime } from "@/lib/srt-utils";
+import { formatTimestamp } from "@/lib/time-utils";
 
 interface SubtitleListProps {
   subtitles: SubtitleLine[];
@@ -175,7 +175,7 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
                   onClick={() => onSeek(sub.startTime)}
                 >
                   <Clock className="w-3 h-3" />
-                  <span>{formatSRTTime(sub.startTime).split(',')[0]}</span>
+                  <span>{formatTimestamp(sub.startTime).split(',')[0]}</span>
                 </div>
                 
                 <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity space-x-1">

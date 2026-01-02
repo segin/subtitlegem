@@ -72,6 +72,7 @@ When adding new functionality:
 1. Add tests for utility functions
 2. Ensure existing tests pass
 3. Test video processing manually with sample files
+4. Mock external services (e.g. Gemini) to verify handling of API responses and errors
 
 ## File Structure Reference
 

@@ -1,7 +1,8 @@
 import { SubtitleLine } from "@/types/subtitle";
 import { v4 as uuidv4 } from "uuid";
 
-export const formatSRTTime = (seconds: number): string => {
+// "HH:MM:SS,mmm" format used by ASS and generic subtitle files
+export const formatTimestamp = (seconds: number): string => {
   // Use integer milliseconds to avoid floating-point precision issues
   // Clamp negative values to 0
   const totalMs = Math.max(0, Math.round(seconds * 1000));
@@ -15,7 +16,7 @@ export const formatSRTTime = (seconds: number): string => {
   return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
 };
 
-export const parseSRTTime = (timeStr: string): number => {
+export const parseTimestamp = (timeStr: string): number => {
   if (!timeStr) return 0;
   
   // Normalize separators: replace dot with comma for standard processing if needed, 
@@ -40,41 +41,14 @@ export const parseSRTTime = (timeStr: string): number => {
   return h * 3600 + m * 60 + s + (ms || 0) / 1000;
 };
 
-export function stringifySRT(subtitles: SubtitleLine[], type: 'primary' | 'secondary'): string {
+// Export-only utility
+export function generateSrtContent(subtitles: SubtitleLine[], type: 'primary' | 'secondary'): string {
   return subtitles
     .filter(sub => type === 'primary' ? !!sub.text : !!sub.secondaryText)
     .map((sub, index) => {
       const text = type === 'primary' ? sub.text : sub.secondaryText;
-      return `${index + 1}\n${formatSRTTime(sub.startTime)} --> ${formatSRTTime(sub.endTime)}\n${text}\n`;
+      return `${index + 1}\n${formatTimestamp(sub.startTime)} --> ${formatTimestamp(sub.endTime)}\n${text}\n`;
     })
     .join('\n');
 }
 
-export function parseSRT(srtContent: string): Partial<SubtitleLine>[] {
-  const normalized = srtContent.replace(/\r\n/g, '\n');
-  const blocks = normalized.split('\n\n');
-  
-  const parsed: Partial<SubtitleLine>[] = [];
-  
-  blocks.forEach(block => {
-    const lines = block.trim().split('\n');
-    if (lines.length >= 3) {
-      // Line 1: Index (ignored)
-      // Line 2: Time
-      const timeMatch = lines[1].match(/(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})/);
-      if (timeMatch) {
-        const startTime = parseSRTTime(timeMatch[1]);
-        const endTime = parseSRTTime(timeMatch[2]);
-        const text = lines.slice(2).join('\n');
-        
-        parsed.push({
-          startTime,
-          endTime,
-          text // This will be mapped to 'text' or 'secondaryText' by the caller
-        });
-      }
-    }
-  });
-  
-  return parsed;
-}

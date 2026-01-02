@@ -1,4 +1,4 @@
-import { getDirectorySize, formatBytes, IFileSystem } from './storage-utils';
+import { getDirectorySize, formatBytes, estimateH264Size, IFileSystem } from './storage-utils';
 import * as fc from 'fast-check';
 import path from 'path';
 
@@ -198,6 +198,94 @@ describe('storage-utils', () => {
            expect(calculatedSize).toBe(expectedSize);
         })
       );
+    });
+  });
+
+  describe('estimateH264Size', () => {
+    describe('Unit Tests', () => {
+        test('Base Case: 1080p, CRF 23, 10 seconds', () => {
+            // Base bitrate: 4500 Kbps video + 192 Kbps audio
+            // Total: 4692 Kbps
+            // Size: 4692 * 10 / 8 = 5865 KB = 5865000 Bytes
+            // 4692 * 1000 * 10 / 8 = 5,865,000 Bytes
+            const size = estimateH264Size({
+                duration: 10,
+                width: 1920,
+                height: 1080,
+                crf: 23
+            });
+            expect(size).toBe(5865000);
+        });
+
+        test('CRF Impact: CRF 17 (Better quality, larger)', () => {
+            // CRF 17 is 6 steps lower than 23 -> 2^(6/6) = 2x factors
+            // Video: 4500 * 2 = 9000 Kbps
+            // Total: 9192 Kbps
+            // 10 sec: 9192 * 1000 * 10 / 8 = 11,490,000
+            const size = estimateH264Size({
+                duration: 10,
+                width: 1920,
+                height: 1080,
+                crf: 17
+            });
+            expect(size).toBe(11490000);
+        });
+
+        test('Resolution Impact: 4K (4x pixels of 1080p)', () => {
+             // 3840x2160 = 4 * 1920x1080
+             // Video: 4500 * 4 = 18000 Kbps
+             // Total: 18192 Kbps
+             // 10 sec: 18192 * 1000 * 10 / 8 = 22,740,000
+             const size = estimateH264Size({
+                duration: 10,
+                width: 3840,
+                height: 2160,
+                crf: 23
+            });
+            expect(size).toBe(22740000);
+        });
+
+        test('Zero duration returns 0', () => {
+            expect(estimateH264Size({ duration: 0, width: 1920, height: 1080, crf: 23 })).toBe(0);
+        });
+    });
+
+    describe('Property Tests', () => {
+        test('Size should be non-negative', () => {
+            fc.assert(
+                fc.property(
+                    fc.double({ min: 0.1, max: 3600 }), // duration
+                    fc.integer({ min: 100, max: 4000 }), // width
+                    fc.integer({ min: 100, max: 4000 }), // height
+                    fc.integer({ min: 0, max: 51 }), // crf
+                    (d, w, h, crf) => {
+                        const size = estimateH264Size({
+                            duration: d,
+                            width: w,
+                            height: h,
+                            crf: crf
+                        });
+                        return size >= 0 && !isNaN(size);
+                    }
+                )
+            );
+        });
+
+        test('Lower CRF (higher quality) should result in larger size for same resolution/duration', () => {
+            fc.assert(
+                fc.property(
+                    fc.double({ min: 1, max: 60 }),
+                    fc.constant(1920),
+                    fc.constant(1080),
+                    fc.integer({ min: 0, max: 50 }),
+                    (d, w, h, crf) => {
+                        const sizeHigh = estimateH264Size({ duration: d, width: w, height: h, crf: crf });
+                        const sizeLow = estimateH264Size({ duration: d, width: w, height: h, crf: crf + 1 });
+                        return sizeHigh > sizeLow;
+                    }
+                )
+            );
+        });
     });
   });
 });
