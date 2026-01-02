@@ -216,4 +216,99 @@ describe('Menu Component', () => {
       expect(screen.getByTestId('check-icon')).toBeInTheDocument();
     });
   });
+  describe('Submenus', () => {
+    const submenuItems: MenuItem[] = [
+      { 
+        id: 'parent', 
+        label: 'Parent Item', 
+        items: [
+          { id: 'child1', label: 'Child Item 1', onClick: jest.fn() },
+          { id: 'child2', label: 'Child Item 2', onClick: jest.fn() }
+        ] 
+      }
+    ];
+
+    it('should render submenu trigger', () => {
+      render(<Menu label="Test Menu" items={submenuItems} />);
+      fireEvent.click(screen.getByText('Test Menu'));
+      
+      expect(screen.getByText('Parent Item')).toBeInTheDocument();
+      // Arrow icon
+      expect(screen.getByText('Parent Item').closest('button')).toContainHTML('svg'); 
+    });
+
+    it('should open submenu on mouse enter', async () => {
+      render(<Menu label="Test Menu" items={submenuItems} />);
+      fireEvent.click(screen.getByText('Test Menu'));
+      
+      const parentItem = screen.getByText('Parent Item').closest('button')!;
+      fireEvent.mouseEnter(parentItem);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Child Item 1')).toBeInTheDocument();
+      });
+    });
+
+    it('should open submenu with ArrowRight', async () => {
+      render(<Menu label="Test Menu" items={submenuItems} />);
+      fireEvent.click(screen.getByText('Test Menu'));
+      
+      const menu = screen.getByRole('menu');
+      fireEvent.keyDown(menu, { key: 'ArrowDown' }); // Focus parent
+      
+      const parentBtn = screen.getByText('Parent Item').closest('button')!;
+      fireEvent.keyDown(parentBtn, { key: 'ArrowRight' }); // Open submenu via button handler
+      
+      await waitFor(() => {
+        expect(screen.getByText('Child Item 1')).toBeInTheDocument();
+        expect(screen.getByText('Child Item 1').closest('button')).toHaveFocus();
+      });
+    });
+
+    it('should close submenu with ArrowLeft', async () => {
+      render(<Menu label="Test Menu" items={submenuItems} />);
+      fireEvent.click(screen.getByText('Test Menu'));
+      
+      // Open submenu
+      const parentItem = screen.getByText('Parent Item').closest('button')!;
+      fireEvent.mouseEnter(parentItem);
+      
+      await waitFor(() => {
+        expect(screen.getByText('Child Item 1')).toBeVisible();
+      });
+
+      // Focus child - fire ArrowRight to focus first child if not already focused? 
+      // MouseEnter doesn't focus child automatically? logic says requestAnimationFrame focus
+      // But let's simulate focus
+      const childItem = screen.getByText('Child Item 1').closest('button')!;
+      childItem.focus();
+
+      // Fire ArrowLeft on the CHILD. It bubbles to submenu container which handles it.
+      fireEvent.keyDown(childItem, { key: 'ArrowLeft' });
+      
+      await waitFor(() => {
+        expect(screen.queryByText('Child Item 1')).not.toBeInTheDocument();
+        expect(parentItem).toHaveFocus();
+      });
+    });
+
+    it('should click child item and close all menus', async () => {
+      const onClick = jest.fn();
+      const itemsWithClick: MenuItem[] = [{
+        id: 'parent', label: 'Parent', items: [{ id: 'child', label: 'Child', onClick }]
+      }];
+
+      render(<Menu label="Test Menu" items={itemsWithClick} />);
+      fireEvent.click(screen.getByText('Test Menu'));
+      
+      // Open submenu
+      fireEvent.mouseEnter(screen.getByText('Parent'));
+      await waitFor(() => screen.getByText('Child'));
+      
+      fireEvent.click(screen.getByText('Child'));
+      
+      expect(onClick).toHaveBeenCalled();
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+    });
+  });
 });

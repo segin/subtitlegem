@@ -327,6 +327,16 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const subItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const timeoutRef = useRef<NodeJS.Timeout>(null);
+  const innerRef = useRef<HTMLButtonElement>(null);
+
+  const setRef = useCallback((node: HTMLButtonElement | null) => {
+    innerRef.current = node;
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+  }, [ref]);
 
   const handleMouseEnter = () => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -341,13 +351,16 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
     if (!isOpen) {
       if (e.key === "ArrowRight") {
         e.preventDefault();
+        e.stopPropagation();
         setIsOpen(true);
         const first = getFirstFocusableIndex(item.items!);
         setFocusedIndex(first);
-        setTimeout(() => subItemRefs.current[first]?.focus(), 10);
+        requestAnimationFrame(() => subItemRefs.current[first]?.focus());
       }
       return;
     }
+
+    e.stopPropagation();
 
     switch (e.key) {
       case "ArrowUp":
@@ -366,7 +379,7 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
       case "Escape":
         e.preventDefault();
         setIsOpen(false);
-        (ref as React.MutableRefObject<HTMLButtonElement | null>).current?.focus();
+        innerRef.current?.focus();
         break;
       case "Enter":
       case " ":
@@ -387,7 +400,7 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
       onMouseLeave={handleMouseLeave}
     >
       <button
-        ref={ref}
+        ref={setRef}
         role="menuitem"
         aria-haspopup="menu"
         aria-expanded={isOpen}
@@ -410,6 +423,7 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
         <div 
           className="absolute left-full top-0 ml-[-2px] w-56 bg-[#252526] border border-[#454545] shadow-xl z-[60] py-1"
           role="menu"
+          onKeyDown={handleKeyDown}
         >
           {item.items.map((subItem, index) => {
             if ('divider' in subItem) {
