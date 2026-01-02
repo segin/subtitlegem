@@ -39,6 +39,16 @@ import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Tras
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 
+interface DraftItem {
+  id: string;
+  name: string;
+  videoPath?: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: any;
+}
+
+
 export default function Home() {
   // Undo/redo state management for subtitles
   const { subtitles, setSubtitles, undo, redo, canUndo, canRedo, resetHistory } = useSubtitleHistory([]);
@@ -110,7 +120,7 @@ export default function Home() {
   const timelineRef = useRef<TimelineRef>(null);
 
   // Recent Drafts state
-  const [drafts, setDrafts] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<DraftItem[]>([]);
   const [draftsLoading, setDraftsLoading] = useState(true);
   
   const fetchDrafts = useCallback(async () => {
@@ -959,7 +969,7 @@ export default function Home() {
             isUploadScreen={true}
             onGlobalSettings={() => setShowGlobalSettings(true)}
             onShowShortcuts={() => setShowShortcuts(true)}
-            recentDrafts={drafts.map(d => ({
+            recentDrafts={drafts.slice(0, 10).map(d => ({
               id: d.id,
               name: d.name,
               date: d.updatedAt
@@ -1230,7 +1240,7 @@ export default function Home() {
             canSplit={selectedSubtitleIds.length === 1}
             onZoomIn={() => timelineRef.current?.zoomIn()}
             onZoomOut={() => timelineRef.current?.zoomOut()}
-            recentDrafts={drafts.map(d => ({
+            recentDrafts={drafts.slice(0, 10).map(d => ({
               id: d.id,
               name: d.name,
               date: d.updatedAt
