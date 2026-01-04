@@ -1,19 +1,15 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
-import { FileVideo, Trash2, FolderOpen, Clock, X, Menu } from "lucide-react";
+import { FolderOpen, X, Menu } from "lucide-react";
+import { ProjectCard } from "./ProjectCard";
+import { DraftItem } from "@/hooks/useHomeState";
 
-interface Draft {
-  id: string;
-  name: string;
-  videoPath?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
+// Using DraftItem from hook for consistency
 interface DraftsSidebarProps {
-  onLoadDraft: (draft: Draft) => void;
-  drafts: Draft[];
+  onLoadDraft: (draft: DraftItem) => void;
+  drafts: DraftItem[];
   loading?: boolean;
   onDelete?: (id: string) => void;
   className?: string;
@@ -40,31 +36,18 @@ export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, 
   const [isOpen, setIsOpen] = useState(false);
   const isDesktop = useIsDesktop();
 
-  const handleDelete = async (id: string) => {
-    if (onDelete) {
-      onDelete(id);
-      setDeleteConfirm(null);
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent card click
+    
+    if (deleteConfirm === id) {
+      if (onDelete) {
+        onDelete(id);
+        setDeleteConfirm(null);
+      }
+    } else {
+        setDeleteConfirm(id);
     }
   };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-  };
-
-  if (drafts.length === 0 && !loading) {
-    return null; // Hide sidebar if no drafts
-  }
 
   const renderSidebarContent = () => (
     <>
@@ -82,7 +65,7 @@ export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, 
       </div>
 
       {/* Drafts List */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#1e1e1e]">
+      <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#1e1e1e] px-2 py-2">
         {loading ? (
           <div className="p-4 text-center text-xs text-[#666666] flex flex-col items-center gap-2">
             <div className="w-4 h-4 border-2 border-[#007acc] border-t-transparent rounded-full animate-spin" />
@@ -94,60 +77,38 @@ export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, 
           </div>
         ) : (
           drafts.map(draft => (
-            <div
-              key={draft.id}
-              className="group border-b border-[#333333] hover:bg-[#2a2d2e] transition-colors"
-            >
-              <button
-                onClick={() => {
-                  onLoadDraft(draft);
-                  if (!isDesktop) setIsOpen(false);
-                }}
-                className="w-full p-3 text-left"
-              >
-                <div className="flex items-start gap-2">
-                  <FileVideo className="w-4 h-4 text-[#0e639c] shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-[#e1e1e1] truncate font-medium">
-                      {draft.name}
-                    </div>
-                    <div className="flex items-center gap-1 text-[10px] text-[#666666] mt-0.5">
-                      <Clock className="w-3 h-3" />
-                      {formatDate(draft.updatedAt)}
-                    </div>
-                  </div>
-                </div>
-              </button>
-
-              {/* Delete button */}
-              <div className="px-3 pb-2 flex justify-end">
+             <div key={draft.id}>
                 {deleteConfirm === draft.id ? (
-                  <div className="flex items-center gap-2 text-[10px]">
-                    <span className="text-[#888888] font-medium">Delete?</span>
-                    <button
-                      onClick={() => handleDelete(draft.id)}
-                      className="px-2 py-0.5 bg-red-600/20 text-red-400 border border-red-900/50 rounded hover:bg-red-600/30 transition-colors"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={() => setDeleteConfirm(null)}
-                      className="px-2 py-0.5 bg-[#3e3e42] text-[#888888] rounded hover:bg-[#4e4e52] transition-colors"
-                    >
-                      No
-                    </button>
+                  // Delete Confirmation State
+                  <div className="mb-2 p-2 bg-red-900/20 border border-red-500/30 rounded flex items-center justify-between">
+                     <span className="text-xs text-red-200">Confirm Delete?</span>
+                     <div className="flex gap-2">
+                        <button 
+                          onClick={(e) => handleDelete(e, draft.id)}
+                          className="px-2 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                          Yes
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
+                          className="px-2 py-0.5 text-[10px] bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
+                        >
+                          No
+                        </button>
+                     </div>
                   </div>
                 ) : (
-                  <button
-                    onClick={() => setDeleteConfirm(draft.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-[#666666] hover:text-red-400 transition-all"
-                    title="Delete project"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <ProjectCard
+                    draft={draft}
+                    isSelected={false} 
+                    onClick={() => {
+                        onLoadDraft(draft);
+                        if (!isDesktop) setIsOpen(false);
+                    }}
+                    onDelete={(e) => handleDelete(e, draft.id)}
+                  />
                 )}
-              </div>
-            </div>
+             </div>
           ))
         )}
       </div>
@@ -158,6 +119,21 @@ export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, 
       </div>
     </>
   );
+
+  if (drafts.length === 0 && !loading) {
+    // If no drafts and not loading, we still show the sidebar skeleton or hidden?
+    // Existing logic was: return null if length=0 && !loading.
+    // But RenderSidebarContent uses drafts.length check too.
+    // Let's stick to existing behavior: Hide sidebar if empty.
+    // BUT we need content to render if NOT empty.
+    // Wait, the original code had `if (drafts.length === 0 && !loading) return null;`
+    // I should put that check at the top of the component render, NOT inside.
+  }
+
+  // Correction: Put the empty check here if we want to hide the whole sidebar.
+  if (drafts.length === 0 && !loading) {
+     return null;
+  }
 
   return (
     <>
@@ -205,4 +181,3 @@ export function DraftsSidebar({ drafts, loading = false, onLoadDraft, onDelete, 
     </>
   );
 }
-

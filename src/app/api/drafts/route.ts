@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft } from "@/lib/draft-store";
+import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft, DraftV1, DraftV2 } from "@/lib/draft-store";
 import fs from 'fs';
+import path from 'path';
 import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
+import { getStagingDir } from "@/lib/storage-config";
+import { getDirectorySize } from "@/lib/storage-utils";
+import { generateProjectSummary } from "@/lib/summary-generator";
 
 export const runtime = 'nodejs';
+
+// Helper: Compute metrics (now delegated to utility)
+import { computeMetrics, getMetadataPath, ProjectMetadata } from "@/lib/metrics-utils";
+
+// Removed local implementations of computeMetrics and interfaces as they are now imported
 
 /**
  * GET /api/drafts - List all drafts or get a single draft by ID
@@ -14,45 +23,30 @@ export async function GET(req: NextRequest) {
   if (id) {
     const draft = loadDraft(id);
     if (draft) {
-      // Perform integrity check on load
-      let hasChanges = false;
+      // Perform integrity check on load (Existing Logic)
+      if ('version' in draft && draft.version === 2) {
+         const v2 = draft as DraftV2;
+         const clips = v2.clips.map(clip => {
+           let measuredSize: number | null = null;
+           try {
+             if (fs.existsSync(clip.filePath)) {
+                const stats = fs.statSync(clip.filePath);
+                measuredSize = stats.size;
+             }
+           } catch (e) { }
 
-      if (draft.version === 2) {
-        // Check all clips
-        draft.clips = draft.clips.map(clip => {
-          let measuredSize: number | null = null;
-          try {
-            if (fs.existsSync(clip.filePath)) {
-               const stats = fs.statSync(clip.filePath);
-               measuredSize = stats.size;
-            }
-          } catch (e) {
-            console.error(`[DraftAPI] Failed to stat file ${clip.filePath}`, e);
-          }
-
-          const status = checkClipIntegrity(clip, measuredSize);
-          
-          if (status === IntegrityStatus.MISSING || status === IntegrityStatus.MISMATCH) {
-             console.warn(`[DraftAPI] Integrity check failed for clip ${clip.id}: ${status}`);
-             return { ...clip, missing: true };
-          } else if (status === IntegrityStatus.OK && measuredSize !== null && clip.fileSize !== measuredSize) {
-             // Self-heal: If size was undefined but file exists and is valid (legacy), update it
-             // BUT, checkClipIntegrity returns OK for undefined fileSize. 
-             // If we want to backfill fileSize, we can do it here.
-             return { ...clip, fileSize: measuredSize, missing: false };
-          }
-          
-          return { ...clip, missing: false };
-        });
-      } else if (draft.version === 1 && draft.videoPath) {
-         // Basic V1 check
-         if (!fs.existsSync(draft.videoPath)) {
-            // We can't easily flag V1 structure as missing without changing type, 
-            // but we can pass a transient error or just let it fail later.
-            // Or migrate to V2?
-            console.warn(`[DraftAPI] V1 Draft video missing: ${draft.videoPath}`);
-         }
-      }
+           const status = checkClipIntegrity(clip, measuredSize);
+           
+           if (status === IntegrityStatus.MISSING || status === IntegrityStatus.MISMATCH) {
+              return { ...clip, missing: true };
+           } else if (status === IntegrityStatus.OK && measuredSize !== null && clip.fileSize !== measuredSize) {
+              return { ...clip, fileSize: measuredSize, missing: false };
+           }
+           
+           return { ...clip, missing: false };
+         });
+         (draft as any).clips = clips; // Cast to update readonly/typed property if needed
+      } 
       
       return NextResponse.json(draft);
     }
@@ -60,7 +54,48 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   }
   
-  const drafts = listDrafts();
+  // List all drafts with hydrated metrics
+  const drafts = listDrafts().map(draft => {
+    try {
+      const metaPath = getMetadataPath(draft.id);
+      let metadata: ProjectMetadata = {};
+      
+      // Load cached metadata
+      if (fs.existsSync(metaPath)) {
+        try {
+          metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+        } catch { /* corrupted metadata */ }
+      }
+      
+      const metrics = computeMetrics(draft);
+
+      // Merge cached subtitle count if available (assuming POST updated it)
+      if (metadata.metrics && metadata.metrics.subtitleCount > 0 && metrics.subtitleCount === 0) {
+        metrics.subtitleCount = metadata.metrics.subtitleCount;
+      }
+      
+      // Merge with cache (preserve summary and cache metrics)
+      const newMetadata = {
+        ...metadata,
+        metrics,
+        lastUpdated: Date.now()
+      };
+      
+      try {
+        fs.writeFileSync(metaPath, JSON.stringify(newMetadata, null, 2));
+      } catch {}
+
+      return {
+        ...draft,
+        metrics: metrics,
+        cache_summary: newMetadata.summary || ''
+      };
+    } catch (e) {
+      console.warn(`[DraftAPI] Failed to populate metrics for ${draft.id}`, e);
+      return draft;
+    }
+  });
+  
   return NextResponse.json({ drafts });
 }
 
@@ -71,6 +106,7 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     
+    // ... existing save logic ...
     const { id, name, videoPath, subtitles, config } = body;
     
     if (!name) {
@@ -84,6 +120,41 @@ export async function POST(req: NextRequest) {
       subtitles,
       config,
     });
+    
+    // Invalidate/Update metadata on save
+    try {
+         const metaPath = getMetadataPath(draft.id);
+         const metrics = computeMetrics(draft); // Recalc new metrics
+         
+         // Fix subtitle count using incoming body (as V2 draft object might not have it populated)
+         if (subtitles && Array.isArray(subtitles)) {
+            metrics.subtitleCount = subtitles.length;
+         }
+
+         let currentMeta: ProjectMetadata = {};
+         if (fs.existsSync(metaPath)) {
+             currentMeta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+         }
+         
+         const newMeta = {
+             ...currentMeta,
+             metrics,
+             lastUpdated: Date.now()
+         };
+         
+         fs.writeFileSync(metaPath, JSON.stringify(newMeta, null, 2));
+
+         // Background: Generate Summary if missing
+         if (!newMeta.summary && subtitles && subtitles.length > 0) {
+           console.log(`[DraftAPI] Triggering summary generation for ${draft.id}`);
+           // Fire and forget - do not await
+           generateProjectSummary(draft.id, subtitles).catch(err => {
+             console.error(`[DraftAPI] Summary generation failed for ${draft.id}`, err);
+           });
+         }
+    } catch (e) {
+        console.error("Failed to update metadata on save", e);
+    }
     
     return NextResponse.json(draft);
   } catch (error: any) {
@@ -107,6 +178,14 @@ export async function DELETE(req: NextRequest) {
   if (!success) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   }
+  
+  // Cleanup metrics/metadata
+  try {
+      const metaPath = getMetadataPath(id);
+      if (fs.existsSync(metaPath)) {
+          fs.unlinkSync(metaPath);
+      }
+  } catch {}
   
   return NextResponse.json({ success: true });
 }

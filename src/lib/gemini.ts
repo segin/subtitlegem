@@ -1,6 +1,7 @@
 import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold } from "@google/genai";
 import fs from "fs";
 import { SubtitleLine } from "@/types/subtitle";
+import { subtitleSchema, translationSchema } from "./gemini-schemas";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || "",
@@ -13,41 +14,7 @@ const safetySettings = [
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 ];
 
-const subtitleSchema = {
-  type: "OBJECT",
-  properties: {
-    detectedLanguage: {
-      type: "STRING",
-      description: "The primary language detected in the video audio (e.g. 'English', 'Spanish', 'Japanese').",
-    },
-    subtitles: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          startTime: {
-            type: "STRING",
-            description: "Timestamp in HH:MM:SS,mmm format",
-          },
-          endTime: {
-            type: "STRING",
-            description: "Timestamp in HH:MM:SS,mmm format",
-          },
-          text: {
-            type: "STRING",
-            description: "Primary language subtitle text (transcribed)",
-          },
-          secondaryText: {
-            type: "STRING",
-            description: "Secondary language translation (if requested)",
-          },
-        },
-        required: ["startTime", "endTime", "text"],
-      },
-    },
-  },
-  required: ["detectedLanguage", "subtitles"],
-};
+// Removed local schema definitions (moved to gemini-schemas.ts)
 
 // Helper to strip markdown code blocks from JSON response
 function cleanJsonOutput(text: string): string {
@@ -57,25 +24,7 @@ function cleanJsonOutput(text: string): string {
   return clean.trim();
 }
 
-const translationSchema = {
-  type: "OBJECT",
-  properties: {
-    subtitles: {
-      type: "ARRAY",
-      items: {
-        type: "OBJECT",
-        properties: {
-          startTime: { type: "STRING" },
-          endTime: { type: "STRING" },
-          text: { type: "STRING" },
-          secondaryText: { type: "STRING" },
-        },
-        required: ["startTime", "endTime", "text", "secondaryText"],
-      },
-    },
-  },
-  required: ["subtitles"],
-};
+
 
 export async function uploadToGemini(filePath: string, mimeType: string) {
   // Upload file using new SDK
@@ -315,6 +264,29 @@ export async function translateSubtitles(
     return result; 
   } catch (error) {
     console.error("Translation error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Generate a short summary or text response
+ */
+export async function generateSummary(
+  prompt: string,
+  modelName: string = "gemini-2.5-flash"
+): Promise<string> {
+  try {
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        safetySettings,
+      },
+    });
+
+    return response.text || "";
+  } catch (error) {
+    console.error("Summary generation error:", error);
     throw error;
   }
 }

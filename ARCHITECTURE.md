@@ -15,6 +15,7 @@ subtitlegem/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/                # API Routes (12 endpoints)
+│   │   │   ├── cleanup/        # File cleanup endpoint
 │   │   │   ├── download/       # File download handler
 │   │   │   ├── drafts/         # Draft project persistence
 │   │   │   ├── export/         # Video export with subtitles
@@ -64,7 +65,12 @@ subtitlegem/
 │   │   ├── time-utils.ts       # Timestamp utilities (formerly srt-utils.ts)
 │   │   ├── storage-config.ts   # File path configuration
 │   │   ├── style-resolver.ts   # Style inheritance resolver
-│   │   └── timeline-utils.ts   # Multi-video timeline calculations
+│   │   ├── timeline-utils.ts   # Multi-video timeline calculations
+│   │   ├── upload-utils.ts     # Video upload helper (validation, data prep)
+│   │   ├── video-estimate-utils.ts # Client-safe video size estimation
+│   │   ├── metrics-utils.ts    # Project storage & count metrics
+│   │   ├── summary-generator.ts # AI project summary orchestration
+│   │   └── format-utils.ts     # Client-safe formatting utilities
 │   │
 │   ├── hooks/                  # Custom React Hooks
 │   │   ├── useSubtitleSync.ts  # Video-subtitle time sync
@@ -202,8 +208,43 @@ subtitlegem/
 - **Status MISMATCH:** File exists but size differs (potentially corrupted or replaced).
 
 ---
-
-## 5. External Integrations
+ 
+## 5. Project Metadata & Metrics Layer
+ 
+The system maintains project-specific metadata (summaries and metrics) to enable high-performance sidebar displays without scanning the entire file system on every load.
+ 
+### 5.1. Metadata Cache
+**File:** `{STAGING_DIR}/metadata/{id}.json`  
+**Type:** JSON File  
+**Purpose:** Stores pre-calculated metrics and AI-generated summaries.  
+**Structure:**
+```typescript
+interface ProjectMetadata {
+  summary?: string;
+  metrics?: {
+    sourceSize: number;
+    renderedSize: number;
+    sourceCount: number;
+    subtitleCount: number;
+    renderCount: number;
+  };
+  lastUpdated?: number;
+}
+```
+ 
+### 5.2. Metrics Calculation (`metrics-utils.ts`)
+- **Source Size:** Sum of `fileSize` from all `VideoClip` objects (V2) or direct `fs.stat` (V1).
+- **Rendered Size:** Recursive directory size of `{STAGING_DIR}/exports/{id}`.
+- **Counts:** Calculated by scanning project structures and export directories.
+ 
+### 5.3. AI Summary Generation (`summary-generator.ts`)
+- **Trigger:** Automated on project save (POST `/api/drafts`) if a summary is missing.
+- **Process:** Snippets of the first 100 subtitle lines are sent to Gemini to generate a 10-word summary.
+- **Persistence:** Results are saved back to the metadata JSON cache.
+ 
+---
+ 
+## 6. External Integrations
 
 | Service | Purpose | Integration Method |
 |---------|---------|-------------------|
@@ -255,7 +296,7 @@ subtitlegem/
 | **Authorization** | None |
 | **API Key Storage** | `.env` file (`GEMINI_API_KEY`) |
 | **File Access** | Limited to `STAGING_DIR` path |
-| **Input Validation** | Path traversal prevention in `/api/storage` |
+| **Input Validation** | strict Path Validation in `/api/stream`, Zod schemas in `/api/process`, `/api/cleanup` |
 
 ⚠️ **Warning:** This application is NOT designed for public internet exposure. Use behind firewall or VPN.
 
@@ -340,7 +381,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-01-01 |
+| **Date of Last Update** | 2026-01-04 |
 
 ---
 
