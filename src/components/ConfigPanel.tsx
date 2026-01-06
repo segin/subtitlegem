@@ -1,39 +1,46 @@
 "use client";
 
 import React, { useState } from "react";
-import { SubtitleConfig, TrackStyle, Alignment } from "@/types/subtitle";
+import { SubtitleConfig, TrackStyle, Alignment, GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { resolveTrackStyle } from "@/lib/style-resolver";
 import { AlignLeft, AlignCenter, AlignRight, Type, Palette, Layout, Move, Cpu, Settings, MonitorPlay } from "lucide-react";
 
 interface ConfigProps {
   config: SubtitleConfig;
   onChange: (config: SubtitleConfig) => void;
+  /** Loaded global settings (falls back to system defaults if not provided) */
+  globalSettings?: GlobalSettings;
 }
 
-export function ConfigPanel({ config, onChange }: ConfigProps) {
+export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
   const [activeTab, setActiveTab] = useState<'primary' | 'secondary' | 'encoding'>('primary');
 
-  // Get current style with null safety
-  const currentStyle = (activeTab !== 'encoding' ? config[activeTab] : null) || {};
+  // Resolve: Loaded Global Settings → System Defaults
+  const effectiveGlobalSettings = globalSettings || DEFAULT_GLOBAL_SETTINGS;
 
-  const updateStyle = (key: keyof TrackStyle, value: any) => {
+  // Get base style from effective global settings
+  const baseStyle = activeTab === 'primary' 
+    ? effectiveGlobalSettings.defaultPrimaryStyle 
+    : effectiveGlobalSettings.defaultSecondaryStyle;
+
+  // Resolve current style: base (global+system) + project overrides
+  const projectOverride = activeTab !== 'encoding' ? config[activeTab] : undefined;
+  const currentStyle = activeTab !== 'encoding' 
+    ? resolveTrackStyle(baseStyle, projectOverride) 
+    : ({} as TrackStyle);
+
+  const updateStyle = (key: keyof TrackStyle, value: number | string) => {
     if (activeTab === 'encoding') return;
-    
-    // Force percentage string for numeric inputs
-    let finalValue = value;
-    const percentageKeys = ['fontSize', 'marginV', 'marginH', 'outlineWidth'];
-    
-    if (percentageKeys.includes(key) && typeof value === 'number') {
-        finalValue = `${value}%`;
-    }
 
     onChange({
       ...config,
       [activeTab]: {
         ...config[activeTab],
-        [key]: finalValue
+        [key]: value
       }
     });
   };
+
 
   return (
     <div className="flex flex-col h-full bg-[#252526] text-[#cccccc]">
@@ -98,7 +105,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                         step="0.5"
                         min="0.5"
                         max="50"
-                        value={currentStyle.fontSize} 
+                        value={currentStyle.fontSize || 0} 
                         onChange={(e) => updateStyle('fontSize', parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                       />
@@ -167,7 +174,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={currentStyle.marginV} 
+                      value={currentStyle.marginV || 0} 
                       onChange={(e) => updateStyle('marginV', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
@@ -179,7 +186,7 @@ export function ConfigPanel({ config, onChange }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={currentStyle.marginH} 
+                      value={currentStyle.marginH || 0} 
                       onChange={(e) => updateStyle('marginH', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
