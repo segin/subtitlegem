@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { HardDrive, Film, FileText, Clapperboard, CheckCircle2 } from 'lucide-react';
+import { HardDrive, Film, FileText, Clapperboard, CheckCircle2, Trash2 } from 'lucide-react';
 import { DraftItem } from '@/hooks/useHomeState';
 import { formatBytes } from '@/lib/format-utils';
 
@@ -37,7 +37,7 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete }: ProjectCar
           <h3 className={`text-sm font-medium truncate pr-2 ${isSelected ? 'text-white' : 'text-gray-300'}`}>
             {draft.name}
           </h3>
-          <span className="text-[10px] text-gray-500 whitespace-nowrap pt-0.5">{dateStr}</span>
+          <span className="text-[10px] text-gray-500 whitespace-nowrap transition-transform duration-300 ease-in-out group-hover:translate-y-4">{dateStr}</span>
         </div>
         
         {/* Metrics Row (Always Visible - Colorful Compact Mode) */}
@@ -97,10 +97,7 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete }: ProjectCar
         className="absolute top-2 right-2 p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity bg-[#252526]/80 rounded"
         title="Delete Draft"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 6 6 18"/>
-          <path d="m6 6 12 12"/>
-        </svg>
+        <Trash2 size={12} />
       </button>
     </div>
   );
