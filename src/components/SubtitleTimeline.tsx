@@ -109,6 +109,15 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const [followPlayhead, setFollowPlayhead] = useState(true);
   
   // Context Menu state
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const transitionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const triggerTransition = useCallback(() => {
+    setIsTransitioning(true);
+    if (transitionTimeoutRef.current) clearTimeout(transitionTimeoutRef.current);
+    transitionTimeoutRef.current = setTimeout(() => setIsTransitioning(false), 300);
+  }, []);
+
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -237,22 +246,36 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     onSeek(time);
   }, [duration, pixelsPerSecond, onSeek]);
 
-  // Handle Ctrl+scroll for zoom, regular scroll for horizontal panning
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    if (e.ctrlKey) {
-      // Zoom
-      e.preventDefault();
-      const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      setPixelsPerSecond(prev => Math.max(20, Math.min(400, prev * zoomFactor)));
-    } else {
-      // Convert vertical scroll to horizontal scroll
-      const scrollAmount = e.deltaY !== 0 ? e.deltaY : e.deltaX;
-      if (scrollAmount !== 0 && containerRef.current) {
+  // Handle native wheel for zoom prevention and smooth transitions
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) {
+        // Zoom
         e.preventDefault();
-        containerRef.current.scrollLeft += scrollAmount;
+        const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+        triggerTransition();
+        setPixelsPerSecond(prev => {
+          const next = Math.max(20, Math.min(400, prev * zoomFactor));
+          return next;
+        });
+      } else {
+        // Convert vertical scroll to horizontal scroll
+        const scrollAmount = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+        if (scrollAmount !== 0) {
+          // We don't preventDefault here to allow standard scroll behavior if desired,
+          // but for horizontal-only timeline, converting Y to X is standard.
+          container.scrollLeft += scrollAmount;
+          // Note: if we want to block browser 'back' on trackpad, e.preventDefault() here.
+        }
       }
-    }
-  }, []);
+    };
+
+    container.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleNativeWheel);
+  }, [triggerTransition]);
 
   // Handle scrubbing globally
   useEffect(() => {
@@ -286,8 +309,14 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 16;
   
   // Zoom handlers
-  const handleZoomIn = () => setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
-  const handleZoomOut = () => setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
+  const handleZoomIn = () => {
+    triggerTransition();
+    setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
+  };
+  const handleZoomOut = () => {
+    triggerTransition();
+    setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
+  };
 
   React.useImperativeHandle(ref, () => ({
     zoomIn: handleZoomIn,
@@ -323,6 +352,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     const scrollLeft = container.scrollLeft;
     const visibleWidth = container.clientWidth;
     // Scroll if playhead is outside visible area (with margin)
+    // Only auto-scroll if NOT transitioning (to avoid competing animations)
+    if (isTransitioning) return;
     const margin = 100;
     if (playheadX < scrollLeft + margin || playheadX > scrollLeft + visibleWidth - margin) {
       // scrollTo may not be available in test environment (JSDOM)
@@ -389,8 +420,10 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
 
       <div 
         ref={containerRef} 
-        className="flex-1 w-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none"
-        onWheel={handleWheel}
+        className={cn(
+          "flex-1 w-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none",
+          isTransitioning && !isScrubbing && "timeline-transitioning"
+        )}
       >
       <div 
         data-timeline-bg
@@ -412,6 +445,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
 
         {/* Playhead Line */}
         <div 
+          data-playhead
           className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
           style={{ left: `${currentTime * pixelsPerSecond}px` }}
         >
@@ -509,6 +543,7 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
       {Array.from({ length: Math.ceil(duration) + 1 }).map((_, i) => (
         <div 
           key={i} 
+          data-ruler-tick
           className="absolute bottom-0 h-2 border-l border-[#555555] text-[9px] text-[#888888] pl-1 font-mono"
           style={{ left: `${i * pixelsPerSecond}px` }}
         >
