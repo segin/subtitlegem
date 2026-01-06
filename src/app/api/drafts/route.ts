@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft, DraftV1, DraftV2 } from "@/lib/draft-store";
+import { generateSummary, deleteFileFromGemini } from "@/lib/gemini";
 import fs from 'fs';
 import path from 'path';
 import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
@@ -173,19 +174,25 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Draft ID is required" }, { status: 400 });
   }
   
+  // Cleanup remote files first
+  try {
+    const draft = loadDraft(id);
+    // Safe access to config.fileId (works for V1 and V2 if available)
+    if (draft && 'config' in draft && draft.config?.fileId) {
+       // Fire and forget, or await? Await to ensure clean state.
+       await deleteFileFromGemini(draft.config.fileId);
+    }
+  } catch (err) {
+    console.error(`[DraftAPI] Failed to cleanup remote file for ${id}`, err);
+  }
+
   const success = deleteDraft(id);
   
   if (!success) {
     return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   }
   
-  // Cleanup metrics/metadata
-  try {
-      const metaPath = getMetadataPath(id);
-      if (fs.existsSync(metaPath)) {
-          fs.unlinkSync(metaPath);
-      }
-  } catch {}
+  // Metadata/Export cleanup is now handled by deleteDraft in store
   
   return NextResponse.json({ success: true });
 }
