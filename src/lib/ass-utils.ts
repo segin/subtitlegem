@@ -28,12 +28,28 @@ export function formatAssTime(seconds: number): string {
 function generateStyleLine(name: string, style: TrackStyle, playResX: number = REFERENCE_WIDTH, playResY: number = REFERENCE_HEIGHT): string {
     const { fontFamily, fontSize, color, backgroundColor, marginV, marginH, outlineWidth } = style;
     
-    // Normalize all mixed units (pixels vs %) to Absolute ASS Pixels (based on PlayRes)
-    const assFontSize = Math.round(normalizeToPx(fontSize, playResY));
-    const assMarginV = Math.round(normalizeToPx(marginV, playResY));
-    const assMarginH = Math.round(normalizeToPx(marginH, playResX));
+    // IMPORTANT: Font sizes and margins are stored as percentages relative to the REFERENCE resolution (1920x1080).
+    // To maintain visual consistency across different video resolutions:
+    // 1. Calculate the pixel value at REFERENCE resolution
+    // 2. Scale that pixel value to the target PlayRes
+    // This ensures a "5% font size" looks the same whether the video is 1080p or 2160p.
+    
+    // Scale factors: how much bigger/smaller is target vs reference?
+    const scaleX = playResX / REFERENCE_WIDTH;
+    const scaleY = playResY / REFERENCE_HEIGHT;
+    
+    // Calculate at reference resolution, then scale to target
+    const refFontSize = normalizeToPx(fontSize, REFERENCE_HEIGHT);
+    const refMarginV = normalizeToPx(marginV, REFERENCE_HEIGHT);
+    const refMarginH = normalizeToPx(marginH, REFERENCE_WIDTH);
+    const refOutlineWidth = normalizeToPx(outlineWidth ?? 2.0, REFERENCE_HEIGHT);
+    
+    // Scale to target PlayRes
+    const assFontSize = Math.round(refFontSize * scaleY);
+    const assMarginV = Math.round(refMarginV * scaleY);
+    const assMarginH = Math.round(refMarginH * scaleX);
     // Clamp outline to prevent massive globs
-    const assOutlineWidth = Math.min(normalizeToPx(outlineWidth ?? 2.0, playResY), 20); 
+    const assOutlineWidth = Math.min(refOutlineWidth * scaleY, 20); 
 
     const primaryColour = hexToAssColor(color);
     const backColour = hexToAssColor(backgroundColor);
@@ -47,6 +63,7 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = R
     return `Style: ${name},${finalFontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},0,${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
 
 }
+
 
 // Sanitize text to prevent ASS tag injection
 export function sanitizeAssText(text: string): string {
