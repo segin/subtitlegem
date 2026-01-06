@@ -25,18 +25,20 @@ export type Alignment = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 export interface TrackStyle {
   alignment: Alignment;
-  /** Font size: Number = 1080p Pixels, String = Percentage (e.g. "5%") */
-  fontSize: number | string;
+  /** Font size as percentage of video height (e.g., 5 = 5% of video height) */
+  fontSize: number;
   color: string; // Hex format #RRGGBB
   fontFamily: string;
-  /** Vertical margin: Number = 1080p Pixels, String = Percentage (e.g. "22.5%") */
-  marginV: number | string;
-  /** Horizontal margin: Number = 1080p Pixels, String = Percentage (e.g. "4%") */
-  marginH: number | string;
+  /** Vertical margin as percentage of video height */
+  marginV: number;
+  /** Horizontal margin as percentage of video width */
+  marginH: number;
   backgroundColor: string; // rgba() format for transparency
   outlineColor?: string; // Optional outline color
-  outlineWidth?: number | string;
+  /** Outline width as percentage of video height */
+  outlineWidth?: number;
 }
+
 
 export interface FFmpegConfig {
   hwaccel: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
@@ -324,26 +326,27 @@ export interface ModelConfig {
 export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   defaultPrimaryStyle: {
     alignment: 2, // Bottom Center
-    fontSize: "5%",       // responsive default
+    fontSize: 5,           // 5% of video height
     color: '#ffffff',
     fontFamily: 'Arial',
-    marginV: "22.5%",     // responsive default
-    marginH: "4%",        // responsive default
+    marginV: 4,            // 4% from edge
+    marginH: 4,            // 4% horizontal padding
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: "0.2%",
+    outlineWidth: 0.2,     // 0.2% outline
   },
   defaultSecondaryStyle: {
     alignment: 8, // Top Center
-    fontSize: "4%",
+    fontSize: 4,           // 4% of video height (smaller for secondary)
     color: '#fbbf24',
     fontFamily: 'Arial',
-    marginV: "22.5%",
-    marginH: "4%",
+    marginV: 4,
+    marginH: 4,
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: "0.2%",
+    outlineWidth: 0.2,
   },
+
   defaultPrimaryLanguage: 'English',
   defaultSecondaryLanguage: 'Simplified Chinese',
   subtitleStyle: 'split',
