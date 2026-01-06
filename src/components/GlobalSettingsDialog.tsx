@@ -5,7 +5,7 @@ import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
-import { normalizeToPx } from "@/lib/style-resolver";
+import { normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
 
 interface GlobalSettingsDialogProps {
   isOpen: boolean;
@@ -221,18 +221,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                       {/* Preview subtitles */}
                       <div 
                         className="absolute inset-0 pointer-events-none p-4"
-                        style={{
-                            paddingTop: currentStyle.alignment >= 7 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / REFERENCE_HEIGHT) * 100}%`) : 0,
-                            paddingBottom: currentStyle.alignment <= 3 ? (typeof currentStyle.marginV === 'string' ? currentStyle.marginV : `${(currentStyle.marginV / REFERENCE_HEIGHT) * 100}%`) : 0,
-                            paddingLeft: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / REFERENCE_WIDTH) * 100}%`,
-                            paddingRight: typeof currentStyle.marginH === 'string' ? currentStyle.marginH : `${(currentStyle.marginH / REFERENCE_WIDTH) * 100}%`,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: [1, 4, 7].includes(currentStyle.alignment) ? 'flex-start' : 
-                                        [3, 6, 9].includes(currentStyle.alignment) ? 'flex-end' : 'center',
-                            justifyContent: [7, 8, 9].includes(currentStyle.alignment) ? 'flex-start' : 
-                                            [1, 2, 3].includes(currentStyle.alignment) ? 'flex-end' : 'center',
-                        }}
+                        style={getMarginPreviewStyle(currentStyle.marginV, currentStyle.marginH, currentStyle.alignment)}
                       >
                         <span 
                           style={{
