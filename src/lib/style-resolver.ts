@@ -22,18 +22,30 @@ export function resolveTrackStyle(
 /**
  * Calculates CSS style object for previewing a TrackStyle
  */
-// Helper to normalize any TrackStyle numeric/string field to 1080p Reference Pixels
+/**
+ * Convert percentage value to pixels for a given reference size.
+ * 
+ * @param value - Percentage value (e.g., 5 = 5%)
+ * @param fullSize - Reference size in pixels (e.g., 1080 for height, 1920 for width)
+ * @returns Pixel value
+ */
+export function percentToPx(value: number | undefined, fullSize: number): number {
+    if (value === undefined || value === null) return 0;
+    return (value / 100) * fullSize;
+}
+
+// Legacy function for backward compatibility with string percentages
 export function normalizeToPx(value: number | string | undefined, fullSize: number): number {
-    if (value === undefined) return 0;
-    if (typeof value === 'number') return value; // Already Pixels
+    if (value === undefined || value === null) return 0;
+    if (typeof value === 'number') return percentToPx(value, fullSize);
     
     // Parse percentage string "50%" -> 50
     const percent = parseFloat(value);
     if (isNaN(percent)) return 0;
     
-    // Return pixels relative to fullSize
     return (percent / 100) * fullSize;
 }
+
 
 /**
  * Calculates CSS style object for previewing a TrackStyle
