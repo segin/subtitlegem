@@ -2,6 +2,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
+import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
+import { cacheModelResult, checkModelAvailability } from "@/lib/model-cache";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -48,7 +50,7 @@ export function VideoUpload({
 
   // Advanced Mode State (Mode 3)
   const [advancedProjects, setAdvancedProjects] = useState<StagedProject[]>([
-    { id: 'proj-' + Math.random().toString(36).substr(2, 9), files: [], isDragging: false }
+    { id: generateClipId(), files: [], isDragging: false }
   ]);
 
   // Drag reorder state
@@ -96,11 +98,10 @@ export function VideoUpload({
     setTesting(true);
     setTestResult(null);
     try {
-      const res = await fetch(`/api/models?test=${encodeURIComponent(model)}`);
-      const data = await res.json();
+      const success = await checkModelAvailability(model, true); // true = bypass cache for explicit test
       setTestResult({
-        success: data.success,
-        message: data.success ? 'Model OK!' : (data.error || 'Model not accessible')
+        success,
+        message: success ? 'Model OK!' : 'Model validation failed'
       });
     } catch (err: any) {
       setTestResult({
@@ -118,16 +119,15 @@ export function VideoUpload({
     setModalTesting(true);
     setModalTestResult(null);
     try {
-      const res = await fetch(`/api/models?test=${encodeURIComponent(selectedInModal)}`);
-      const data = await res.json();
+      const success = await checkModelAvailability(selectedInModal, true); // bypass cache for manual test
       setModalTestResult({
-        success: data.success,
-        message: data.success ? 'Model OK!' : (data.error || 'Model not accessible')
+        success,
+        message: success ? 'Model OK!' : 'Model validation failed'
       });
       // Track persistent result
       setTestedModels(prev => ({
         ...prev,
-        [selectedInModal]: { success: data.success }
+        [selectedInModal]: { success }
       }));
     } catch (err: any) {
       const errorMsg = err.message || 'Test failed';
@@ -165,12 +165,13 @@ export function VideoUpload({
   };
 
   const handleFileSelect = useCallback((selectedFile: File) => {
-    if (selectedFile.type.startsWith('video/')) {
+    const result = validateVideoFile(selectedFile);
+    if (result.valid) {
       setFile(selectedFile);
       setError(null);
       setProgress(0);
     } else {
-      setError('Please select a video file');
+      setError(result.error || 'Invalid video file');
     }
   }, []);
 
@@ -262,10 +263,10 @@ export function VideoUpload({
     setTotalBytes(file.size);
     setUploadSpeed(0);
 
-    const formData = new FormData();
-    formData.append("video", file);
-    formData.append("secondaryLanguage", secondaryLanguage);
-    formData.append("model", model);
+    const formData = prepareUploadFormData(file, {
+      secondaryLanguage: secondaryLanguage !== 'None' ? secondaryLanguage : undefined,
+      model,
+    });
 
     const xhr = new XMLHttpRequest();
     startTimeRef.current = Date.now();
@@ -517,7 +518,7 @@ export function VideoUpload({
               type="button"
               onClick={() => {
                 setAdvancedProjects(prev => [...prev, {
-                  id: 'proj-' + Math.random().toString(36).substr(2, 9),
+                  id: generateClipId(),
                   files: [],
                   isDragging: false
                 }]);
