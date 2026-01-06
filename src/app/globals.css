@@ -45,3 +45,17 @@ body {
 input[type=range] {
   @apply accent-blue-600;
 }
+
+/* Timeline Smooth Zoom */
+.timeline-transitioning {
+  transition: width 0.3s ease-in-out;
+}
+.timeline-transitioning [data-draggable] {
+  transition: left 0.3s ease-in-out, width 0.3s ease-in-out;
+}
+.timeline-transitioning [data-playhead] {
+  transition: left 0.3s ease-in-out;
+}
+.timeline-transitioning [data-ruler-tick] {
+  transition: left 0.3s ease-in-out;
+}
