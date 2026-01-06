@@ -73,8 +73,10 @@ describe('/api/process (JSON modes)', () => {
       const data = await res.json();
       
       expect(res.status).toBe(400);
-      expect(data.error).toBe('No fileUri or filePath provided');
+      // Zod validation returns 'Invalid request data' for schema violations
+      expect(data.error).toBe('Invalid request data');
     });
+
 
     it('should handle fileUri processing', async () => {
       mockProcess.mockResolvedValue({
