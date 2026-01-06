@@ -20,10 +20,17 @@ export async function GET(req: NextRequest) {
   const resolvedPath = path.resolve(filePath);
   const resolvedStagingDir = path.resolve(config.stagingDir);
   
-  // Only allow files within the staging directory
+  // Ensure the resolved path is strictly within the staging directory
+  // Prevent null byte injection and traversal relative to staging
   if (!resolvedPath.startsWith(resolvedStagingDir + path.sep) && resolvedPath !== resolvedStagingDir) {
     console.warn(`[Stream] Blocked unauthorized path access: ${filePath} (resolved: ${resolvedPath})`);
     return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+  }
+
+  // Additional check: explicitly forbid ".." in the originally supplied path component
+  if (filePath.includes('..')) {
+      console.warn(`[Stream] Blocked potential traversal pattern: ${filePath}`);
+      return NextResponse.json({ error: 'Invalid path' }, { status: 403 });
   }
 
   if (!fs.existsSync(resolvedPath)) {
