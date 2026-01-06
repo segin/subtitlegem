@@ -5,7 +5,7 @@ import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { Download, Play, Loader2 } from "lucide-react";
 import { FFmpegConfigPanel, ExportConfig, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
-import { estimateH264Size, formatBytes } from "@/lib/storage-utils";
+import { estimateH264Size, formatBytes } from "@/lib/video-estimate-utils";
 
 interface ExportControlsProps {
   subtitles: SubtitleLine[];
