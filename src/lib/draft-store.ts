@@ -21,6 +21,7 @@ import {
   migrateToMultiVideo,
   ProjectState,
 } from "@/types/subtitle";
+import { getMetadataPath } from "./metrics-utils";
 import { getStagingDir, ensureStagingStructure } from './storage-config';
 
 const stagingDir = getStagingDir();
@@ -351,6 +352,29 @@ export function deleteDraft(id: string): boolean {
         }
       }
     }
+  }
+  
+  // Delete metadata sidecar
+  try {
+    const metaPath = getMetadataPath(id);
+    if (fs.existsSync(metaPath)) {
+      fs.unlinkSync(metaPath);
+      console.log(`[DraftStore] Deleted metadata: ${metaPath}`);
+    }
+  } catch (err) {
+    console.error(`[DraftStore] Failed to delete metadata for ${id}`, err);
+  }
+
+  // Delete export directory
+  try {
+    const stagingDir = getStagingDir();
+    const exportsDir = path.join(stagingDir, 'exports', id);
+    if (fs.existsSync(exportsDir)) {
+      fs.rmSync(exportsDir, { recursive: true, force: true });
+      console.log(`[DraftStore] Deleted exports directory: ${exportsDir}`);
+    }
+  } catch (err) {
+    console.error(`[DraftStore] Failed to delete exports for ${id}`, err);
   }
   
   // Delete from database
