@@ -18,6 +18,7 @@ import { UploadMode } from '@/components/VideoUpload';
 import { TabId } from '@/components/GlobalSettingsDialog';
 import { useSubtitleHistory } from './useSubtitleHistory';
 import { getProjectDuration } from '@/lib/timeline-utils';
+import { TimelineRef } from '@/components/SubtitleTimeline';
 
 export interface DraftItem {
   id: string;
@@ -25,6 +26,14 @@ export interface DraftItem {
   videoPath?: string;
   createdAt: string;
   updatedAt: string;
+  cache_summary?: string;
+  metrics?: {
+    sourceSize: number;
+    renderedSize: number;
+    sourceCount: number;
+    subtitleCount: number;
+    renderCount: number;
+  };
 }
 
 export interface RawSubtitleItem {
@@ -119,8 +128,8 @@ export function useQueueState() {
 
   return {
     queueItems, setQueueItems,
-    queuePaused,
-    queueWidth,
+    queuePaused, setQueuePaused,
+    queueWidth, setQueueWidth,
     handleQueueWidthChange,
     toggleQueuePause,
     fetchQueue,
@@ -162,7 +171,7 @@ export function useDraftsState() {
   }, []);
 
   return {
-    drafts,
+    drafts, setDrafts,
     draftsLoading,
     currentDraftId, setCurrentDraftId,
     fetchDrafts,
@@ -211,9 +220,9 @@ export function useVideoPropertiesState() {
   }, []);
 
   return {
-    videoProperties,
-    videoPropsLoading,
-    videoPropsError,
+    videoProperties, setVideoProperties,
+    videoPropsLoading, setVideoPropsLoading,
+    videoPropsError, setVideoPropsError,
     fetchVideoProperties,
     clearVideoProperties,
   };
@@ -235,6 +244,9 @@ export function useMultiVideoState() {
 
   const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
 
+  // Timeline Zoom Ref
+  const timelineRef = useRef<TimelineRef>(null);
+
   return {
     videoClips, setVideoClips,
     timelineClips, setTimelineClips,
@@ -246,6 +258,7 @@ export function useMultiVideoState() {
     selectedImageId, setSelectedImageId,
     isLibraryCollapsed, setIsLibraryCollapsed,
     isMultiVideoMode,
+    timelineRef,
   };
 }
 
@@ -261,5 +274,65 @@ export function useSelectionState() {
     selectedSubtitleIds, setSelectedSubtitleIds,
     clipboardSubtitles, setClipboardSubtitles,
     lastSelectedIdRef,
+  };
+}
+
+/**
+ * Core state management
+ */
+export function useCoreState() {
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoPath, setVideoPath] = useState<string | null>(null);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [config, setConfig] = useState<SubtitleConfig>(DEFAULT_CONFIG);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'list' | 'style'>('list');
+  const [initialSubtitles, setInitialSubtitles] = useState<SubtitleLine[] | null>(null);
+
+  const resetCoreState = useCallback(() => {
+    setVideoUrl(null);
+    setVideoPath(null);
+    setDuration(0);
+    setCurrentTime(0);
+    setConfig(DEFAULT_CONFIG);
+    setInitialSubtitles(null);
+  }, []);
+
+  return {
+    videoUrl, setVideoUrl,
+    videoPath, setVideoPath,
+    duration, setDuration,
+    currentTime, setCurrentTime,
+    config, setConfig,
+    loading, setLoading,
+    activeTab, setActiveTab,
+    initialSubtitles, setInitialSubtitles,
+    resetCoreState,
+  };
+}
+
+/**
+ * Unified Home State Hook
+ */
+export function useHomeState() {
+  const core = useCoreState();
+  const dialogs = useDialogState();
+  const queue = useQueueState();
+  const drafts = useDraftsState();
+  const videoProperties = useVideoPropertiesState();
+  const multiVideo = useMultiVideoState();
+  const selection = useSelectionState();
+  const history = useSubtitleHistory([]);
+
+  return {
+    ...core,
+    ...dialogs,
+    ...queue,
+    ...drafts,
+    ...videoProperties,
+    ...multiVideo,
+    ...selection,
+    ...history,
   };
 }
