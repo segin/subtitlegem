@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { uploadToGemini, generateSubtitles, generateSubtitlesInline, translateSubtitles } from "@/lib/gemini";
 import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
 import fs from "fs";
@@ -33,7 +34,35 @@ export async function POST(req: NextRequest) {
   // Handle JSON requests for Reprocessing/Translation
   if (req.headers.get("content-type")?.includes("application/json")) {
     try {
-      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = await req.json();
+      const body = await req.json();
+      
+      const ReprocessSchema = z.object({
+        mode: z.literal('reprocess'),
+        fileUri: z.string().optional(),
+        filePath: z.string().optional(),
+        language: z.string().optional(),
+        secondaryLanguage: z.string().optional(),
+        model: z.string().optional(),
+        clipId: z.string().optional(),
+      }).refine(data => data.fileUri || data.filePath, { message: "Either fileUri or filePath is required" });
+
+      const TranslateSchema = z.object({
+        mode: z.literal('translate'),
+        subtitles: z.array(z.any()), // Basic check, could be stricter
+        secondaryLanguage: z.string(),
+        model: z.string().optional(),
+        clipId: z.string().optional(),
+      });
+
+      const Schema = z.discriminatedUnion('mode', [ReprocessSchema, TranslateSchema]);
+      
+      const validation = Schema.safeParse(body);
+      
+      if (!validation.success) {
+         return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
+      }
+
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = validation.data as any; // Cast for now as discriminated union types can be tricky to destructure uniformly
       const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
