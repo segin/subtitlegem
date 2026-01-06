@@ -5,7 +5,8 @@ import { Settings, X, RefreshCw, Type, Languages } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
-import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
+import { resolveTrackStyle, normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
+import { getCachedModelResult } from "@/lib/model-cache";
 
 interface ProjectSettingsDialogProps {
   isOpen: boolean;
@@ -59,7 +60,15 @@ export function ProjectSettingsDialog({
       fetch('/api/models')
         .then(res => res.json())
         .then(data => {
-            if (data.models) setAvailableModels(data.models);
+            if (data.models) {
+                // Filter out models known to fail
+                const filtered = data.models.filter((m: any) => {
+                    const cached = getCachedModelResult(m.name);
+                    // Keep if unknown (null) or successful (true)
+                    return cached !== false;
+                });
+                setAvailableModels(filtered);
+            }
         })
         .catch(err => console.error("Failed to load models", err))
         .finally(() => setLoadingModels(false));
@@ -292,18 +301,7 @@ export function ProjectSettingsDialog({
                             {/* Subtitle Render */}
                             <div 
                                 className="absolute inset-0 pointer-events-none p-4"
-                                style={{
-                                    paddingTop: resolvedStyle.alignment >= 7 ? `${resolvedStyle.marginV}%` : 0,
-                                    paddingBottom: resolvedStyle.alignment <= 3 ? `${resolvedStyle.marginV}%` : 0,
-                                    paddingLeft: `${resolvedStyle.marginH}%`,
-                                    paddingRight: `${resolvedStyle.marginH}%`,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: [1, 4, 7].includes(resolvedStyle.alignment) ? 'flex-start' : 
-                                                [3, 6, 9].includes(resolvedStyle.alignment) ? 'flex-end' : 'center',
-                                    justifyContent: [7, 8, 9].includes(resolvedStyle.alignment) ? 'flex-start' : 
-                                                    [1, 2, 3].includes(resolvedStyle.alignment) ? 'flex-end' : 'center',
-                                }}
+                                style={getMarginPreviewStyle(resolvedStyle.marginV, resolvedStyle.marginH, resolvedStyle.alignment)}
                             >
                                 <span 
                                     style={{
