@@ -21,7 +21,7 @@ describe('integrity-utils', () => {
             fileSize: fc.option(fc.integer({ min: 0 }), { nil: undefined })
           }),
           (clip) => {
-            const result = checkClipIntegrity(clip as VideoClip, null);
+            const result = checkClipIntegrity({ ...clip, subtitles: [...(clip.subtitles || [])] } as VideoClip, null);
             expect(result).toBe(IntegrityStatus.MISSING);
           }
         )
@@ -44,7 +44,7 @@ describe('integrity-utils', () => {
           }),
           fc.integer({ min: 0 }),
           (clip, measuredSize) => {
-            const result = checkClipIntegrity(clip as VideoClip, measuredSize);
+            const result = checkClipIntegrity({ ...clip, subtitles: [...clip.subtitles!] } as VideoClip, measuredSize);
             expect(result).toBe(IntegrityStatus.OK);
           }
         )

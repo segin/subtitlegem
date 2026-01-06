@@ -1,4 +1,5 @@
-import { getDirectorySize, formatBytes, estimateH264Size, IFileSystem } from './storage-utils';
+import { getDirectorySize, IFileSystem } from './storage-utils';
+import { formatBytes, estimateH264Size } from './video-estimate-utils';
 import * as fc from 'fast-check';
 import path from 'path';
 
@@ -254,7 +255,7 @@ describe('storage-utils', () => {
         test('Size should be non-negative', () => {
             fc.assert(
                 fc.property(
-                    fc.double({ min: 0.1, max: 3600 }), // duration
+                    fc.double({ min: 0.1, max: 3600, noNaN: true }), // duration
                     fc.integer({ min: 100, max: 4000 }), // width
                     fc.integer({ min: 100, max: 4000 }), // height
                     fc.integer({ min: 0, max: 51 }), // crf
@@ -274,7 +275,7 @@ describe('storage-utils', () => {
         test('Lower CRF (higher quality) should result in larger size for same resolution/duration', () => {
             fc.assert(
                 fc.property(
-                    fc.double({ min: 1, max: 60 }),
+                    fc.double({ min: 1, max: 60, noNaN: true }),
                     fc.constant(1920),
                     fc.constant(1080),
                     fc.integer({ min: 0, max: 50 }),

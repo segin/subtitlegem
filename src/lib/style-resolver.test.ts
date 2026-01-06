@@ -128,10 +128,11 @@ describe('resolveTrackStyle', () => {
 
 describe('normalizeToPx', () => {
   describe('unit tests', () => {
-    test('returns number values unchanged', () => {
-      expect(normalizeToPx(48, 1080)).toBe(48);
-      expect(normalizeToPx(0, 1080)).toBe(0);
-      expect(normalizeToPx(100, 1920)).toBe(100);
+    test('treats numbers as percentages', () => {
+      // Numbers are now percentages: value% of fullSize
+      expect(normalizeToPx(5, 1080)).toBe(54);    // 5% of 1080 = 54
+      expect(normalizeToPx(0, 1080)).toBe(0);     // 0% of anything = 0
+      expect(normalizeToPx(10, 1920)).toBe(192);  // 10% of 1920 = 192
     });
 
     test('converts percentage strings', () => {
@@ -139,6 +140,7 @@ describe('normalizeToPx', () => {
       expect(normalizeToPx('10%', 1920)).toBe(192);
       expect(normalizeToPx('50%', 1000)).toBe(500);
     });
+
 
     test('returns 0 for undefined', () => {
       expect(normalizeToPx(undefined, 1080)).toBe(0);
@@ -163,13 +165,16 @@ describe('normalizeToPx', () => {
   });
 
   describe('property tests', () => {
-    test('number input equals output', () => {
+    test('number input is treated as percentage', () => {
       fc.assert(
-        fc.property(fc.float({ min: 0, max: 1000, noNaN: true }), (value) => {
-          return normalizeToPx(value, 1080) === value;
+        fc.property(fc.float({ min: 0, max: 100, noNaN: true }), (value) => {
+          // Numbers are now percentages: value% of 1080
+          const expected = (value / 100) * 1080;
+          return Math.abs(normalizeToPx(value, 1080) - expected) < 0.0001;
         })
       );
     });
+
 
     test('percentage result scales with fullSize', () => {
       fc.assert(
@@ -203,17 +208,21 @@ describe('normalizeToPx', () => {
 
   describe('edge cases', () => {
     test('handles very large percentages', () => {
+      // 1000% as string = 1000/100 * 100 = 1000
       expect(normalizeToPx('1000%', 100)).toBe(1000);
     });
 
     test('handles negative percentages', () => {
+      // -10% of 1000 = -100
       expect(normalizeToPx('-10%', 1000)).toBe(-100);
     });
 
-    test('handles negative numbers', () => {
-      expect(normalizeToPx(-50, 1080)).toBe(-50);
+    test('handles negative numbers (percentages)', () => {
+      // -50 as percentage = -50% of 1080 = -540
+      expect(normalizeToPx(-50, 1080)).toBe(-540);
     });
   });
+
 });
 
 // ============================================================================
@@ -221,29 +230,32 @@ describe('normalizeToPx', () => {
 // ============================================================================
 
 describe('getPreviewStyle', () => {
+  // Sample style using percentage-based values
   const sampleStyle: TrackStyle = {
     alignment: 2,
-    fontSize: 54,
+    fontSize: 5,        // 5% of video height
     color: '#ffffff',
     fontFamily: 'Arial',
-    marginV: 50,
-    marginH: 40,
+    marginV: 4,         // 4% margin
+    marginH: 4,
     backgroundColor: 'rgba(0,0,0,0.7)',
     outlineColor: '#000000',
-    outlineWidth: 2,
-    outlineWidth: 2,
+    outlineWidth: 0.2,  // 0.2% outline
   };
 
   describe('unit tests', () => {
     test('scales font size for preview height', () => {
       const result = getPreviewStyle(sampleStyle, 360);
+      // 5% of 360 = 18px
       expect(result.fontSize).toBe('18px');
     });
 
     test('scales font size for full 1080p', () => {
       const result = getPreviewStyle(sampleStyle, 1080);
+      // 5% of 1080 = 54px
       expect(result.fontSize).toBe('54px');
     });
+
 
     test('includes font family', () => {
       const result = getPreviewStyle(sampleStyle);
@@ -263,24 +275,26 @@ describe('getPreviewStyle', () => {
     test('handles percentage-based fontSize', () => {
       const styleWithPercent: TrackStyle = {
         ...sampleStyle,
-        fontSize: '5%',
+        fontSize: 5, // 5% as numeric value
       };
       const result = getPreviewStyle(styleWithPercent, 1080);
       expect(result.fontSize).toBe('54px');
     });
 
+
     test('handles missing outline/shadow', () => {
       const styleWithoutEffects: TrackStyle = {
         alignment: 2,
-        fontSize: 48,
+        fontSize: 5,        // 5%
         color: '#ffffff',
         fontFamily: 'Arial',
-        marginV: 50,
-        marginH: 40,
+        marginV: 4,
+        marginH: 4,
         backgroundColor: 'rgba(0,0,0,0.7)',
       };
       expect(() => getPreviewStyle(styleWithoutEffects)).not.toThrow();
     });
+
   });
 
   describe('property tests', () => {
@@ -298,20 +312,22 @@ describe('getPreviewStyle', () => {
       );
     });
 
-    test('scaling is proportional', () => {
+    test('scaling is proportional to video height', () => {
       fc.assert(
         fc.property(
-          fc.integer({ min: 10, max: 200 }),
+          fc.integer({ min: 1, max: 20 }), // fontSize as percentage (1-20%)
           fc.integer({ min: 100, max: 2000 }),
-          (fontSize, videoHeight) => {
-            const style: TrackStyle = { ...sampleStyle, fontSize };
+          (fontSizePercent, videoHeight) => {
+            const style: TrackStyle = { ...sampleStyle, fontSize: fontSizePercent };
             const result = getPreviewStyle(style, videoHeight);
-            const expectedSize = (fontSize / 1080) * videoHeight;
+            // fontSize% of videoHeight = expected pixels
+            const expectedSize = (fontSizePercent / 100) * videoHeight;
             const actualSize = parseFloat(result.fontSize);
             return Math.abs(actualSize - expectedSize) < 0.001;
           }
         )
       );
     });
+
   });
 });
