@@ -290,3 +290,18 @@ export async function generateSummary(
     throw error;
   }
 }
+
+/**
+ * Delete a file from Gemini Files API
+ * @param fileId The 'name' of the file (e.g. 'files/...')
+ */
+export async function deleteFileFromGemini(fileId: string): Promise<boolean> {
+  try {
+    console.log(`[Gemini] Deleting remote file: ${fileId}`);
+    await ai.files.delete({ name: fileId });
+    return true;
+  } catch (error) {
+    console.error(`[Gemini] Failed to delete remote file ${fileId}:`, error);
+    return false;
+  }
+}
