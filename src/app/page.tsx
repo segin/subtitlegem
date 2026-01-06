@@ -32,7 +32,7 @@ import {
 import { QueueItem } from "@/lib/queue-manager";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { generateAss } from "@/lib/ass-utils";
-import { useSubtitleHistory } from "@/hooks/useSubtitleHistory";
+import { useHomeState, RawSubtitleItem, DraftItem } from "@/hooks/useHomeState";
 import { getProjectDuration } from "@/lib/timeline-utils";
 import { checkClipIntegrity, canRelinkClip } from "@/lib/integrity-utils";
 import { v4 as uuidv4 } from "uuid";
@@ -40,177 +40,83 @@ import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Tras
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
 
-interface DraftItem {
-  id: string;
-  name: string;
-  videoPath?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface RawSubtitleItem {
-  startTime: string;
-  endTime: string;
-  text: string;
-  secondaryText?: string;
-}
-
-
 export default function Home() {
-  // Undo/redo state management for subtitles
-  const { subtitles, setSubtitles, undo, redo, canUndo, canRedo, resetHistory } = useSubtitleHistory([]);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoPath, setVideoPath] = useState<string | null>(null);
-  const [duration, setDuration] = useState(0);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [config, setConfig] = useState<SubtitleConfig>(DEFAULT_CONFIG);
-  const [showProjectSettings, setShowProjectSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<'list' | 'style'>('list');
-  
-  // Queue state
-  const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
-  const [queuePaused, setQueuePaused] = useState(false);
-  
-  // Draft state
-  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  
+  const homeState = useHomeState();
+  const {
+    subtitles, setSubtitles, undo, redo, canUndo, canRedo, resetHistory,
+    videoUrl, setVideoUrl,
+    videoPath, setVideoPath,
+    duration, setDuration,
+    currentTime, setCurrentTime,
+    config, setConfig,
+    showProjectSettings, setShowProjectSettings,
+    activeTab, setActiveTab,
+    queueItems, setQueueItems,
+    queuePaused,
+    currentDraftId, setCurrentDraftId,
+    showRestoreOption, setShowRestoreOption,
+    loading, setLoading,
+    initialSubtitles, setInitialSubtitles,
+    selectedSubtitleIds, setSelectedSubtitleIds,
+    lastSelectedIdRef,
+    showGlobalSettings, setShowGlobalSettings,
+    globalSettingsTab, setGlobalSettingsTab,
+    showShortcuts, setShowShortcuts,
+    showAbout, setShowAbout,
+    showShiftTimings, setShowShiftTimings,
+    showFindReplace, setShowFindReplace,
+    clipboardSubtitles, setClipboardSubtitles,
+    showQueue, setShowQueue,
+    queueWidth,
+    showVideoProperties, setShowVideoProperties,
+    videoProperties, setVideoProperties,
+    videoPropsLoading,
+    videoPropsError,
+    videoClips, setVideoClips,
+    timelineClips, setTimelineClips,
+    projectConfig, setProjectConfig,
+    uploadMode, setUploadMode,
+    selectedClipId, setSelectedClipId,
+    showVideoLibrary, setShowVideoLibrary,
+    isLibraryCollapsed, setIsLibraryCollapsed,
+    imageAssets, setImageAssets,
+    timelineImages, setTimelineImages,
+    selectedImageId, setSelectedImageId,
+    timelineRef,
+    drafts, setDrafts,
+    draftsLoading,
+    fetchDrafts,
+    handleDeleteDraft,
+    fetchVideoProperties,
+    handleQueueWidthChange,
+    toggleQueuePause,
+    fetchQueue,
+    isMultiVideoMode,
+    setQueuePaused,
+  } = homeState;
+
   // Shift key tracking for Open Project
   const openShiftKeyRef = useRef(false);
   
   // Home screen restore state
-  const [showRestoreOption, setShowRestoreOption] = useState(false);
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  
-  // Cache initial subtitles for "Reset to Original" feature
-  const [initialSubtitles, setInitialSubtitles] = useState<SubtitleLine[] | null>(null);
-  
-  // Multi-selection state (shared between timeline and list)
-  const [selectedSubtitleIds, setSelectedSubtitleIds] = useState<string[]>([]);
-  const lastSelectedIdRef = useRef<string | null>(null);
-  
-  // Global settings dialog
-  const [showGlobalSettings, setShowGlobalSettings] = useState(false);
-  const [globalSettingsTab, setGlobalSettingsTab] = useState<TabId>('styles');
-  
-  // New dialogs
-  const [showShortcuts, setShowShortcuts] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-  const [showShiftTimings, setShowShiftTimings] = useState(false);
-  const [showFindReplace, setShowFindReplace] = useState(false);
-  
-  // Clipboard for subtitle Cut/Copy/Paste
-  const [clipboardSubtitles, setClipboardSubtitles] = useState<SubtitleLine[]>([]);
-  
-  // Queue Drawer State
-  const [showQueue, setShowQueue] = useState(true);
-  const [queueWidth, setQueueWidth] = useState(300);
-
-  // Video Properties Dialog
-  const [showVideoProperties, setShowVideoProperties] = useState(false);
-  const [videoProperties, setVideoProperties] = useState<VideoProperties | null>(null);
-  const [videoPropsLoading, setVideoPropsLoading] = useState(false);
-  const [videoPropsError, setVideoPropsError] = useState<string | undefined>(undefined);
-
-  // Multi-video project state (V2)
-  const [videoClips, setVideoClips] = useState<VideoClip[]>([]);
-  const [timelineClips, setTimelineClips] = useState<TimelineClip[]>([]);
-  const [projectConfig, setProjectConfig] = useState<ProjectConfig>(DEFAULT_PROJECT_CONFIG);
-  const [uploadMode, setUploadMode] = useState<UploadMode>('single');
-  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
-  const [showVideoLibrary, setShowVideoLibrary] = useState(false);
-  const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
-  const [imageAssets, setImageAssets] = useState<ImageAsset[]>([]);
-  const [timelineImages, setTimelineImages] = useState<TimelineImage[]>([]);
-  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
-  
-  // Timeline Zoom Ref
-  const timelineRef = useRef<TimelineRef>(null);
-
-  // Recent Drafts state
-  const [drafts, setDrafts] = useState<DraftItem[]>([]);
-  const [draftsLoading, setDraftsLoading] = useState(true);
-  
-  const fetchDrafts = useCallback(async () => {
-    setDraftsLoading(true);
-    try {
-      const res = await fetch("/api/drafts");
-      const data = await res.json();
-      setDrafts(data.drafts || []);
-    } catch (err) {
-      console.error("Failed to load drafts:", err);
-    } finally {
-      setDraftsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchDrafts();
-  }, [fetchDrafts]);
-
-  const handleDeleteDraft = async (id: string) => {
-    try {
-      await fetch(`/api/drafts?id=${id}`, { method: "DELETE" });
-      setDrafts(prev => prev.filter(d => d.id !== id));
-    } catch (err) {
-      console.error("Failed to delete draft:", err);
-    }
-  };
 
   // Check if we're in multi-video mode
-  const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
+  // (isMultiVideoMode is now provided by homeState.isMultiVideoMode)
 
   // Fetch and cache video properties
   const handleShowVideoProperties = async () => {
     setShowVideoProperties(true);
-    
-    // Use cached if available
-    if (videoProperties) return;
-    
-    if (!videoPath) {
-      setVideoPropsError('No video loaded');
-      return;
-    }
-    
-    setVideoPropsLoading(true);
-    setVideoPropsError(undefined);
-    
-    try {
-      const res = await fetch(`/api/video-info?path=${encodeURIComponent(videoPath)}`);
-      const data = await res.json();
-      if (data.error) {
-        setVideoPropsError(data.error);
-      } else {
-        setVideoProperties(data);
-      }
-    } catch (err: unknown) {
-      setVideoPropsError((err instanceof Error ? err.message : String(err)) || 'Failed to fetch video properties');
-    } finally {
-      setVideoPropsLoading(false);
-    }
+    fetchVideoProperties(videoPath);
   };
 
-  // Load persisted queue width
-  useEffect(() => {
-    const savedWidth = localStorage.getItem('subtitlegem_queue_width');
-    if (savedWidth) {
-       const w = parseInt(savedWidth);
-       if (!isNaN(w) && w >= 250 && w <= 600) setQueueWidth(w);
-    }
-  }, []);
-
-  const handleQueueWidthChange = (w: number) => {
-    setQueueWidth(w);
-    localStorage.setItem('subtitlegem_queue_width', w.toString());
-  };
 
   // Sync project duration in multi-video mode
   useEffect(() => {
     if (isMultiVideoMode) {
       setDuration(getProjectDuration(timelineClips, timelineImages));
     }
-  }, [timelineClips, timelineImages, isMultiVideoMode]);
+  }, [timelineClips, timelineImages, isMultiVideoMode, setDuration]);
 
   // Load draft functionality
   const handleLoadDraft = async (draft: DraftItem) => {
@@ -268,29 +174,6 @@ export default function Home() {
     return () => clearTimeout(timeoutId);
   }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
   
-  // Real-time queue updates via Polling (Robust Fallback)
-  const fetchQueue = useCallback(async () => {
-    try {
-      const res = await fetch('/api/queue');
-      if (res.ok) {
-         const data = await res.json();
-         setQueueItems(data.items);
-         setQueuePaused(data.isPaused);
-      }
-    } catch (error) {
-      console.error("Queue poll failed:", error);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Initial fetch
-    fetchQueue();
-
-    // Poll every 1 second
-    const interval = setInterval(fetchQueue, 1000);
-
-    return () => clearInterval(interval);
-  }, [fetchQueue]);
 
   // Keyboard shortcuts for Undo/Redo
   useEffect(() => {
@@ -589,16 +472,6 @@ export default function Home() {
     }
   };
   
-  const toggleQueuePause = async () => {
-    const action = queuePaused ? 'resume' : 'pause';
-    await fetch('/api/queue', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action })
-    });
-    
-    setQueuePaused(!queuePaused);
-  };
 
   const handleExport = (format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
     let content = "";
@@ -762,10 +635,49 @@ export default function Home() {
       }
   };
 
+  // Consolidate reset logic
+  const closeProject = useCallback(() => {
+    console.log('[Page] Closing/Resetting project...');
+    // Reset all core state
+    setVideoUrl(null);
+    setVideoPath(null);
+    setDuration(0); // Reset duration
+    setCurrentTime(0); // Reset time
+    
+    // Reset subtitles and history
+    setSubtitles([]); 
+    setInitialSubtitles(null);
+    resetHistory([]);
+    setSelectedSubtitleIds([]);
+    
+    // Reset config
+    setConfig(DEFAULT_CONFIG);
+    setCurrentDraftId(null);
+    setPendingProjectFile(null); // Clear any pending restore
+    
+    // Reset multi-video state
+    setVideoClips([]);
+    setTimelineClips([]);
+    setTimelineImages([]);
+    setImageAssets([]);
+    setProjectConfig(DEFAULT_PROJECT_CONFIG);
+    setSelectedClipId(null);
+    setSelectedImageId(null);
+    
+    console.log('[Page] Project reset complete');
+  }, [
+    setVideoUrl, setVideoPath, setDuration, setCurrentTime,
+    setSubtitles, setInitialSubtitles, resetHistory, setSelectedSubtitleIds,
+    setConfig, setCurrentDraftId, setPendingProjectFile,
+    setVideoClips, setTimelineClips, setTimelineImages, setImageAssets,
+    setProjectConfig, setSelectedClipId, setSelectedImageId
+  ]);
+
   const handleCloseProject = async () => {
     // If there's a saved draft, offer to delete it
     if (currentDraftId) {
-      const shouldDelete = confirm("Delete this project from Recent Projects?");
+      // Use window.confirm directly to ensure blocking behavior
+      const shouldDelete = window.confirm("Delete this project from Recent Projects?\n\nClick OK to delete the draft.\nClick Cancel to just close the project.");
       if (shouldDelete) {
         try {
           await fetch(`/api/drafts?id=${currentDraftId}`, { method: 'DELETE' });
@@ -774,14 +686,7 @@ export default function Home() {
         }
       }
     }
-    
-    setVideoUrl(null);
-    setVideoPath(null);
-    resetHistory([]);
-    setCurrentDraftId(null);
-    setConfig(DEFAULT_CONFIG);
-    setInitialSubtitles(null);
-    setSelectedSubtitleIds([]);
+    closeProject();
   };
 
   // === Clipboard Operations ===
@@ -925,6 +830,191 @@ export default function Home() {
     }
   };
 
+  // === Find & Replace Logic ===
+  const findResultsRef = useRef<FindResult[]>([]);
+  const currentResultIndexRef = useRef<number>(-1);
+
+  const handleFind = (query: string, options: FindOptions): FindResult | null => {
+    findResultsRef.current = [];
+    currentResultIndexRef.current = -1;
+    
+    if (!query) return null;
+
+    const results: FindResult[] = [];
+    const lowerQuery = options.caseSensitive ? query : query.toLowerCase();
+
+    subtitles.forEach((sub, index) => {
+      // Check Primary
+      if (options.searchPrimary && sub.text) {
+        const text = options.caseSensitive ? sub.text : sub.text.toLowerCase();
+        if (text.includes(lowerQuery)) {
+          results.push({ subtitleId: sub.id, field: 'primary', index: -1, total: -1 }); // index/total set later
+        }
+      }
+      // Check Secondary
+      if (options.searchSecondary && sub.secondaryText) {
+        const text = options.caseSensitive ? sub.secondaryText : sub.secondaryText.toLowerCase();
+        if (text.includes(lowerQuery)) {
+          results.push({ subtitleId: sub.id, field: 'secondary', index: -1, total: -1 });
+        }
+      }
+    });
+
+    if (results.length === 0) return null;
+
+    // Assign indices
+    results.forEach((r, i) => {
+       r.index = i;
+       r.total = results.length;
+    });
+
+    findResultsRef.current = results;
+    currentResultIndexRef.current = 0;
+    
+    // Jump to first result
+    const first = results[0];
+    const sub = subtitles.find(s => s.id === first.subtitleId);
+    if (sub) {
+       setCurrentTime(sub.startTime);
+       setSelectedSubtitleIds([sub.id]);
+    }
+    
+    return first;
+  };
+
+  const handleFindNext = (): FindResult | null => {
+      if (findResultsRef.current.length === 0) return null;
+      let nextIndex = currentResultIndexRef.current + 1;
+      if (nextIndex >= findResultsRef.current.length) nextIndex = 0; // Wrap around
+      
+      currentResultIndexRef.current = nextIndex;
+      const res = findResultsRef.current[nextIndex];
+      
+      const sub = subtitles.find(s => s.id === res.subtitleId);
+      if (sub) {
+         setCurrentTime(sub.startTime);
+         setSelectedSubtitleIds([sub.id]);
+      }
+      return res;
+  };
+
+  const handleFindPrevious = (): FindResult | null => {
+      if (findResultsRef.current.length === 0) return null;
+      let prevIndex = currentResultIndexRef.current - 1;
+      if (prevIndex < 0) prevIndex = findResultsRef.current.length - 1; // Wrap around
+      
+      currentResultIndexRef.current = prevIndex;
+      const res = findResultsRef.current[prevIndex];
+      
+      const sub = subtitles.find(s => s.id === res.subtitleId);
+      if (sub) {
+         setCurrentTime(sub.startTime);
+         setSelectedSubtitleIds([sub.id]);
+      }
+      return res;
+  };
+
+  const handleReplace = (query: string, replacement: string, options: FindOptions): number => {
+      // Replace current match if any, otherwise find next and replace?
+      // Standard behavior: if current selection matches, replace it. Else find next and replace it.
+      // For simplicity here, we'll try to find one match starting from current position/time?
+      // Or just use the current result from findResultsRef if valid?
+      
+      if (findResultsRef.current.length === 0) {
+          // Try to find first
+          const found = handleFind(query, options);
+          if (!found) return 0;
+      }
+      
+      const currentRes = findResultsRef.current[currentResultIndexRef.current];
+      if (!currentRes) return 0;
+      
+      const subIndex = subtitles.findIndex(s => s.id === currentRes.subtitleId);
+      if (subIndex === -1) return 0;
+      
+      const sub = subtitles[subIndex];
+      const flags = options.caseSensitive ? 'g' : 'gi';
+      // Note: simple string replace might replace multiple occurrences in the same line if 'g' used
+      // Use 'g' since we matched the line.
+      
+      let newText = sub.text;
+      let newSecondary = sub.secondaryText;
+      let replaced = false;
+
+      if (currentRes.field === 'primary' && options.searchPrimary) {
+          const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags); // escape regex chars
+          const updated = newText.replace(regex, replacement);
+          if (updated !== newText) {
+              newText = updated;
+              replaced = true;
+          }
+      } else if (currentRes.field === 'secondary' && options.searchSecondary && newSecondary) {
+           const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+           const updated = newSecondary.replace(regex, replacement);
+           if (updated !== newSecondary) {
+               newSecondary = updated;
+               replaced = true;
+           }
+      }
+      
+      if (replaced) {
+          const newSubtitles = [...subtitles];
+          newSubtitles[subIndex] = { ...sub, text: newText, secondaryText: newSecondary };
+          setSubtitles(newSubtitles);
+          
+          // Re-run find to update results list since state changed
+          // This is a bit expensive but accurate.
+          // Or just update the current result?
+          // Let's re-run find to keep it synced.
+          handleFind(query, options); 
+          return 1;
+      }
+
+      return 0;
+  };
+
+  const handleReplaceAll = (query: string, replacement: string, options: FindOptions): number => {
+      const flags = options.caseSensitive ? 'g' : 'gi';
+      const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+      let count = 0;
+      
+      const newSubtitles = subtitles.map(sub => {
+          let text = sub.text;
+          let secondaryText = sub.secondaryText;
+          let changed = false;
+          
+          if (options.searchPrimary && text) {
+             const updated = text.replace(regex, replacement);
+             if (updated !== text) {
+                 text = updated;
+                 // count += (text.match(regex) || []).length; // approximation
+                 count++; // count lines changed or occurrences? UI usually shows occurrences.
+                 changed = true;
+             }
+          }
+          
+          if (options.searchSecondary && secondaryText) {
+             const updated = secondaryText.replace(regex, replacement);
+             if (updated !== secondaryText) {
+                 secondaryText = updated;
+                 count++;
+                 changed = true;
+             }
+          }
+          
+          return changed ? { ...sub, text, secondaryText } : sub;
+      });
+      
+      if (count > 0) {
+          setSubtitles(newSubtitles);
+          // Clear find results as they are stale
+          findResultsRef.current = [];
+          currentResultIndexRef.current = -1;
+      }
+      
+      return count;
+  };
+
   // Split a subtitle at its midpoint
   const splitSubtitle = (id: string) => {
     const index = subtitles.findIndex(s => s.id === id);
@@ -1016,7 +1106,13 @@ export default function Home() {
             drafts={drafts}
             loading={draftsLoading}
             onLoadDraft={handleLoadDraft}
-            onDelete={handleDeleteDraft}
+            onDelete={(id) => {
+              handleDeleteDraft(id);
+              if (currentDraftId === id) {
+                console.log("Deleted active project, closing editor...");
+                closeProject();
+              }
+            }}
           />
 
           {/* Main Upload Area - Center */}
@@ -1223,13 +1319,7 @@ export default function Home() {
           <span className="font-bold text-sm text-[#e1e1e1] tracking-wide">SUBTITLEGEM</span>
           <div className="h-4 w-px bg-[#444444]" />
           <MenuBar
-            onNewProject={() => {
-              setVideoUrl(null);
-              setVideoPath(null);
-              resetHistory([]); // Use resetHistory to clear undo stack
-              setConfig(DEFAULT_CONFIG);
-              setCurrentDraftId(null);
-            }}
+            onNewProject={closeProject}
             onExport={handleExport}
             hasSecondarySubtitles={subtitles.some(s => !!s.secondaryText)}
             primaryLanguage={config.primaryLanguage}
@@ -1241,7 +1331,11 @@ export default function Home() {
               document.getElementById('project-upload')?.click();
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
-            onReprocessVideo={() => setShowProjectSettings(true)}
+            onReprocessVideo={() => {
+              alert("Reprocess Video clicked!");
+              console.log("Reprocess clicked via MenuBar, opening settings...");
+              setShowProjectSettings(true);
+            }}
             onGlobalSettings={() => {
               setGlobalSettingsTab('styles');
               setShowGlobalSettings(true);
@@ -1590,6 +1684,18 @@ export default function Home() {
 
       {/* Raw Editor removed */}
       
+      {/* Raw Editor removed */}
+      
+      <FindReplaceDialog
+        isOpen={showFindReplace}
+        onClose={() => setShowFindReplace(false)}
+        onFind={handleFind}
+        onFindNext={handleFindNext}
+        onFindPrevious={handleFindPrevious}
+        onReplace={handleReplace}
+        onReplaceAll={handleReplaceAll}
+      />
+
       <ProjectSettingsDialog
         isOpen={showProjectSettings}
         onClose={() => setShowProjectSettings(false)}
