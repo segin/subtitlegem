@@ -110,8 +110,90 @@ async function callGenerate(config: ModelConfig, params: Record<string, any>): P
     );
   }
 
-  // TODO: Implement other providers for 'generate' (requires audio/video upload or local processing)
+  if (config.provider === 'openai' || config.provider === 'deepseek') { // DeepSeek might not support audio, but structure allows extensibility
+      if (config.provider === 'openai') {
+          return await callOpenAIGenerate(config, params);
+      }
+  }
+
   throw new Error(`Provider ${config.provider} does not support 'generate' task yet.`);
+}
+
+async function callOpenAIGenerate(config: ModelConfig, params: Record<string, any>): Promise<any> {
+    const endpoint = config.endpoint || 'https://api.openai.com/v1';
+    const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+
+    if (!apiKey) throw new Error(`API Key missing for ${config.provider}`);
+
+    // OpenAI Audio API requires FormData
+    const formData = new FormData();
+    formData.append('model', 'whisper-1'); // OpenAI uses whisper-1 for audio
+    if (params.secondaryLanguage) {
+        // Whisper doesn't support direct dual-lang generation in one go usually, 
+        // but we can prompt it or use 'translation' endpoint. 
+        // For now, let's assume 'transcription' and just return that, 
+        // effectively ignoring secondaryLanguage or handling it later.
+        // Or we could prompt it if using chat completions, but for audio it's specific.
+        // Let's stick to simple transcription for now.
+    }
+
+    let fileBlob: Blob;
+
+    if (params.isInline) {
+         // Convert base64 to Blob
+         const byteCharacters = atob(params.base64Data);
+         const byteNumbers = new Array(byteCharacters.length);
+         for (let i = 0; i < byteCharacters.length; i++) {
+             byteNumbers[i] = byteCharacters.charCodeAt(i);
+         }
+         const byteArray = new Uint8Array(byteNumbers);
+         fileBlob = new Blob([byteArray], { type: params.mimeType });
+    } else {
+         // We don't support fileUri for OpenAI audio here yet without downloading it first
+         // This is a limitation for now.
+         throw new Error("OpenAI Audio support currently requires inline processing (file < 10MB).");
+    }
+
+    formData.append('file', fileBlob, 'audio.mp4'); // Filename needed for mime detection sometimes
+    formData.append('response_format', 'srt'); // SRT is easier to parse than verbose_json for now, or use verbose_json for timestamps
+    formData.append('timestamp_granularity', 'segment'); 
+
+    // Actually, let's use verbose_json for structured data
+    formData.delete('response_format');
+    formData.append('response_format', 'verbose_json');
+
+    const response = await fetch(`${endpoint}/audio/transcriptions`, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`
+            // Content-Type is set automatically by FormData
+        },
+        body: formData
+    });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`OpenAI Audio Error: ${response.status} - ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    
+    // Map Whisper segments to SubtitleLine[]
+    const subtitles: SubtitleLine[] = data.segments.map((seg: any, index: number) => ({
+        id: index + 1,
+        startTime: seg.start,
+        endTime: seg.end,
+        text: seg.text.trim(),
+        secondaryText: ''
+    }));
+
+    // If secondary language was requested, we might need a 2nd pass to translate
+    // For now, just return primary
+    
+    return {
+        detectedLanguage: data.language,
+        subtitles: subtitles
+    };
 }
 
 async function callTranslate(config: ModelConfig, params: Record<string, any>) {
