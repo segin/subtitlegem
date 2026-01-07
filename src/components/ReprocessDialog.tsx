@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { RefreshCw, X, Settings2, AlertTriangle } from "lucide-react";
+import { RefreshCw, X, Settings2, AlertTriangle, Eye } from "lucide-react";
 import { getCachedModelResult } from "@/lib/model-cache";
 import { SubtitleLine } from "@/types/subtitle";
 
@@ -46,6 +46,7 @@ export function ReprocessDialog({
   const [loadingModels, setLoadingModels] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
 
   // Load models on open
   useEffect(() => {
@@ -153,12 +154,37 @@ export function ReprocessDialog({
           {/* Secondary Language */}
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-[#888888]">Secondary Language (Translation)</label>
-            <input
+            <select
               value={secondaryLanguage}
               onChange={(e) => setSecondaryLanguage(e.target.value)}
-              placeholder="e.g. English, Spanish, Chinese (leave blank for none)"
-              className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded px-3 py-1.5 text-sm focus:border-[#007fd4] outline-none text-[#ccc] placeholder:text-[#555]"
-            />
+              className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded px-3 py-1.5 text-sm focus:border-[#007fd4] outline-none text-[#ccc]"
+            >
+              <option value="">None</option>
+              <option value="English">English</option>
+              <option value="Simplified Chinese">Simplified Chinese</option>
+              <option value="Traditional Chinese">Traditional Chinese</option>
+              <option value="Spanish">Spanish</option>
+              <option value="French">French</option>
+              <option value="German">German</option>
+              <option value="Italian">Italian</option>
+              <option value="Portuguese">Portuguese</option>
+              <option value="Dutch">Dutch</option>
+              <option value="Polish">Polish</option>
+              <option value="Russian">Russian</option>
+              <option value="Japanese">Japanese</option>
+              <option value="Korean">Korean</option>
+              <option value="Arabic">Arabic</option>
+              <option value="Turkish">Turkish</option>
+              <option value="Swedish">Swedish</option>
+              <option value="Danish">Danish</option>
+              <option value="Norwegian">Norwegian</option>
+              <option value="Finnish">Finnish</option>
+              <option value="Greek">Greek</option>
+              <option value="Czech">Czech</option>
+              <option value="Hungarian">Hungarian</option>
+              <option value="Romanian">Romanian</option>
+              <option value="Ukrainian">Ukrainian</option>
+            </select>
           </div>
 
           {/* Mode Selection */}
@@ -254,23 +280,63 @@ export function ReprocessDialog({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-2 p-3 border-t border-[#333333] bg-[#2d2d2d]">
+        <div className="flex items-center justify-between p-3 border-t border-[#333333] bg-[#2d2d2d]">
           <button
-            onClick={onClose}
+            onClick={() => setShowPreviewDialog(true)}
             disabled={isProcessing}
-            className="px-4 py-1.5 text-xs text-[#cccccc] hover:bg-[#3e3e42] transition-colors border border-[#3e3e42] disabled:opacity-50"
+            className="px-4 py-1.5 text-xs text-[#cccccc] hover:bg-[#3e3e42] transition-colors border border-[#3e3e42] disabled:opacity-50 flex items-center gap-1.5"
           >
-            Cancel
+            <Eye className="w-3 h-3" />
+            Preview...
           </button>
-          <button
-            onClick={handleReprocess}
-            disabled={isProcessing || loadingModels}
-            className="px-4 py-1.5 text-xs bg-[#0e639c] text-white hover:bg-[#1177bb] transition-colors flex items-center gap-2 disabled:opacity-50"
-          >
-            {isProcessing && <RefreshCw className="w-3 h-3 animate-spin" />}
-            {isProcessing ? 'Processing...' : 'Reprocess'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              disabled={isProcessing}
+              className="px-4 py-1.5 text-xs text-[#cccccc] hover:bg-[#3e3e42] transition-colors border border-[#3e3e42] disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReprocess}
+              disabled={isProcessing || loadingModels}
+              className="px-4 py-1.5 text-xs bg-[#0e639c] text-white hover:bg-[#1177bb] transition-colors flex items-center gap-2 disabled:opacity-50"
+            >
+              {isProcessing && <RefreshCw className="w-3 h-3 animate-spin" />}
+              {isProcessing ? 'Processing...' : 'Reprocess'}
+            </button>
+          </div>
         </div>
+
+        {/* Preview Subdialog (placeholder) */}
+        {showPreviewDialog && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]" onClick={() => setShowPreviewDialog(false)}>
+            <div
+              className="bg-[#252526] border border-[#3e3e42] shadow-2xl w-full max-w-lg rounded-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-10 bg-[#333333] flex items-center justify-between px-3 border-b border-[#454545]">
+                <span className="text-sm font-medium text-[#e1e1e1]">Sample Preview</span>
+                <button onClick={() => setShowPreviewDialog(false)} className="p-1 hover:bg-[#454545] rounded">
+                  <X className="w-4 h-4 text-[#888888]" />
+                </button>
+              </div>
+              <div className="p-6 text-center text-[#888888] text-sm">
+                <Eye className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p>Sample preview functionality coming soon.</p>
+                <p className="text-xs mt-2 text-[#666]">Will extract first N seconds via FFmpeg and show AI results.</p>
+              </div>
+              <div className="flex justify-end p-3 border-t border-[#333333] bg-[#2d2d2d]">
+                <button
+                  onClick={() => setShowPreviewDialog(false)}
+                  className="px-4 py-1.5 text-xs text-[#cccccc] hover:bg-[#3e3e42] border border-[#3e3e42]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
