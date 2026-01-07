@@ -33,12 +33,26 @@ export async function POST(req: NextRequest) {
        
        console.log(`[Export] Processing multi-video project (v2) with ${project.clips.length} clips`);
        
-       // Generate flattened subtitles using the unified timeline model
-       // We use project.imageAssets if available, though getFlattenedSubtitles currently only cares about video clips
-       // for subtitle purposes (images don't have subtitles usually? or do they? 
-       // The current implementation of getFlattenedSubtitles iterates timeline clips and looks up video clips.
-       // It skips images implicitly if it checks for videoClipId.
+       // Security Check: Validate ALL paths in project clips and image assets
+       const { isPathSafe } = await import("@/lib/storage-config");
        
+       for (const clip of project.clips) {
+           if (!isPathSafe(clip.filePath)) {
+               console.warn(`[Export] Blocked unauthorized clip path: ${clip.filePath}`);
+               return NextResponse.json({ error: 'Unauthorized path in project clips' }, { status: 403 });
+           }
+       }
+
+       if (project.imageAssets) {
+           for (const img of project.imageAssets) {
+               if (!isPathSafe(img.filePath)) {
+                   console.warn(`[Export] Blocked unauthorized image path: ${img.filePath}`);
+                   return NextResponse.json({ error: 'Unauthorized path in project images' }, { status: 403 });
+               }
+           }
+       }
+
+       // Generate flattened subtitles using the unified timeline model
        const flattenedSubtitles = getFlattenedSubtitles(project.clips, project.timeline);
        
        // Generate unique ID
@@ -74,7 +88,7 @@ export async function POST(req: NextRequest) {
              projectState: project,
              assPath,
              outputPath,
-             // Dummy videoPath for validation inside job-processor if needed (though we branch before)
+             // Dummy videoPath for validation inside job-processor if needed
              videoPath: project.clips[0]?.filePath || '', 
              sampleDuration: sampleDuration || undefined,
              ffmpegConfig: project.subtitleConfig.ffmpeg
@@ -99,7 +113,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing video path" }, { status: 400 });
     }
 
-    if (!fs.existsSync(videoPath)) {
+    // Security check: strict path validation
+    const { isPathSafe } = await import("@/lib/storage-config");
+    if (!isPathSafe(videoPath)) {
+        console.warn(`[Export] Blocked unauthorized path access: ${videoPath}`);
+        return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+    }
+
+    const resolvedPath = path.resolve(videoPath);
+    if (!fs.existsSync(resolvedPath)) {
       return NextResponse.json({ error: "Video file not found" }, { status: 404 });
     }
 
