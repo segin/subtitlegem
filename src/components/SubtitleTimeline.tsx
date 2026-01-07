@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { SubtitleLine, VideoClip, TimelineClip } from "@/types/subtitle";
-import { AlertCircle, Magnet } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -126,10 +126,17 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   } | null>(null);
   const [snappingEnabled, setSnappingEnabled] = useState(true);
 
+  // Preview states for dragging (optimistic updates)
+  // Maps ID -> New State properties
+  const [subtitlePreview, setSubtitlePreview] = useState<Record<string, { startTime: number, endTime: number }>>({});
+  const [clipPreview, setClipPreview] = useState<Record<string, { projectStartTime: number, sourceInPoint: number, clipDuration: number }>>({});
+  const [imagePreview, setImagePreview] = useState<Record<string, { projectStartTime: number, duration: number }>>({});
+
   // Snapping helper: snaps time to playhead, other boundaries, or 1s intervals
   const getSnappedTime = useCallback((time: number, excludeId?: string) => {
     if (!snappingEnabled) return time;
     
+    // We snap to existing commit state of other items
     const threshold = 10 / pixelsPerSecond; // 10 pixels threshold
     const snapTargets = [
       0,
@@ -154,12 +161,15 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     return closestSnap;
   }, [snappingEnabled, pixelsPerSecond, duration, currentTime, subtitles, timelineClips, timelineImages]);
 
-  // Subtitle drag handler
+  // Subtitle drag handler (Preview)
   const handleSubtitleDrag = useCallback((id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
     const deltaSeconds = deltaX / pixelsPerSecond;
-    const sub = subtitles.find(s => s.id === id);
+    const sub = subtitles.find(s => s.id === id); // Original
     if (!sub) return;
     
+    // Always calculate from Original (sub) + Cumulative Delta
+    // This allows breaking out of snaps with large enough movements
+
     let newStart = sub.startTime;
     let newEnd = sub.endTime;
 
@@ -178,16 +188,33 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     newEnd = Math.min(duration, newEnd);
     if (newEnd - newStart < 0.1) return;
 
-    const newSubtitles = subtitles.map(s => s.id === id ? { ...s, startTime: newStart, endTime: newEnd } : s);
-    onSubtitlesUpdate(newSubtitles);
-  }, [subtitles, pixelsPerSecond, duration, onSubtitlesUpdate, getSnappedTime]);
+    setSubtitlePreview(prev => ({
+      ...prev,
+      [id]: { startTime: newStart, endTime: newEnd }
+    }));
+  }, [subtitles, pixelsPerSecond, duration, getSnappedTime]);
 
-  // Video clip drag handler
+  // Subtitle drop handler (Commit)
+  const handleSubtitleDrop = useCallback((id: string) => {
+    const preview = subtitlePreview[id];
+    // Only commit if we have a valid preview change
+    if (preview) {
+      const newSubtitles = subtitles.map(s => s.id === id ? { ...s, ...preview } : s);
+      onSubtitlesUpdate(newSubtitles);
+      setSubtitlePreview(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  }, [subtitlePreview, subtitles, onSubtitlesUpdate]);
+
+  // Video clip drag handler (Preview)
   const handleClipDrag = useCallback((clipId: string, side: 'left' | 'right' | 'both', deltaX: number) => {
-    if (!timelineClips || !onTimelineClipsUpdate) return;
+    if (!timelineClips) return;
     
     const deltaSeconds = deltaX / pixelsPerSecond;
-    const currentClip = timelineClips.find(c => c.id === clipId);
+    const currentClip = timelineClips.find(c => c.id === clipId); // Original
     if (!currentClip) return;
 
     let newStart = currentClip.projectStartTime;
@@ -200,22 +227,44 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
       const snappedStart = getSnappedTime(currentClip.projectStartTime + deltaSeconds, clipId);
       const adjustment = snappedStart - currentClip.projectStartTime;
       newInPoint = Math.max(0, currentClip.sourceInPoint + adjustment);
-      newDuration = Math.max(0.1, currentClip.clipDuration - (snappedStart - currentClip.projectStartTime));
+      newDuration = Math.max(0.1, currentClip.clipDuration - adjustment);
       newStart = snappedStart;
     } else if (side === 'right') {
       const newEndTime = getSnappedTime(currentClip.projectStartTime + currentClip.clipDuration + deltaSeconds, clipId);
       newDuration = Math.max(0.1, newEndTime - currentClip.projectStartTime);
     }
 
-    const newClips = timelineClips.map(clip => 
-      clip.id === clipId ? { ...clip, projectStartTime: Math.max(0, newStart), sourceInPoint: newInPoint, clipDuration: newDuration } : clip
-    );
-    onTimelineClipsUpdate(newClips);
-  }, [timelineClips, pixelsPerSecond, onTimelineClipsUpdate, getSnappedTime]);
+    setClipPreview(prev => ({
+      ...prev,
+      [clipId]: { 
+        projectStartTime: Math.max(0, newStart), 
+        sourceInPoint: newInPoint, 
+        clipDuration: newDuration 
+      }
+    }));
+  }, [timelineClips, pixelsPerSecond, getSnappedTime]);
 
-  // Image clip drag handler
+  // Video clip drop handler (Commit)
+  const handleClipDrop = useCallback((clipId: string) => {
+    if (!timelineClips || !onTimelineClipsUpdate) return;
+    const preview = clipPreview[clipId];
+    if (preview) {
+      const newClips = timelineClips.map(clip => 
+        clip.id === clipId ? { ...clip, ...preview } : clip
+      );
+      onTimelineClipsUpdate(newClips);
+      setClipPreview(prev => {
+        const next = { ...prev };
+        delete next[clipId];
+        return next;
+      });
+    }
+  }, [clipPreview, timelineClips, onTimelineClipsUpdate]);
+
+
+  // Image clip drag handler (Preview)
   const handleImageDrag = useCallback((id: string, side: 'left' | 'right' | 'both', deltaX: number) => {
-    if (!onTimelineImagesUpdate || !timelineImages) return;
+    if (!timelineImages) return;
     const deltaSeconds = deltaX / pixelsPerSecond;
     const img = timelineImages.find(i => i.id === id);
     if (!img) return;
@@ -233,11 +282,29 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
       newDur = Math.max(0.1, newEnd - img.projectStartTime);
     }
 
-    const newImages = timelineImages.map(i => 
-      i.id === id ? { ...i, projectStartTime: Math.max(0, newStart), duration: newDur } : i
-    );
-    onTimelineImagesUpdate(newImages);
-  }, [timelineImages, pixelsPerSecond, onTimelineImagesUpdate, getSnappedTime]);
+    setImagePreview(prev => ({
+      ...prev,
+      [id]: { projectStartTime: Math.max(0, newStart), duration: newDur }
+    }));
+  }, [timelineImages, pixelsPerSecond, getSnappedTime]);
+
+  // Image clip drop handler (Commit)
+  const handleImageDrop = useCallback((id: string) => {
+    if (!timelineImages || !onTimelineImagesUpdate) return;
+    const preview = imagePreview[id];
+    if (preview) {
+      const newImages = timelineImages.map(i => 
+        i.id === id ? { ...i, ...preview } : i
+      );
+      onTimelineImagesUpdate(newImages);
+      setImagePreview(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    }
+  }, [imagePreview, timelineImages, onTimelineImagesUpdate]);
+
 
   // Seek to position based on mouse X
   const seekFromEvent = useCallback((e: React.MouseEvent | MouseEvent, rect: DOMRect) => {
@@ -466,14 +533,19 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
                   const videoClip = videoClips.find(v => v.id === clip.videoClipId);
                   if (!videoClip) return null;
                   
+                  // Use preview state override if dragging
+                  const preview = clipPreview[clip.id];
+                  const displayClip = preview ? { ...clip, ...preview } : clip;
+
                   return (
                     <VideoClipBlock
                       key={clip.id}
-                      clip={clip}
+                      clip={displayClip}
                       videoClip={videoClip}
                       pixelsPerSecond={pixelsPerSecond}
                       selected={selectedClipId === clip.id}
                       onDrag={(side, deltaX) => handleClipDrag(clip.id, side, deltaX)}
+                      onDrop={() => handleClipDrop(clip.id)}
                       onClick={() => onClipSelect?.(clip.id)}
                       onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')}
                     />
@@ -485,14 +557,19 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
                   const asset = imageAssets?.find(a => a.id === img.imageAssetId);
                   if (!asset) return null;
                   
+                  // Use preview state override if dragging
+                  const preview = imagePreview[img.id];
+                  const displayImg = preview ? { ...img, ...preview } : img;
+
                   return (
                     <ImageClipBlock
                       key={img.id}
-                      item={img}
+                      item={displayImg}
                       asset={asset}
                       pixelsPerSecond={pixelsPerSecond}
                       selected={selectedImageId === img.id}
                       onDrag={(side, deltaX) => handleImageDrag(img.id, side, deltaX)}
+                      onDrop={() => handleImageDrop(img.id)}
                       onClick={() => onImageSelect?.(img.id)}
                       onContextMenu={(e) => handleContextMenu(e, img.id, 'image')}
                     />
@@ -511,17 +588,24 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
               className="ml-16 relative h-full px-0"
               onClick={() => onSelect("", false, false)}
             >
-              {subtitles.map((sub) => (
-                <SubtitleBubble 
-                  key={sub.id} 
-                  subtitle={sub} 
-                  pixelsPerSecond={pixelsPerSecond}
-                  onDrag={(side, deltaX) => handleSubtitleDrag(sub.id, side, deltaX)}
-                  active={currentTime >= sub.startTime && currentTime <= sub.endTime}
-                  selected={selectedIds.includes(sub.id)}
-                  onClick={(e) => onSelect(sub.id, e.shiftKey, e.ctrlKey || e.metaKey)}
-                />
-              ))}
+              {subtitles.map((sub) => {
+                // Use preview state override if dragging
+                const preview = subtitlePreview[sub.id];
+                const displaySub = preview ? { ...sub, ...preview } : sub;
+
+                return (
+                  <SubtitleBubble 
+                    key={sub.id} 
+                    subtitle={displaySub} 
+                    pixelsPerSecond={pixelsPerSecond}
+                    onDrag={(side, deltaX) => handleSubtitleDrag(sub.id, side, deltaX)}
+                    onDrop={() => handleSubtitleDrop(sub.id)}
+                    active={currentTime >= displaySub.startTime && currentTime <= displaySub.endTime}
+                    selected={selectedIds.includes(sub.id)}
+                    onClick={(e) => onSelect(sub.id, e.shiftKey, e.ctrlKey || e.metaKey)}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>
@@ -566,12 +650,13 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
 // Video Clip Block
 // ============================================================================
 
-function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onClick, onContextMenu }: {
+function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onDrop, onClick, onContextMenu }: {
   clip: TimelineClip;
   videoClip: VideoClip;
   pixelsPerSecond: number;
   selected: boolean;
   onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void;
+  onDrop: () => void;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -592,12 +677,15 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX.current;
       onDrag(isDragging, deltaX);
-      startX.current = e.clientX;
+      // NOTE: We do NOT reset startX here.
+      // This means deltaX is CUMULATIVE from the start of the drag.
+      // This allows the parent to calculate positioning relative to the original start time.
     };
 
     const handleMouseUp = () => {
       setIsDragging(null);
       setOriginalClip(null);
+      onDrop();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -606,7 +694,7 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onDrag]);
+  }, [isDragging, onDrag, onDrop]);
 
   return (
     <div 
@@ -681,12 +769,13 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
 // Image Clip Block
 // ============================================================================
 
-function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onClick, onContextMenu }: {
+function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onDrop, onClick, onContextMenu }: {
   item: import("@/types/subtitle").TimelineImage;
   asset: import("@/types/subtitle").ImageAsset;
   pixelsPerSecond: number;
   selected: boolean;
   onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void;
+  onDrop: () => void;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
 }) {
@@ -707,12 +796,12 @@ function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onClic
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX.current;
       onDrag(isDragging, deltaX);
-      startX.current = e.clientX;
     };
 
     const handleMouseUp = () => {
       setIsDragging(null);
       setOriginalItem(null);
+      onDrop();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -721,7 +810,7 @@ function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onClic
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onDrag]);
+  }, [isDragging, onDrag, onDrop]);
 
   return (
     <div 
@@ -837,10 +926,11 @@ function TimelineContextMenu({ x, y, onDuplicate, onSplit, onRemove, onClose }: 
 // Subtitle Bubble
 // ============================================================================
 
-function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, onClick }: { 
+function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, onDrop, active, selected, onClick }: { 
   subtitle: SubtitleLine, 
   pixelsPerSecond: number, 
   onDrag: (side: 'left' | 'right' | 'both', deltaX: number) => void,
+  onDrop: () => void,
   active: boolean,
   selected: boolean,
   onClick: (e: React.MouseEvent) => void
@@ -862,12 +952,12 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, o
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX.current;
       onDrag(isDragging, deltaX);
-      startX.current = e.clientX;
     };
 
     const handleMouseUp = () => {
       setIsDragging(null);
       setOriginalSub(null);
+      onDrop();
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -876,7 +966,7 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, active, selected, o
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, onDrag]);
+  }, [isDragging, onDrag, onDrop]);
 
   return (
     <div 
