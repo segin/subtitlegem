@@ -101,26 +101,58 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/drafts - Save a new draft or update existing
+ * POST /api/drafts - Save a new draft or update existing (Supports V1 and V2)
  */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const { isPathSafe } = await import("@/lib/storage-config");
     
-    // ... existing save logic ...
-    const { id, name, videoPath, subtitles, config } = body;
+    const { id, name, videoPath, subtitles, config, version, clips, timeline, projectConfig, subtitleConfig } = body;
     
     if (!name) {
       return NextResponse.json({ error: "Draft name is required" }, { status: 400 });
     }
-    
-    const draft = saveDraft({
-      id,
-      name,
-      videoPath,
-      subtitles,
-      config,
-    });
+
+    let draft;
+
+    if (version === 2 || (clips && timeline)) {
+        // Handle V2 Draft
+        const { saveDraftV2 } = await import("@/lib/draft-store");
+        
+        // Security Check: Validate all clip paths
+        if (clips) {
+            for (const clip of clips) {
+                if (!isPathSafe(clip.filePath)) {
+                    console.warn(`[DraftAPI] Blocked unauthorized clip path: ${clip.filePath}`);
+                    return NextResponse.json({ error: "Unauthorized path in clips" }, { status: 403 });
+                }
+            }
+        }
+
+        draft = saveDraftV2({
+            id,
+            name,
+            clips: clips || [],
+            timeline: timeline || [],
+            projectConfig: projectConfig || {},
+            subtitleConfig: subtitleConfig || config || {},
+        });
+    } else {
+        // Handle V1 Draft
+        if (videoPath && !isPathSafe(videoPath)) {
+            console.warn(`[DraftAPI] Blocked unauthorized videoPath: ${videoPath}`);
+            return NextResponse.json({ error: "Unauthorized video path" }, { status: 403 });
+        }
+
+        draft = saveDraft({
+            id,
+            name,
+            videoPath,
+            subtitles,
+            config,
+        });
+    }
     
     // Invalidate/Update metadata on save
     try {
@@ -128,8 +160,9 @@ export async function POST(req: NextRequest) {
          const metrics = computeMetrics(draft); // Recalc new metrics
          
          // Fix subtitle count using incoming body (as V2 draft object might not have it populated)
-         if (subtitles && Array.isArray(subtitles)) {
-            metrics.subtitleCount = subtitles.length;
+         const incomingSubtitles = subtitles || subtitleConfig?.subtitles || config?.subtitles;
+         if (incomingSubtitles && Array.isArray(incomingSubtitles)) {
+            metrics.subtitleCount = incomingSubtitles.length;
          }
 
          let currentMeta: ProjectMetadata = {};
@@ -146,10 +179,10 @@ export async function POST(req: NextRequest) {
          fs.writeFileSync(metaPath, JSON.stringify(newMeta, null, 2));
 
          // Background: Generate Summary if missing
-         if (!newMeta.summary && subtitles && subtitles.length > 0) {
+         const finalSubtitles = subtitles || (draft.version === 1 ? draft.subtitles : []); // V2 might need more complex extraction if not in body
+         if (!newMeta.summary && finalSubtitles && (finalSubtitles as any[]).length > 0) {
            console.log(`[DraftAPI] Triggering summary generation for ${draft.id}`);
-           // Fire and forget - do not await
-           generateProjectSummary(draft.id, subtitles).catch(err => {
+           generateProjectSummary(draft.id, finalSubtitles as any[]).catch(err => {
              console.error(`[DraftAPI] Summary generation failed for ${draft.id}`, err);
            });
          }
