@@ -211,13 +211,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "File vanished from storage" }, { status: 410 });
   }
 
-  const fileBuffer = fs.readFileSync(filePath);
+  const stat = fs.statSync(filePath);
+  const fileStream = fs.createReadStream(filePath);
   const fileName = path.basename(filePath);
 
-  return new NextResponse(fileBuffer, {
+  const stream = new ReadableStream({
+    start(controller) {
+      fileStream.on('data', (chunk) => controller.enqueue(chunk));
+      fileStream.on('end', () => controller.close());
+      fileStream.on('error', (err) => controller.error(err));
+    },
+    cancel() {
+      fileStream.destroy();
+    }
+  });
+
+  return new NextResponse(stream as any, {
     headers: {
       "Content-Type": "video/mp4",
       "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Length": stat.size.toString(),
     },
   });
 }
