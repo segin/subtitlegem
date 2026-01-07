@@ -273,3 +273,24 @@ export function cleanupOldItems(stagingDir: string, maxAgeHours: number = 24): n
   
   return cleanedCount;
 }
+
+/**
+ * Validates if a file path is safe to access (within staging or project root)
+ * Prevents path traversal and unauthorized file access.
+ */
+export function isPathSafe(filePath: string | null | undefined): boolean {
+  if (!filePath) return false;
+  
+  // Explicitly deny '..' sequences to prevent traversal attempts before resolution
+  if (filePath.includes('..')) return false;
+  
+  const stagingDir = getStagingDir();
+  const resolvedPath = path.resolve(filePath);
+  const resolvedStagingDir = path.resolve(stagingDir);
+  const projectRoot = path.resolve(process.cwd());
+  
+  // Check if path is within staging directory or project root
+  return resolvedPath.startsWith(resolvedStagingDir + path.sep) || 
+         resolvedPath === resolvedStagingDir ||
+         resolvedPath.startsWith(projectRoot + path.sep);
+}

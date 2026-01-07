@@ -16,24 +16,20 @@ export async function GET(req: NextRequest) {
     const filePath = searchParams.get('path');
 
     if (filePath) {
-      // Security: Ensure path is within allowed directories
-      const config = getStorageConfig();
-      const stagingDir = config.stagingDir;
-      const absolutePath = path.resolve(filePath);
-      
-      const isAllowed = absolutePath.startsWith(stagingDir) || 
-                         absolutePath.includes('subtitlegem');
-
-      if (!isAllowed) {
+      const { isPathSafe } = await import("@/lib/storage-config");
+      if (!isPathSafe(filePath)) {
+        console.warn(`[Storage] Blocked unauthorized path access: ${filePath}`);
         return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
       }
 
-      if (!fs.existsSync(absolutePath)) {
+      const resolvedPath = path.resolve(filePath);
+
+      if (!fs.existsSync(resolvedPath)) {
         return NextResponse.json({ error: 'File not found' }, { status: 404 });
       }
 
       // Determine content type
-      const fileExtension = path.extname(absolutePath).toLowerCase();
+      const fileExtension = path.extname(resolvedPath).toLowerCase();
       let contentType = 'application/octet-stream';
       if (fileExtension === '.mp4') contentType = 'video/mp4';
       else if (fileExtension === '.webm') contentType = 'video/webm';
@@ -41,7 +37,7 @@ export async function GET(req: NextRequest) {
       else if (fileExtension === '.srt') contentType = 'text/plain';
       else if (fileExtension === '.ass') contentType = 'text/plain';
 
-      const stat = fs.statSync(absolutePath);
+      const stat = fs.statSync(resolvedPath);
       const fileSize = stat.size;
       const range = req.headers.get('range');
 
@@ -51,7 +47,7 @@ export async function GET(req: NextRequest) {
         const start = parseInt(parts[0], 10);
         const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
         const chunksize = (end - start) + 1;
-        const fileStream = fs.createReadStream(absolutePath, { start, end });
+        const fileStream = fs.createReadStream(resolvedPath, { start, end });
 
         // Convert Node stream to Web stream
         const stream = new ReadableStream({
@@ -83,7 +79,7 @@ export async function GET(req: NextRequest) {
         });
       } else {
         // Handle full file request
-        const fileStream = fs.createReadStream(absolutePath);
+        const fileStream = fs.createReadStream(resolvedPath);
         
         // Convert Node stream to Web stream
         const stream = new ReadableStream({
