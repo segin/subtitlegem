@@ -42,8 +42,16 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   const maxRetries = 5;
 
   // Wait for file to be processed
-  while (file.state === FileState.PROCESSING) {
-    process.stdout.write(".");
+  // Safety timeout: stop waiting after 10 minutes (60 * 10s checks)
+  let waitCount = 0;
+  const maxWaitChecks = 60; 
+
+  // Wait for file to be processed
+  while (file.state === FileState.PROCESSING && waitCount < maxWaitChecks) {
+    waitCount++;
+    if (waitCount % 3 === 0) {
+        console.log(`[${new Date().toISOString()}] [Gemini] Still processing file ${fileName}... (${waitCount}/${maxWaitChecks})`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 10_000));
 
     // Retry with exponential backoff on transient errors
@@ -54,7 +62,7 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
       retryCount++;
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(
-        `\n[Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`,
+        `[${new Date().toISOString()}] [Gemini] File status poll failed (attempt ${retryCount}/${maxRetries}):`,
         errorMessage
       );
 
@@ -64,11 +72,14 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
         );
       }
 
-      // Exponential backoff: 5s, 10s, 20s, 40s, 80s
+      // Exponential backoff
       const backoffMs = 5000 * Math.pow(2, retryCount - 1);
-      console.log(`[Gemini] Retrying in ${backoffMs / 1000}s...`);
       await new Promise((resolve) => setTimeout(resolve, backoffMs));
     }
+  }
+
+  if (waitCount >= maxWaitChecks) {
+    throw new Error(`Gemini file processing timed out after ${maxWaitChecks * 10} seconds.`);
   }
 
   if (file.state === FileState.FAILED) {
