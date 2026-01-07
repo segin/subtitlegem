@@ -60,6 +60,7 @@ subtitlegem/
 │   │   ├── gemini.ts           # Google Gemini AI integration
 │   │   ├── global-settings-store.ts # Settings persistence
 │   │   ├── job-processor.ts    # Export job execution
+   │   ├── model-cache.ts      # AI model availability caching
 │   │   ├── queue-db.ts         # SQLite queue persistence
 │   │   ├── queue-manager.ts    # Job queue state machine
 │   │   ├── time-utils.ts       # Timestamp utilities (formerly srt-utils.ts)
@@ -74,6 +75,7 @@ subtitlegem/
 │   │
 │   ├── hooks/                  # Custom React Hooks
 │   │   ├── useSubtitleSync.ts  # Video-subtitle time sync
+   │   ├── useSubtitleHistory.ts # Undo/redo history management
 │   │   └── useHomeState.ts     # State hooks for home page (dialog, queue, drafts, video, multi-video, selection)
 │   │
 │   └── types/                  # TypeScript Definitions
@@ -381,7 +383,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-01-04 |
+| **Date of Last Update** | 2026-01-08 |
 
 ---
 
