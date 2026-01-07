@@ -1451,6 +1451,7 @@ export default function Home() {
                   currentTime={currentTime}
                   onTimeUpdate={setCurrentTime}
                   onDurationChange={setDuration}
+                  videoProperties={videoProperties}
                 />
             </div>
           </div>
