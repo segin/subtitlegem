@@ -211,7 +211,13 @@ export function burnSubtitles(
     }
 
     // Add subtitle filter (escape path for filter syntax)
-    const escapedAssPath = assPath.replace(/:/g, '\\:').replace(/\\/g, '/');
+    // FFmpeg filter paths need complex escaping: 
+    // 1. Backslashes become forward slashes (works better across platforms)
+    // 2. Colons must be escaped as \:
+    // 3. The whole thing should be wrapped in single quotes if it contains special chars like commas
+    const processedPath = assPath.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\\\\\''");
+    const escapedAssPath = `'${processedPath}'`;
+    
     videoFilters.push(`subtitles=${escapedAssPath}`);
 
     args.push('-vf', videoFilters.join(','));
