@@ -20,6 +20,10 @@ jest.mock('@/lib/storage-config', () => ({
   getStorageConfig: jest.fn(() => ({
     stagingDir: '/mock/staging',
   })),
+  isPathSafe: jest.fn((p) => {
+    if (!p) return false;
+    return p.startsWith('/mock/staging') || p.startsWith(process.cwd());
+  }),
 }));
 
 describe('/api/stream', () => {
@@ -49,7 +53,7 @@ describe('/api/stream', () => {
     const res = await GET(req);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toBe('Missing path');
+    expect(data.error).toBe('Missing path parameter');
   });
 
   it('should block path traversal attempts', async () => {
