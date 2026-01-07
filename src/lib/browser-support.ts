@@ -86,7 +86,8 @@ export function isMetadataSupported(metadata: any, support: BrowserSupport): boo
     const { videoCodec, pixFmt, width, height } = metadata;
 
     // 1. Check for 10-bit color formats (common cause of black screen in browsers)
-    const is10bit = pixFmt?.includes('10') || pixFmt?.includes('12');
+    // Note: yuv410p is 8-bit despite having '10' in the name
+    const is10bit = (pixFmt?.includes('10') || pixFmt?.includes('12')) && pixFmt !== 'yuv410p';
     if (is10bit) {
         if (videoCodec === 'h264' && !support.h264_10bit) return false;
         if ((videoCodec === 'hevc' || videoCodec === 'h265') && !support.hevc_10bit) return false;
