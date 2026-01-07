@@ -4,6 +4,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
 import { REFERENCE_WIDTH } from "@/types/constants";
 import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
+import { probeBrowserSupport, isMetadataSupported, BrowserSupport } from "@/lib/browser-support";
 
 interface PreviewProps {
   // Legacy support for single video
@@ -21,6 +22,7 @@ interface PreviewProps {
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
+  videoProperties?: any; // Added to pass probed metadata
 }
 
 export function VideoPreview({ 
@@ -34,7 +36,8 @@ export function VideoPreview({
   config, 
   currentTime, 
   onTimeUpdate, 
-  onDurationChange 
+  onDurationChange,
+  videoProperties
 }: PreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -45,17 +48,23 @@ export function VideoPreview({
   const isMultiVideo = timelineClips.length > 0 || timelineImages.length > 0;
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(videoUrl || null);
   const [activeImageUrl, setActiveImageUrl] = useState<string | null>(null);
-  const lastTimeRef = useRef(currentTime);
+  const [activeMetadata, setActiveMetadata] = useState<any>(null);
   
-  // Transcoding State
+  // Browser Support & Transcoding State
+  const [browserSupport, setBrowserSupport] = useState<BrowserSupport | null>(null);
   const [useTranscoding, setUseTranscoding] = useState(false);
   const [checkingSupport, setCheckingSupport] = useState(false);
 
+  // Initialize browser support probe
+  useEffect(() => {
+    probeBrowserSupport().then(setBrowserSupport);
+  }, []);
 
   // Multi-clip and Image switching logic
   useEffect(() => {
     if (!isMultiVideo) {
       if (videoUrl !== activeVideoUrl) setActiveVideoUrl(videoUrl || null);
+      setActiveMetadata(videoProperties);
       return;
     }
 
@@ -70,7 +79,11 @@ export function VideoPreview({
         if (fullUrl !== activeVideoUrl) {
           setActiveVideoUrl(fullUrl);
           setActiveImageUrl(null);
-          // We need to set the video time appropriately, but let's do it after load
+          // Fetch metadata for this clip if we don't have it
+          fetch(`/api/video-info?path=${encodeURIComponent(clipInfo.filePath)}`)
+            .then(res => res.json())
+            .then(setActiveMetadata)
+            .catch(() => setActiveMetadata(null));
         }
       }
     } else if (activeImage) {
@@ -80,35 +93,52 @@ export function VideoPreview({
         if (fullUrl !== activeImageUrl) {
           setActiveImageUrl(fullUrl);
           setActiveVideoUrl(null);
+          setActiveMetadata(null);
         }
       }
     } else {
       // Gap or nothing
       setActiveVideoUrl(null);
       setActiveImageUrl(null);
+      setActiveMetadata(null);
     }
-  }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets]);
+  }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets, videoProperties, activeVideoUrl]);
 
   // Support check for active video
   useEffect(() => {
-    if (!activeVideoUrl) return;
+    if (!activeVideoUrl || !browserSupport) return;
     
     setUseTranscoding(false);
     setCheckingSupport(true);
 
     const checkSupport = async () => {
         try {
-            const ext = activeVideoUrl.split('.').pop()?.split('?')[0]?.toLowerCase(); // Handle query params
+            // Priority 1: Check metadata if we have it (strict check)
+            if (activeMetadata) {
+                const supported = isMetadataSupported(activeMetadata, browserSupport);
+                if (!supported) {
+                    console.log(`[Preview] Metadata indicates unsupported format (${activeMetadata.videoCodec}/${activeMetadata.pixFmt}). Forcing transcoding.`);
+                    setUseTranscoding(true);
+                    return;
+                }
+            }
+
+            // Priority 2: Extension based fallback
+            const ext = activeVideoUrl.split('.').pop()?.split('?')[0]?.toLowerCase();
+            if (ext === 'mkv' || ext === 'avi') {
+                 setUseTranscoding(true);
+                 return;
+            }
+
+            // Priority 3: Browser canPlayType check (lightweight)
             let mime = 'video/mp4'; 
-            if (ext === 'mkv') mime = 'video/x-matroska';
             if (ext === 'webm') mime = 'video/webm';
             if (ext === 'mov') mime = 'video/quicktime';
-            if (ext === 'avi') mime = 'video/x-msvideo';
 
             const video = document.createElement('video');
             const canPlay = video.canPlayType(mime);
             
-            if (canPlay === '' || mime === 'video/x-matroska') {
+            if (canPlay === '') {
                  setUseTranscoding(true);
             }
         } catch (e) {
@@ -119,7 +149,7 @@ export function VideoPreview({
     };
 
     checkSupport();
-  }, [activeVideoUrl]);
+  }, [activeVideoUrl, browserSupport, activeMetadata]);
 
   // Handle seekers & scrubbing (Project Time -> Local Video Time)
   useEffect(() => {
