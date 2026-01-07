@@ -433,6 +433,39 @@ describe('ffmpeg-utils', () => {
 
       await expect(promise).rejects.toThrow('FFmpeg failed with code 1');
     });
+
+    it('should handle special characters in paths correctly', async () => {
+      const mockFfprobeProc = createMockProcess();
+      const mockFfmpegProc = createMockProcess();
+      
+      (spawn as jest.Mock)
+        .mockReturnValueOnce(mockFfprobeProc)
+        .mockReturnValueOnce(mockFfmpegProc);
+
+      const specialAssPath = '/tmp/user, file.ass';
+      const promise = burnSubtitles('/input.mp4', specialAssPath, '/output.mp4');
+
+      const probeOutput = JSON.stringify({
+        format: { duration: '100' },
+        streams: [{ codec_type: 'video', width: 1920, height: 1080 }],
+      });
+      mockFfprobeProc.stdout.emit('data', probeOutput);
+      mockFfprobeProc.emit('close', 0);
+
+      await new Promise(r => setTimeout(r, 10));
+      mockFfmpegProc.emit('close', 0);
+
+      await promise;
+
+      const ffmpegCall = (spawn as jest.Mock).mock.calls.find(
+        call => call[0] === 'ffmpeg'
+      );
+      const vfArg = ffmpegCall[1][ffmpegCall[1].indexOf('-vf') + 1];
+      
+      // We check if the path is properly escaped or quoted to handle the comma
+      expect(vfArg).toContain("'");
+      expect(vfArg).toContain("'/tmp/user, file.ass'");
+    });
   });
 
   // ============================================================================
