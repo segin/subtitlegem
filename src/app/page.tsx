@@ -39,6 +39,7 @@ import { v4 as uuidv4 } from "uuid";
 import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Trash2, Edit2, Check, Sparkles, AlertCircle, FileText, Settings, Code, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
+import { ReprocessDialog, ReprocessOptions } from "@/components/ReprocessDialog";
 
 export default function Home() {
   const homeState = useHomeState();
@@ -100,6 +101,9 @@ export default function Home() {
   
   // Home screen restore state
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
+  
+  // Reprocess dialog state
+  const [showReprocessDialog, setShowReprocessDialog] = useState(false);
 
   // Check if we're in multi-video mode
   // (isMultiVideoMode is now provided by homeState.isMultiVideoMode)
@@ -596,6 +600,65 @@ export default function Home() {
         resetHistory(processed);
     }
   };
+
+  // Reprocess handler for the new ReprocessDialog
+  const handleReprocessWithOptions = useCallback(async (options: ReprocessOptions): Promise<SubtitleLine[]> => {
+    if (!videoPath) throw new Error("No video loaded");
+    
+    const response = await fetch('/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filePath: videoPath,
+        fileName: videoUrl?.split('/').pop() || "video.mp4",
+        fileSize: 0,
+        fileType: "video/mp4",
+        model: options.model,
+        secondaryLanguage: options.secondaryLanguage || "None",
+        reprocess: true,
+        primaryLanguage: config.primaryLanguage || "auto",
+        existingFileUri: config.geminiFileUri,
+        sampleDuration: options.sampleDuration,
+        promptHints: options.promptHints,
+      })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "Reprocessing failed");
+    }
+    
+    const data = await response.json();
+    if (!data.subtitles) throw new Error("No subtitles returned");
+    
+    // Add unique IDs if missing
+    const newSubtitles: SubtitleLine[] = (data.subtitles as SubtitleLine[]).map((s) => ({
+      ...s,
+      id: s.id || uuidv4()
+    }));
+    
+    if (options.mode === 'merge' && subtitles.length > 0) {
+      // Merge mode: keep existing timing, update text
+      // Match by index (simple approach) or could match by time overlap
+      const merged = subtitles.map((existing, idx) => {
+        const newSub = newSubtitles[idx];
+        if (newSub) {
+          return {
+            ...existing,
+            text: newSub.text,
+            secondaryText: newSub.secondaryText,
+          };
+        }
+        return existing;
+      });
+      setSubtitles(merged);
+      return merged;
+    } else {
+      // Replace mode
+      setSubtitles(newSubtitles);
+      return newSubtitles;
+    }
+  }, [videoPath, videoUrl, config.primaryLanguage, config.geminiFileUri, subtitles, setSubtitles]);
 
   const handleRetranslate = async (language: string, model: string) => {
      if (subtitles.length === 0) throw new Error("No subtitles to translate");
@@ -1220,6 +1283,15 @@ export default function Home() {
           isOpen={showAbout}
           onClose={() => setShowAbout(false)}
         />
+
+        <ReprocessDialog
+          isOpen={showReprocessDialog}
+          onClose={() => setShowReprocessDialog(false)}
+          subtitleCount={subtitles.length}
+          currentModel={config.geminiModel || "gemini-2.5-flash"}
+          currentSecondaryLanguage={config.secondaryLanguage || ""}
+          onReprocess={handleReprocessWithOptions}
+        />
         
         <ShiftTimingsDialog
           isOpen={showShiftTimings}
@@ -1331,11 +1403,7 @@ export default function Home() {
               document.getElementById('project-upload')?.click();
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
-            onReprocessVideo={() => {
-              alert("Reprocess Video clicked!");
-              console.log("Reprocess clicked via MenuBar, opening settings...");
-              setShowProjectSettings(true);
-            }}
+            onReprocessVideo={() => setShowReprocessDialog(true)}
             onGlobalSettings={() => {
               setGlobalSettingsTab('styles');
               setShowGlobalSettings(true);
