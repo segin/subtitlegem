@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
       }
 
-      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = validation.data as any; // Cast for now as discriminated union types can be tricky to destructure uniformly
+const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = validation.data as any;
       const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
@@ -70,11 +70,12 @@ export async function POST(req: NextRequest) {
          if (!fileUri && !filePath) {
              return NextResponse.json({ error: "No fileUri or filePath provided" }, { status: 400 });
          }
-         
+
          const { getGlobalSettings } = await import("@/lib/global-settings-store");
          const { processWithFallback } = await import("@/lib/ai-provider");
          const { uploadToGemini } = await import("@/lib/gemini");
          const settings = getGlobalSettings();
+         const config = getStorageConfig();
          
          let targetUri = fileUri;
          let targetMime = "video/mp4"; // Default assumption, or derive from path
@@ -83,7 +84,16 @@ export async function POST(req: NextRequest) {
          // If we have a local path but no URI (or we want to re-upload), handle that
          if (!targetUri && filePath) {
              console.log(`Reprocessing from local file: ${filePath}`);
-             if (!fs.existsSync(filePath)) {
+             
+             // Security check: strict path validation
+             const { isPathSafe } = await import("@/lib/storage-config");
+             if (!isPathSafe(filePath)) {
+                 console.warn(`[Process] Blocked unauthorized path access: ${filePath}`);
+                 return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+             }
+
+             const resolvedPath = path.resolve(filePath);
+             if (!fs.existsSync(resolvedPath)) {
                  return NextResponse.json({ error: "Local file not found" }, { status: 404 });
              }
              
