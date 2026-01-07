@@ -307,8 +307,11 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
 
 
   // Seek to position based on mouse X
+  // Track label width for offset calculations
+  const TRACK_LABEL_WIDTH_SEEK = 64; // w-16 = 4rem = 64px
+  
   const seekFromEvent = useCallback((e: React.MouseEvent | MouseEvent, rect: DOMRect) => {
-    const x = (e as MouseEvent).clientX - rect.left;
+    const x = (e as MouseEvent).clientX - rect.left - TRACK_LABEL_WIDTH_SEEK;
     const time = Math.max(0, Math.min(duration, x / pixelsPerSecond));
     onSeek(time);
   }, [duration, pixelsPerSecond, onSeek]);
@@ -369,8 +372,9 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     };
   }, [isScrubbing, seekFromEvent]);
 
-  // Track heights
+  // Track heights and label width
   const RULER_HEIGHT = 24;
+  const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
   const VIDEO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
   const SUBTITLE_TRACK_HEIGHT = 48;
   const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 16;
@@ -415,7 +419,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   useEffect(() => {
     if (!followPlayhead || !containerRef.current || isScrubbing) return;
     const container = containerRef.current;
-    const playheadX = currentTime * pixelsPerSecond;
+    const playheadX = TRACK_LABEL_WIDTH + currentTime * pixelsPerSecond;
     const scrollLeft = container.scrollLeft;
     const visibleWidth = container.clientWidth;
     // Scroll if playhead is outside visible area (with margin)
@@ -514,7 +518,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
         <div 
           data-playhead
           className="absolute top-0 bottom-0 w-px bg-red-500 z-30 pointer-events-none"
-          style={{ left: `${currentTime * pixelsPerSecond}px` }}
+          style={{ left: `${TRACK_LABEL_WIDTH + currentTime * pixelsPerSecond}px` }}
         >
           <div className="absolute top-0 -left-1.5 w-3 h-3 bg-red-500" style={{ clipPath: 'polygon(50% 100%, 0% 0%, 100% 0%)' }} />
         </div>
@@ -622,6 +626,7 @@ SubtitleTimeline.displayName = "SubtitleTimeline";
 // ============================================================================
 
 function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerSecond: number }) {
+  const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
   return (
     <div className="absolute top-0 left-0 right-0 h-6 bg-[#252526] border-b border-[#333333] flex items-end select-none">
       {Array.from({ length: Math.ceil(duration) + 1 }).map((_, i) => (
@@ -629,7 +634,7 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
           key={i} 
           data-ruler-tick
           className="absolute bottom-0 h-2 border-l border-[#555555] text-[9px] text-[#888888] pl-1 font-mono"
-          style={{ left: `${i * pixelsPerSecond}px` }}
+          style={{ left: `${TRACK_LABEL_WIDTH + i * pixelsPerSecond}px` }}
         >
           {i % 5 === 0 && <span>{new Date(i * 1000).toISOString().substr(14, 5)}</span>}
         </div>
@@ -639,7 +644,7 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
         <div 
           key={`sub-${i}`}
           className="absolute bottom-0 h-1 border-l border-[#333333]"
-          style={{ left: `${i * (pixelsPerSecond / 2)}px` }}
+          style={{ left: `${TRACK_LABEL_WIDTH + i * (pixelsPerSecond / 2)}px` }}
         />
       ))}
     </div>
