@@ -16,7 +16,13 @@ export interface BurnOptions {
  * Helper to escape FFmpeg filter parameters
  */
 function escapeFilterArg(arg: string): string {
-  return arg.replace(/'/g, "'\\''").replace(/:/g, '\\:');
+  // FFmpeg filter paths need complex escaping:
+  // 1. Backslashes to forward slashes (works better across platforms in FFmpeg)
+  // 2. Colons escaped as \:
+  // 3. Wrapping in single quotes for special chars like commas
+  // 4. Nested single quotes escaped as '\\'' or similar 
+  const processed = arg.replace(/\\/g, '/').replace(/:/g, '\\:').replace(/'/g, "'\\\\\\''");
+  return `'${processed}'`;
 }
 
 /**
