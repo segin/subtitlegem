@@ -22,6 +22,10 @@ jest.mock('@/lib/storage-config', () => ({
   getStorageConfig: jest.fn(() => ({
     stagingDir: '/mock/staging',
   })),
+  isPathSafe: jest.fn((p) => {
+    if (!p) return false;
+    return p.startsWith('/mock/staging') || p.startsWith(process.cwd());
+  }),
 }));
 
 jest.mock('@/lib/global-settings-store', () => ({
@@ -128,7 +132,7 @@ describe('/api/process (JSON modes)', () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 mode: 'reprocess',
-                filePath: '/local/file.mp4',
+                filePath: '/mock/staging/file.mp4',
                 language: 'English'
             }),
         });
