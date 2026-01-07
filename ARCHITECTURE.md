@@ -296,9 +296,10 @@ interface ProjectMetadata {
 |--------|---------------|
 | **Authentication** | None (designed for single-user/trusted network) |
 | **Authorization** | None |
-| **API Key Storage** | `.env` file (`GEMINI_API_KEY`) |
-| **File Access** | Limited to `STAGING_DIR` path |
-| **Input Validation** | strict Path Validation in `/api/stream`, Zod schemas in `/api/process`, `/api/cleanup` |
+| **API Key Storage** | `.env` file (`GOOGLE_GENERATIVE_AI_API_KEY`) |
+| **File Access** | Strict path validation using `isPathSafe` utility (Staging/Project Root) |
+| **Input Validation** | Zod schemas in `/api/process`, `/api/cleanup`, `/api/export`, `/api/queue` |
+| **Command Safety** | All external calls (FFmpeg/FFprobe) use `spawn` with array arguments to prevent injection. |
 
 ⚠️ **Warning:** This application is NOT designed for public internet exposure. Use behind firewall or VPN.
 
@@ -383,7 +384,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-01-08 |
+| **Date of Last Update** | 2026-01-07 |
 
 ---
 
