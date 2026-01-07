@@ -42,6 +42,12 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
+    const { isPathSafe } = await import("@/lib/storage-config");
+    if (!isPathSafe(filePath)) {
+        console.warn(`[Queue] Blocked unauthorized path access: ${filePath}`);
+        return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+    }
     
     const item = queueManager.addItem({
       file: {
