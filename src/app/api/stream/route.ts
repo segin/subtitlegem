@@ -10,28 +10,18 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const filePath = searchParams.get('path');
 
-  if (!filePath) {
-    return NextResponse.json({ error: 'Missing path' }, { status: 400 });
-  }
-
-  // Security check: strict path validation to prevent traversal attacks
-  // Resolve both paths to handle symlinks and relative paths like ../
-  const config = getStorageConfig();
-  const resolvedPath = path.resolve(filePath);
-  const resolvedStagingDir = path.resolve(config.stagingDir);
-  
-  // Ensure the resolved path is strictly within the staging directory
-  // Prevent null byte injection and traversal relative to staging
-  if (!resolvedPath.startsWith(resolvedStagingDir + path.sep) && resolvedPath !== resolvedStagingDir) {
-    console.warn(`[Stream] Blocked unauthorized path access: ${filePath} (resolved: ${resolvedPath})`);
-    return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
-  }
-
-  // Additional check: explicitly forbid ".." in the originally supplied path component
-  if (filePath.includes('..')) {
-      console.warn(`[Stream] Blocked potential traversal pattern: ${filePath}`);
-      return NextResponse.json({ error: 'Invalid path' }, { status: 403 });
-  }
+    if (!filePath) {
+      return NextResponse.json({ error: 'Missing path parameter' }, { status: 400 });
+    }
+    
+    // Security check: strict path validation
+    const { isPathSafe } = await import("@/lib/storage-config");
+    if (!isPathSafe(filePath)) {
+        console.warn(`[Stream] Blocked unauthorized path access: ${filePath}`);
+        return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+    }
+    
+    const resolvedPath = path.resolve(filePath);
 
   if (!fs.existsSync(resolvedPath)) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 });
@@ -50,6 +40,9 @@ export async function GET(req: NextRequest) {
     '-preset', 'ultrafast',  // Prioritize speed for preview
     '-tune', 'zerolatency',
     '-crf', '23',
+    '-pix_fmt', 'yuv420p',   // Ensure compatibility with all browsers (Edge/Safari etc)
+    '-profile:v', 'main',    // Use common profile for wider support
+    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', // Ensure even dimensions (required by some decoders)
     '-c:a', 'aac',
     '-b:a', '128k',
     '-f', 'mp4',
