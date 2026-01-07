@@ -24,6 +24,7 @@ export interface VideoMetadata {
   height: number;
   audioCodec?: string;
   videoCodec?: string;
+  pixFmt?: string;
   fps?: number;
 }
 
@@ -89,6 +90,7 @@ export async function ffprobe(filePath: string): Promise<VideoMetadata> {
           height: videoStream?.height || 0,
           audioCodec: audioStream?.codec_name,
           videoCodec: videoStream?.codec_name,
+          pixFmt: videoStream?.pix_fmt,
           fps: parseFrameRate(videoStream?.r_frame_rate),
         });
       } catch (e) {
