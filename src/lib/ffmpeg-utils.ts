@@ -288,3 +288,52 @@ export function burnSubtitles(
     });
   });
 }
+
+/**
+ * Create a sample clip from a video file
+ */
+export async function createSampleClip(
+  inputPath: string,
+  outputPath: string,
+  durationInSeconds: number
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-i', inputPath,
+      '-t', durationInSeconds.toString(),
+      '-c', 'copy', // Fast copy without re-encoding
+      '-y',
+      outputPath
+    ];
+
+    console.log(`[FFmpeg] Creating sample clip: ffmpeg ${args.join(' ')}`);
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        // Fallback: if 'copy' fails (e.g. keyframe issues), try re-encoding
+        console.warn(`[FFmpeg] Copy failed (${stderr}), trying re-encode...`);
+        const encodeArgs = [
+            '-i', inputPath,
+            '-t', durationInSeconds.toString(),
+            '-c:v', 'libx264', '-preset', 'ultrafast',
+            '-c:a', 'copy',
+            '-y',
+            outputPath
+        ];
+        const proc2 = spawn('ffmpeg', encodeArgs);
+        proc2.on('close', (code2) => {
+            if (code2 !== 0) return reject(new Error(`FFmpeg sample creation failed: ${stderr}`));
+            resolve(outputPath);
+        });
+        return;
+      }
+      resolve(outputPath);
+    });
+
+    proc.on('error', reject);
+  });
+}

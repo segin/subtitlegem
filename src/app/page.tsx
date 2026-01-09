@@ -31,6 +31,8 @@ import {
 } from "@/types/subtitle";
 import { QueueItem } from "@/lib/queue-manager";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
+import { formatTimestamp } from "@/lib/time-utils";
+import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useHomeState, RawSubtitleItem, DraftItem } from "@/hooks/useHomeState";
 import { getProjectDuration } from "@/lib/timeline-utils";
@@ -796,15 +798,8 @@ export default function Home() {
       .sort((a, b) => a.startTime - b.startTime);
     if (toMerge.length < 2) return;
     
-    const merged: SubtitleLine = {
-      id: toMerge[0].id,
-      startTime: toMerge[0].startTime,
-      endTime: toMerge[toMerge.length - 1].endTime,
-      text: toMerge.map(s => s.text).join(' '),
-      secondaryText: toMerge.some(s => s.secondaryText) 
-        ? toMerge.map(s => s.secondaryText || '').join(' ').trim() || undefined
-        : undefined,
-    };
+    const merged = mergeSubtitles(toMerge);
+    if (!merged) return;
     
     const mergedIds = new Set(toMerge.map(s => s.id));
     const newSubtitles = subtitles.filter(s => !mergedIds.has(s.id) || s.id === merged.id)
@@ -861,9 +856,7 @@ export default function Home() {
       const currentIndex = subtitles.findIndex(s => s.id === id);
       
       if (lastIndex !== -1 && currentIndex !== -1) {
-        const start = Math.min(lastIndex, currentIndex);
-        const end = Math.max(lastIndex, currentIndex);
-        const rangeIds = subtitles.slice(start, end + 1).map(s => s.id);
+        const rangeIds = getRangeSelectionIds(subtitles, lastSelectedIdRef.current, id);
         
         if (ctrlKey) {
           // Add range to existing selection
@@ -1691,6 +1684,7 @@ export default function Home() {
                         sampleDuration,
                         ffmpegConfig,
                         filename: config.originalFilename || undefined,
+                        draftId: currentDraftId || undefined,
                       }),
                     });
                     

@@ -167,7 +167,14 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
               id={`sub-${sub.id}`}
               className={`p-2 transition-all group border-l-2 ${isActive 
                 ? "border-[#007acc] bg-[#264f78] shadow-[0_0_15px_rgba(0,122,204,0.1)]" 
-                : "border-transparent bg-[#252526] hover:bg-[#2d2d2d]"} flex flex-col space-y-1.5`}
+                : "border-transparent bg-[#252526] hover:bg-[#2d2d2d]"} flex flex-col space-y-1.5 cursor-pointer`}
+              onClick={(e) => {
+                // Don't trigger if clicking interactive elements just handled it
+                if ((e.target as HTMLElement).tagName === 'TEXTAREA' || (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).closest('button')) {
+                  return;
+                }
+                toggleSelection(sub.id, e);
+              }}
             >
               <div className="flex justify-between items-start">
                 <div 

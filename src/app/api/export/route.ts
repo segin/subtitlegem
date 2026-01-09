@@ -16,6 +16,7 @@ interface ExportRequest {
   config: SubtitleConfig;
   sampleDuration?: number | null;
   filename?: string;
+  draftId?: string; // Project ID for render association
 }
 
 // Metadata store for export jobs (extends queue items with export-specific data)
@@ -55,9 +56,13 @@ export async function POST(req: NextRequest) {
        // Generate flattened subtitles using the unified timeline model
        const flattenedSubtitles = getFlattenedSubtitles(project.clips, project.timeline);
        
-       // Generate unique ID
+       // Generate unique ID and determine export directory
        const jobId = uuidv4();
-       const exportDir = path.join(stagingDir, "exports", jobId);
+       // Use project ID if available, otherwise fall back to job ID
+       const draftId = project.id || body.draftId;
+       const exportDir = draftId 
+         ? path.join(stagingDir, "exports", draftId)
+         : path.join(stagingDir, "exports", jobId);
        if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
 
        const assPath = path.join(exportDir, "subtitles.ass");
@@ -107,7 +112,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Single Video Export (Legacy/Simple)
-    const { videoPath, subtitles, config, sampleDuration, filename }: ExportRequest = body;
+    const { videoPath, subtitles, config, sampleDuration, filename, draftId }: ExportRequest = body;
 
     if (!videoPath) {
       return NextResponse.json({ error: "Missing video path" }, { status: 400 });
@@ -125,9 +130,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Video file not found" }, { status: 404 });
     }
 
-    // Generate unique ID for this export job
+    // Generate unique ID and determine export directory
     const jobId = uuidv4();
-    const exportDir = path.join(stagingDir, "exports", jobId);
+    // Use draft ID if provided, otherwise fall back to job ID
+    const exportDir = draftId 
+      ? path.join(stagingDir, "exports", draftId)
+      : path.join(stagingDir, "exports", jobId);
     
     if (!fs.existsSync(exportDir)) {
       fs.mkdirSync(exportDir, { recursive: true });

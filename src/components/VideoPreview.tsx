@@ -53,12 +53,22 @@ export function VideoPreview({
   // Browser Support & Transcoding State
   const [browserSupport, setBrowserSupport] = useState<BrowserSupport | null>(null);
   const [useTranscoding, setUseTranscoding] = useState(false);
-  const [checkingSupport, setCheckingSupport] = useState(false);
+  const [checkingSupport, setCheckingSupport] = useState(true); // Start true - block until checked
+  const [metadataReady, setMetadataReady] = useState(false);
+  const [videoReady, setVideoReady] = useState(false); // True only when video can play
 
   // Initialize browser support probe
   useEffect(() => {
     probeBrowserSupport().then(setBrowserSupport);
   }, []);
+
+  // Helper to extract raw path from URL (must be before effects that use it)
+  const getRawPath = (url: string) => {
+      try {
+          const u = new URL(url, 'http://localhost');
+          return u.searchParams.get('path');
+      } catch { return null; }
+  };
 
   // Multi-clip and Image switching logic
   useEffect(() => {
@@ -104,52 +114,92 @@ export function VideoPreview({
     }
   }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets, videoProperties, activeVideoUrl]);
 
-  // Support check for active video
+  // Support check for active video - runs BEFORE video plays
+  // Key: only run when URL changes, not when metadata changes (to avoid re-runs)
   useEffect(() => {
-    if (!activeVideoUrl || !browserSupport) return;
+    if (!activeVideoUrl) {
+        setMetadataReady(true); // No URL = nothing to check
+        setCheckingSupport(false);
+        return;
+    }
+    if (!browserSupport) return; // Wait for browser probe
     
-    setUseTranscoding(false);
+    // Block video load until we complete the check
     setCheckingSupport(true);
+    setMetadataReady(false);
+    setVideoReady(false); // Reset for new source
 
     const checkSupport = async () => {
         try {
-            // Priority 1: Check metadata if we have it (strict check)
-            if (activeMetadata) {
-                const supported = isMetadataSupported(activeMetadata, browserSupport);
-                if (!supported) {
-                    console.log(`[Preview] Metadata indicates unsupported format (${activeMetadata.videoCodec}/${activeMetadata.pixFmt}). Forcing transcoding.`);
-                    setUseTranscoding(true);
-                    return;
+            // Fetch metadata if not already available
+            let metadata = activeMetadata;
+            if (!metadata && !isMultiVideo) {
+                const rawPath = getRawPath(activeVideoUrl);
+                if (rawPath) {
+                    try {
+                        const res = await fetch(`/api/video-info?path=${encodeURIComponent(rawPath)}`);
+                        if (res.ok) {
+                            metadata = await res.json();
+                            setActiveMetadata(metadata);
+                        }
+                    } catch (e) {
+                        console.warn('[Preview] Failed to fetch metadata:', e);
+                    }
                 }
             }
 
-            // Priority 2: Extension based fallback
-            const ext = activeVideoUrl.split('.').pop()?.split('?')[0]?.toLowerCase();
-            if (ext === 'mkv' || ext === 'avi') {
-                 setUseTranscoding(true);
-                 return;
-            }
-
-            // Priority 3: Browser canPlayType check (lightweight)
-            let mime = 'video/mp4'; 
-            if (ext === 'webm') mime = 'video/webm';
-            if (ext === 'mov') mime = 'video/quicktime';
-
-            const video = document.createElement('video');
-            const canPlay = video.canPlayType(mime);
+            // Determine transcoding requirement
+            let needsTranscoding = false;
             
-            if (canPlay === '') {
-                 setUseTranscoding(true);
+            if (metadata?.videoCodec) {
+                const codec = metadata.videoCodec.toLowerCase();
+                // HEVC/H.265 check
+                if ((codec === 'hevc' || codec === 'h265' || codec.includes('hev1') || codec.includes('hvc1')) && !browserSupport.hevc) {
+                    console.log(`[Preview] HEVC detected, browser doesn't support. Using transcoding.`);
+                    needsTranscoding = true;
+                } else {
+                    const supported = isMetadataSupported(metadata, browserSupport);
+                    if (!supported) {
+                        console.log(`[Preview] Unsupported format (${metadata.videoCodec}/${metadata.pixFmt}). Using transcoding.`);
+                        needsTranscoding = true;
+                    }
+                }
             }
+
+            // Extension-based fallback
+            if (!needsTranscoding) {
+                const ext = activeVideoUrl.split('.').pop()?.split('?')[0]?.toLowerCase();
+                if (ext === 'mkv' || ext === 'avi' || ext === 'hevc' || ext === 'h265') {
+                    console.log(`[Preview] Container ${ext} typically needs transcoding.`);
+                    needsTranscoding = true;
+                } else {
+                    // Quick canPlayType check
+                    let mime = 'video/mp4';
+                    if (ext === 'webm') mime = 'video/webm';
+                    if (ext === 'mov') mime = 'video/quicktime';
+                    const testVideo = document.createElement('video');
+                    if (testVideo.canPlayType(mime) === '') {
+                        console.log(`[Preview] Browser cannot play ${mime}. Using transcoding.`);
+                        needsTranscoding = true;
+                    }
+                }
+            }
+
+            // Set final state - this happens ONCE
+            setUseTranscoding(needsTranscoding);
+            setMetadataReady(true);
         } catch (e) {
             console.error("Support check failed:", e);
+            setUseTranscoding(true); // Safe fallback
+            setMetadataReady(true);
         } finally {
             setCheckingSupport(false);
         }
     };
 
     checkSupport();
-  }, [activeVideoUrl, browserSupport, activeMetadata]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeVideoUrl, browserSupport]); // Removed activeMetadata to prevent re-runs
 
   // Handle seekers & scrubbing (Project Time -> Local Video Time)
   useEffect(() => {
@@ -289,18 +339,11 @@ export function VideoPreview({
     return (pxSize / 1080) * containerHeight;
   };
 
-  // Helper to extract raw path
-  const getRawPath = (url: string) => {
-      try {
-          // If relative URL, base doesn't matter much as we only want search params
-          const u = new URL(url, 'http://localhost');
-          return u.searchParams.get('path');
-      } catch { return null; }
-  };
+  // getRawPath moved to line 64 (before effects)
  
-  const activeSrc = useTranscoding && videoUrl 
+  const activeSrc = !metadataReady ? undefined : (useTranscoding && videoUrl 
      ? `/api/stream?path=${encodeURIComponent(getRawPath(videoUrl) || '')}`
-     : videoUrl;
+     : videoUrl);
 
   return (
     <div className="w-full bg-[#000000] flex items-center justify-center overflow-hidden border border-[#333333] shadow-lg p-4">
@@ -319,21 +362,57 @@ export function VideoPreview({
             }}
           />
         ) : (
-          <video
-            ref={videoRef}
-            src={activeSrc || ""}
-            className="max-h-[65vh] max-w-full object-contain block"
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            controls
-            onError={(e) => {
-                console.warn("Video playback error event:", e);
-                if (!useTranscoding) {
-                    console.log("Playback failed, attempting transcode fallback...");
-                    setUseTranscoding(true);
-                }
-            }}
-          />
+          <>
+            {/* Container with proper aspect ratio from metadata */}
+            <div 
+              className="relative bg-black flex items-center justify-center"
+              style={{
+                aspectRatio: activeMetadata?.width && activeMetadata?.height 
+                  ? `${activeMetadata.width}/${activeMetadata.height}` 
+                  : projectConfig 
+                    ? `${projectConfig.width}/${projectConfig.height}` 
+                    : '16/9',
+                maxHeight: '65vh',
+                width: '100%',
+                maxWidth: activeMetadata?.width && activeMetadata?.height
+                  ? `calc(65vh * ${activeMetadata.width / activeMetadata.height})`
+                  : projectConfig
+                    ? `calc(65vh * ${projectConfig.width / projectConfig.height})`
+                    : 'calc(65vh * 16 / 9)',
+              }}
+            >
+              {/* Custom Loading Spinner - shown until video is ready */}
+              {(!videoReady || !activeSrc) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
+                  <div className="w-8 h-8 border-2 border-[#007acc] border-t-transparent rounded-full animate-spin mb-2" />
+                  <span className="text-[11px] text-[#666]">
+                    {!metadataReady ? 'Checking format...' : 'Loading video...'}
+                  </span>
+                </div>
+              )}
+              
+              {/* Video element - hidden until ready, loads in background */}
+              {activeSrc && (
+                <video
+                  ref={videoRef}
+                  src={activeSrc}
+                  className={`w-full h-full object-contain ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onCanPlay={() => setVideoReady(true)}
+                  onError={(e) => {
+                    console.warn("Video playback error:", e);
+                    if (!useTranscoding) {
+                      console.log("Playback failed, attempting transcode fallback...");
+                      setVideoReady(false);
+                      setUseTranscoding(true);
+                    }
+                  }}
+                  controls={videoReady}
+                />
+              )}
+            </div>
+          </>
         )}
         
         {activeSubtitle && (

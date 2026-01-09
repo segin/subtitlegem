@@ -115,7 +115,7 @@ export function Menu({
     } else {
       setFocusedIndex(-1);
     }
-  }, [isOpen, items]);
+  }, [isOpen]); // Removed items from dependency to prevent focus jumping
 
   // Click outside handler
   useEffect(() => {
@@ -291,7 +291,7 @@ export function Menu({
                     ? "text-[#555555] cursor-not-allowed"
                     : focusedIndex === index
                       ? "bg-[#094771] text-white"
-                      : "text-[#cccccc] hover:bg-[#094771]"
+                      : "text-[#cccccc] hover:bg-[#094771] hover:text-white"
                 }`}
               >
                 <span className="flex items-center gap-2">
@@ -301,7 +301,7 @@ export function Menu({
                   {item.label}
                 </span>
                 {item.shortcut && (
-                  <span className={`text-[10px] ${focusedIndex === index ? "text-white/70" : "text-[#888888]"}`}>
+                  <span className={`text-[10px] ${focusedIndex === index ? "text-white/70" : "text-[#888888] group-hover:text-white/70"}`}>
                     {item.shortcut}
                   </span>
                 )}

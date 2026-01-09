@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { uploadToGemini, generateSubtitles, generateSubtitlesInline, translateSubtitles } from "@/lib/gemini";
-import { extractAudio, getAudioCodec } from "@/lib/ffmpeg-utils";
+import { extractAudio, getAudioCodec, createSampleClip } from "@/lib/ffmpeg-utils"; // Added createSampleClip
 import fs from "fs";
 import path from "path";
 import { getStorageConfig } from "@/lib/storage-config";
@@ -44,6 +44,8 @@ export async function POST(req: NextRequest) {
         secondaryLanguage: z.string().optional(),
         model: z.string().optional(),
         clipId: z.string().optional(),
+        sampleDuration: z.number().optional(),
+        promptHints: z.string().optional().refine(val => !val || val.length <= 1000, { message: "Prompt hints cannot exceed 1000 characters" }),
       }).refine(data => data.fileUri || data.filePath, { message: "Either fileUri or filePath is required" });
 
       const TranslateSchema = z.object({
@@ -62,7 +64,7 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
       }
 
-const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId } = validation.data as any;
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId, sampleDuration, promptHints } = validation.data as any;
       const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
@@ -109,7 +111,7 @@ const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, 
              const stats = fs.statSync(filePath);
              const sizeMB = stats.size / (1024 * 1024);
              
-             if (sizeMB < 9.8) {
+             if (sizeMB < 9.8 && !sampleDuration) {
                  // Inline
                  const fileBuffer = fs.readFileSync(filePath);
                  const base64Data = fileBuffer.toString('base64');
@@ -121,29 +123,69 @@ const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, 
                        base64Data, 
                        mimeType: targetMime, 
                        secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
-                       isInline: true
+                       isInline: true,
+                       promptHints
                    },
                    settings.aiFallbackChain
                  );
                  return NextResponse.json({ ...result, clipId });
              } else {
                  // Upload to Gemini
-                 console.log(`Uploading local file to Gemini (${sizeMB.toFixed(2)} MB)...`);
-                 newGeminiFile = await uploadToGemini(filePath, targetMime);
-                 targetUri = newGeminiFile.uri;
+                 // NOTE: We only upload here if NOT doing sampleDuration. 
+                 // If doing usage sampleDuration, we handle it below.
+                 if (!sampleDuration) {
+                    console.log(`Uploading local file to Gemini (${sizeMB.toFixed(2)} MB)...`);
+                    newGeminiFile = await uploadToGemini(filePath, targetMime);
+                    targetUri = newGeminiFile.uri;
+                 }
              }
          }
 
-         console.log(`Reprocessing with URI: ${targetUri}, Lang: ${language}`);
+         // Handle Sample Mode
+         let processUri = targetUri;
+         let cleanupPath: string | null = null;
+         let uploadedSampleFile: any = null;
+
+         if (sampleDuration && filePath) {
+             console.log(`Creating ${sampleDuration}s sample from ${filePath}`);
+             
+             const tempDir = path.join(config.stagingDir, 'temp');
+             if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+             
+             const ext = path.extname(filePath) || ".mp4";
+             const samplePath = path.join(tempDir, `sample_${uuidv4()}${ext}`);
+             
+             try {
+                 await createSampleClip(filePath, samplePath, sampleDuration);
+                 console.log(`Sample created: ${samplePath}`);
+                 
+                 // Upload Sample to Gemini
+                 uploadedSampleFile = await uploadToGemini(samplePath, targetMime);
+                 processUri = uploadedSampleFile.uri;
+                 cleanupPath = samplePath; // Mark for cleanup
+             } catch (sampleErr) {
+                 console.error("Sample creation failed:", sampleErr);
+                 // Cleanup if partially created
+                 if (fs.existsSync(samplePath)) fs.unlinkSync(samplePath);
+                 throw new Error("Failed to create sample clip");
+             }
+         }
+
+         console.log(`Reprocessing with URI: ${processUri}, Lang: ${language}`);
          const result = await processWithFallback(
            'generate',
            { 
-               fileUri: targetUri, 
+               fileUri: processUri, 
                mimeType: targetMime, 
-               secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage 
+               secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+               promptHints: promptHints
            },
            settings.aiFallbackChain
          );
+         
+         if (cleanupPath && fs.existsSync(cleanupPath)) {
+            try { fs.unlinkSync(cleanupPath); } catch (e) { /* ignore */ }
+         }
          
          return NextResponse.json({ 
              ...result, 
@@ -250,18 +292,6 @@ const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, 
          console.error(`File upload failed: ${videoPath} is empty or missing.`);
          return NextResponse.json({ error: "File upload failed (empty file)" }, { status: 400 });
     }
-    
-    // Extract original filename from path if possible, or just use what we have
-    // Actually busboy gave us 'filename' but we lost it in the scope. 
-    // Let's modify the scope to capture it.
-    // ... wait, I need to capture it in the promise.
-    
-    // RE-EDITING previous block to capture filename. 
-    // Since I can't easily reach back into the promise scope without a larger edit, 
-    // I will parse the 'displayName' if available or just use a fallback in the UI for now 
-    // OR better: I will fix the scope in the next step.
-    
-    // actually let's look at the busboy block again.
     
     if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
         if (secondaryLanguage.trim() !== "") {

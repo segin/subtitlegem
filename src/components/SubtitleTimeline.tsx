@@ -47,6 +47,8 @@ interface TimelineProps {
   onDuplicateClip?: (id: string, type: 'video' | 'image') => void;
   onSplitClip?: (id: string, time: number) => void;
   onRemoveTimelineItem?: (id: string, type: 'video' | 'image') => void;
+  // Read-Only mode (e.g. for previews)
+  readOnly?: boolean;
 }
 
 // Legacy props for backwards compatibility
@@ -58,6 +60,7 @@ interface LegacyTimelineProps {
   onSeek: (time: number) => void;
   selectedIds: string[];
   onSelect: (id: string, shiftKey: boolean, ctrlKey: boolean) => void;
+  readOnly?: boolean;
   onSplit: (id: string) => void;
 }
 
@@ -524,7 +527,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
         </div>
 
         {/* Tracks Container */}
-        <div className="relative" style={{ marginTop: RULER_HEIGHT }}>
+        <div className="relative">
           
           {/* Video Track (only in multi-video mode) */}
           {isMultiVideoMode && videoClips && (
@@ -628,7 +631,7 @@ SubtitleTimeline.displayName = "SubtitleTimeline";
 function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerSecond: number }) {
   const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
   return (
-    <div className="absolute top-0 left-0 right-0 h-6 bg-[#252526] border-b border-[#333333] flex items-end select-none">
+    <div className="relative h-6 bg-[#252526] border-b border-[#333333] flex items-end select-none z-20">
       {Array.from({ length: Math.ceil(duration) + 1 }).map((_, i) => (
         <div 
           key={i} 

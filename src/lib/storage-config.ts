@@ -276,14 +276,58 @@ export function cleanupOldItems(stagingDir: string, maxAgeHours: number = 24): n
 
 /**
  * Validates if a file path is safe to access (within staging or project root)
- * Prevents path traversal and unauthorized file access.
+ * Prevents path traversal, shell injection, and unauthorized file access.
+ * 
+ * Security checks:
+ * 1. Null bytes - prevent null byte injection attacks
+ * 2. Path traversal - block .. sequences and encoded variants
+ * 3. Shell metacharacters - defense-in-depth for commands
+ * 4. Path prefix validation - ensure path is within allowed directories
  */
 export function isPathSafe(filePath: string | null | undefined): boolean {
   if (!filePath) return false;
+  if (typeof filePath !== 'string') return false;
   
-  // Explicitly deny '..' sequences to prevent traversal attempts before resolution
-  if (filePath.includes('..')) return false;
+  // 1. Block null byte injection (critical for C-based systems like FFmpeg)
+  if (filePath.includes('\x00') || filePath.includes('\0')) {
+    console.warn('[Security] Blocked null byte in path:', filePath.substring(0, 50));
+    return false;
+  }
   
+  // 2. Block traversal sequences (including URL-encoded and double-encoded variants)
+  const traversalPatterns = [
+    '..',                   // Direct traversal
+    '%2e%2e',              // URL encoded ..
+    '%252e%252e',          // Double URL encoded ..
+    '..%2f', '%2f..',      // Mixed encoding
+    '..\\', '..%5c',       // Windows style
+    '.%00.',               // Null byte split
+  ];
+  const lowerPath = filePath.toLowerCase();
+  for (const pattern of traversalPatterns) {
+    if (lowerPath.includes(pattern.toLowerCase())) {
+      console.warn('[Security] Blocked traversal pattern in path:', pattern);
+      return false;
+    }
+  }
+  
+  // 3. Block shell metacharacters that could be dangerous if path ever 
+  //    accidentally reaches shell (defense-in-depth)
+  //    Note: spawn() is safe, but exec() is not, and future code might use exec
+  const dangerousChars = /[$`|;&<>(){}[\]!#*?~\n\r]/;
+  if (dangerousChars.test(filePath)) {
+    console.warn('[Security] Blocked shell metacharacter in path');
+    return false;
+  }
+  
+  // 4. Block IFS-based attacks (shell variable injection)
+  if (filePath.includes('$IFS') || filePath.includes('${IFS}') || 
+      /\$\{[^}]+\}/.test(filePath) || /\$[A-Za-z_]/.test(filePath)) {
+    console.warn('[Security] Blocked shell variable injection in path');
+    return false;
+  }
+  
+  // 5. Standard path prefix validation
   const stagingDir = getStagingDir();
   const resolvedPath = path.resolve(filePath);
   const resolvedStagingDir = path.resolve(stagingDir);

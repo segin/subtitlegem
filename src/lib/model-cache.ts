@@ -77,7 +77,16 @@ export async function checkModelAvailability(model: string, bypassCache = false)
     return success;
   } catch (err) {
     console.error(`Model check failed for ${model}`, err);
-    cacheModelResult(model, false);
     return false;
   }
+}
+
+/**
+ * Fetch list of available models from API
+ */
+export async function loadModels(): Promise<{name: string, displayName: string}[]> {
+    const res = await fetch('/api/models');
+    if (!res.ok) throw new Error("Failed to load models");
+    const data = await res.json();
+    return data.models || [];
 }
