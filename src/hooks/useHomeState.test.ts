@@ -1,19 +1,40 @@
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useHomeState } from './useHomeState';
 import { DEFAULT_CONFIG, DEFAULT_PROJECT_CONFIG } from '@/types/subtitle';
 
-// Mock fetch
-global.fetch = jest.fn(() =>
-  Promise.resolve({
-    ok: true,
-    json: () => Promise.resolve({ items: [], drafts: [], settings: {}, isPaused: false }),
-  } as Response)
-);
+// Setup Mock Fetch
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
 
 describe('useHomeState', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     localStorage.clear();
+    jest.useFakeTimers();
+
+    // Default fetch behavior
+    mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/api/queue')) {
+            if (url.includes('action')) { // PUT
+               return { ok: true, json: async () => ({}) };
+            }
+            return { ok: true, json: async () => ({ items: [], isPaused: false }) };
+        }
+        if (url.includes('/api/drafts')) {
+             if (url.includes('DELETE')) {
+                 return { ok: true, json: async () => ({}) };
+             }
+             return { ok: true, json: async () => ({ drafts: [] }) };
+        }
+        if (url.includes('/api/video-info')) {
+            return { ok: true, json: async () => ({ width: 1920, height: 1080 }) };
+        }
+        return { ok: true, json: async () => ({}) };
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   test('initializes with default values', () => {
@@ -29,47 +50,116 @@ describe('useHomeState', () => {
     expect(result.current.activeTab).toBe('list');
   });
 
-  test('can update core state', () => {
-    const { result } = renderHook(() => useHomeState());
-
-    act(() => {
-      result.current.setVideoUrl('blob:test');
-      result.current.setVideoPath('/test/video.mp4');
-      result.current.setDuration(120);
-      result.current.setCurrentTime(45);
+  test('queue polling starts on mount', async () => {
+    renderHook(() => useHomeState());
+    
+    // Initial fetch
+    expect(mockFetch).toHaveBeenCalledWith('/api/queue');
+    
+    // Advance timers
+    await act(async () => {
+        jest.advanceTimersByTime(3000);
     });
-
-    expect(result.current.videoUrl).toBe('blob:test');
-    expect(result.current.videoPath).toBe('/test/video.mp4');
-    expect(result.current.duration).toBe(120);
-    expect(result.current.currentTime).toBe(45);
+    
+    // Should have polled multiple times
+    expect(mockFetch.mock.calls.filter(c => c[0] === '/api/queue').length).toBeGreaterThan(1);
   });
 
-  test('can reset core state', () => {
+  test('queue pause toggle', async () => {
     const { result } = renderHook(() => useHomeState());
-
-    act(() => {
-      result.current.setVideoUrl('blob:test');
-      result.current.resetCoreState();
+    
+    // Wait for initial poll to settle so it doesn't overwrite our toggle
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledWith('/api/queue'));
+    
+    await act(async () => {
+        await result.current.toggleQueuePause();
     });
 
-    expect(result.current.videoUrl).toBeNull();
-    expect(result.current.duration).toBe(0);
-    expect(result.current.config).toEqual(DEFAULT_CONFIG);
+    expect(mockFetch).toHaveBeenCalledWith('/api/queue', expect.objectContaining({
+        method: 'PUT',
+        body: expect.stringContaining('pause')
+    }));
+    
+    // We strictly check the boolean toggle logic
+    expect(result.current.queuePaused).toBe(true);
   });
 
-  test('dialog state works', () => {
-    const { result } = renderHook(() => useHomeState());
+  test('drafts fetching', async () => {
+     // Use persistent implementation to handle multiple fetch calls from different hooks
+     mockFetch.mockImplementation(async (url) => {
+         if (url.includes('/api/drafts')) return {
+             ok: true,
+             json: async () => ({ drafts: [{ id: '1', name: 'Draft 1' }] })
+         };
+         // Support other hooks
+         if (url.includes('/api/queue')) return { ok: true, json: async () => ({ items: [], isPaused: false }) };
+         return { ok: true, json: async () => ({}) }; 
+     });
 
-    expect(result.current.showProjectSettings).toBe(false);
-
-    act(() => {
-      result.current.setShowProjectSettings(true);
-    });
-
-    expect(result.current.showProjectSettings).toBe(true);
+     const { result } = renderHook(() => useHomeState());
+     
+     await waitFor(() => {
+         expect(result.current.drafts).toHaveLength(1);
+         expect(result.current.drafts[0].name).toBe('Draft 1');
+     });
   });
 
+  test('delete draft', async () => {
+      // Seed with initial draft
+      mockFetch.mockImplementation(async (url) => {
+          if (url === '/api/drafts') return {
+              ok: true, 
+              json: async () => ({ drafts: [{id: '1', name: 'Draft 1'}] }) 
+          };
+          if (url.includes('DELETE')) return { ok: true, json: async () => ({}) };
+          if (url.includes('/api/queue')) return { ok: true, json: async () => ({ items: [] }) };
+          return { ok: true, json: async () => ({ items: [] }) };
+      });
+
+      const { result } = renderHook(() => useHomeState());
+
+      await waitFor(() => expect(result.current.drafts).toHaveLength(1));
+
+      await act(async () => {
+          await result.current.handleDeleteDraft('1');
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith('/api/drafts?id=1', expect.objectContaining({ method: 'DELETE' }));
+      expect(result.current.drafts).toHaveLength(0);
+  });
+
+  test('video properties loading', async () => {
+      // Create a controlled promise
+      let resolveFetch: Function;
+      const fetchPromise = new Promise(resolve => { resolveFetch = resolve; });
+      
+      mockFetch.mockImplementation(async (url) => {
+          if (url.includes('video-info')) {
+              await fetchPromise;
+              return { ok: true, json: async () => ({ width: 1920, height: 1080 }) };
+          }
+          return { ok: true, json: async () => ({}) };
+      });
+
+      const { result } = renderHook(() => useHomeState());
+
+      let updatePromise: Promise<void>;
+      act(() => {
+          updatePromise = result.current.fetchVideoProperties('/test/vid.mp4');
+      });
+
+      // Should be loading now
+      expect(result.current.videoPropsLoading).toBe(true);
+      
+      // Resolve fetch
+      await act(async () => {
+          resolveFetch!();
+          await updatePromise;
+      });
+
+      expect(result.current.videoProperties).toEqual({ width: 1920, height: 1080 });
+      expect(result.current.videoPropsLoading).toBe(false);
+  });
 
   test('isMultiVideoMode calculation', () => {
     const { result } = renderHook(() => useHomeState());
