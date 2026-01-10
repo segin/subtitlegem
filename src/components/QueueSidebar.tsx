@@ -83,9 +83,16 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
       return;
     }
     
-    await onRemove(id);
+    try {
+      const res = await fetch(`/api/queue?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.error('Failed to cleanup files:', await res.text());
+      }
+    } catch (error) {
+      console.error('Failed to cleanup files:', error);
+    }
     
-    // TODO: Call cleanup API to delete all associated files
+    await onRemove(id);
   };
 
   return (
