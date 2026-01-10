@@ -171,7 +171,7 @@ export function MenuBar({
   // ========== FILE MENU ==========
   const fileItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
-      { id: "new", label: "New Project", icon: <FileVideo className="w-4 h-4" />, onClick: onNewProject, shortcut: "Ctrl+N" },
+      { id: "new", label: "New Project", icon: <FileVideo className="w-4 h-4" />, onClick: onNewProject, shortcut: "Shift+N" },
       { id: "open", label: "Open Project...", icon: <FolderOpen className="w-4 h-4" />, onClick: onOpenProject, shortcut: "Ctrl+O" },
       { id: "open-draft", label: "Open Draft", icon: <FolderOpen className="w-4 h-4" />, 
         items: recentDrafts.length > 0 ? recentDrafts.map(d => ({

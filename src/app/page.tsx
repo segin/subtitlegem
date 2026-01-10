@@ -181,31 +181,7 @@ export default function Home() {
   }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
   
 
-  // Keyboard shortcuts for Undo/Redo
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input/textarea
-      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
-        return;
-      }
-      
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) {
-          redo();
-        } else {
-          undo();
-        }
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
-        e.preventDefault();
-        redo();
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [undo, redo]);
+
 
   // Multi-video handlers
   const handleToggleVideoLibrary = () => setShowVideoLibrary(prev => !prev);
@@ -739,18 +715,9 @@ export default function Home() {
   ]);
 
   const handleCloseProject = async () => {
-    // If there's a saved draft, offer to delete it
-    if (currentDraftId) {
-      // Use window.confirm directly to ensure blocking behavior
-      const shouldDelete = window.confirm("Delete this project from Recent Projects?\n\nClick OK to delete the draft.\nClick Cancel to just close the project.");
-      if (shouldDelete) {
-        try {
-          await fetch(`/api/drafts?id=${currentDraftId}`, { method: 'DELETE' });
-        } catch (err) {
-          console.error("Failed to delete draft:", err);
-        }
-      }
-    }
+    // Just close the project. 
+    // Auto-save handles draft persistence. 
+    // User can delete drafts manually if desired.
     closeProject();
   };
 
@@ -843,6 +810,38 @@ export default function Home() {
     setSubtitles(newSubtitles);
     setSelectedSubtitleIds([first.id, second.id]);
   }, [selectedSubtitleIds, subtitles, setSubtitles]);
+
+  // Keyboard shortcuts for Undo/Redo & New Project
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in an input/textarea
+      if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+        return;
+      }
+      
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+        }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+      
+      // New Project (Shift+N)
+      if (e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+         e.preventDefault();
+         closeProject();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo, closeProject]);
 
   // Handle subtitle selection with Shift+click range selection
   const handleSubtitleSelect = (id: string, shiftKey: boolean, ctrlKey: boolean) => {

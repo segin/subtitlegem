@@ -17,7 +17,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     title: "File",
     shortcuts: [
-      { keys: "Ctrl+N", description: "New Project" },
+      { keys: "Shift+N", description: "New Project" },
       { keys: "Ctrl+O", description: "Open Project" },
       { keys: "Ctrl+S", description: "Save Project" },
     ],

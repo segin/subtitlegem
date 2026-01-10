@@ -270,6 +270,7 @@ export function Menu({
                   onClose={() => setIsOpen(false)} 
                   ref={(el) => { itemRefs.current[index] = el; }}
                   tabIndex={focusedIndex === index ? 0 : -1}
+                  onMouseEnter={() => setFocusedIndex(index)}
                 />
               );
             }
@@ -320,9 +321,10 @@ interface SubMenuItemProps {
   item: MenuItemBase;
   onClose: () => void;
   tabIndex: number;
+  onMouseEnter?: () => void;
 }
 
-const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ item, onClose, tabIndex }, ref) => {
+const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ item, onClose, tabIndex, onMouseEnter }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const subItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -339,6 +341,7 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
   }, [ref]);
 
   const handleMouseEnter = () => {
+    onMouseEnter?.();
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsOpen(true);
   };
@@ -407,7 +410,7 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
         tabIndex={tabIndex}
         onKeyDown={handleKeyDown}
         className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
-          isOpen || tabIndex === 0
+          tabIndex === 0
             ? "bg-[#094771] text-white"
             : "text-[#cccccc] hover:bg-[#094771]"
         }`}

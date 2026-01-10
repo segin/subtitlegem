@@ -71,4 +71,40 @@ describe('MenuBar', () => {
     // Check if 'Draft 1' is rendered 
     expect(screen.getByText('Draft 1')).toBeVisible();
   });
+
+  test('ensure single highlight when moving between sibling items with submenu', () => {
+     jest.useFakeTimers();
+     const props = {
+       ...defaultProps,
+       recentDrafts: [{ id: '1', name: 'Draft 1', date: '2023-01-01' }],
+       onLoadDraft: jest.fn()
+     };
+     render(<MenuBar {...props} />);
+
+     // Open File menu
+     fireEvent.click(screen.getByText('File'));
+
+     // Hover "Open Draft" (Submenu item)
+     const openDraftText = screen.getByText('Open Draft');
+     const openDraftBtn = openDraftText.closest('button');
+     fireEvent.mouseEnter(openDraftBtn!);
+     
+     // Should be active blue
+     expect(openDraftBtn).toHaveClass('bg-[#094771]');
+
+     // Hover "New Project" (Sibling)
+     const newProjectText = screen.getByText('New Project');
+     const newProjectBtn = newProjectText.closest('button');
+     
+     // Simulate user moving mouse
+     fireEvent.mouseLeave(openDraftBtn!); // Triggers timeout in SubMenuItem
+     fireEvent.mouseEnter(newProjectBtn!); // Updates focus in Menu
+
+     // Before timeout executes (submenu lingering open), Open Draft should lose highlight
+     // because we removed isOpen from the class condition
+     expect(openDraftBtn).not.toHaveClass('bg-[#094771]'); 
+     expect(newProjectBtn).toHaveClass('bg-[#094771]');
+     
+     jest.useRealTimers();
+  });
 });
