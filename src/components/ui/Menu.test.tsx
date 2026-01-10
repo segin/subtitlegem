@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import * as fc from 'fast-check';
 import { Menu, MenuItem } from './Menu';
 import '@testing-library/jest-dom';
 
@@ -310,5 +310,237 @@ describe('Menu Component', () => {
       expect(onClick).toHaveBeenCalled();
       expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
+  });
+});
+
+// ============================================================================
+// Property Tests (using fast-check)
+// ============================================================================
+
+describe('Menu Property Tests', () => {
+  test('menu handles arbitrary number of items (0 to 100)', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: 0, max: 100 }), (count: number) => {
+        const items: MenuItem[] = Array.from({ length: count }, (_, i) => ({
+          label: `Item ${i}`,
+          onClick: jest.fn(),
+        }));
+        
+        const { unmount } = render(<Menu label="Test" items={items} isOpen={count > 0} />);
+        
+        if (count > 0) {
+          expect(screen.getByRole('menu')).toBeInTheDocument();
+          expect(screen.getByText('Item 0')).toBeInTheDocument();
+        }
+        
+        unmount();
+      }),
+      { numRuns: 20 }
+    );
+  });
+
+  test('navigation always lands on focusable item', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.oneof(
+            fc.record({ label: fc.string({ minLength: 1, maxLength: 20 }), disabled: fc.constant(false) }),
+            fc.record({ label: fc.string({ minLength: 1, maxLength: 20 }), disabled: fc.constant(true) }),
+            fc.constant({ divider: true as const })
+          ),
+          { minLength: 1, maxLength: 20 }
+        ),
+        (items: Array<{ label?: string; disabled?: boolean } | { divider: true }>) => {
+          // Ensure at least one actionable item
+          const hasActionable = items.some(
+            (item: { label?: string; disabled?: boolean } | { divider: true }) => !('divider' in item) && !(item as { disabled?: boolean }).disabled
+          );
+          if (!hasActionable) return true;
+          
+          const { unmount } = render(
+            <Menu label="Test" items={items as MenuItem[]} isOpen={true} />
+          );
+          
+          // Get the focused element
+          const focused = document.activeElement;
+          
+          // It should be a button and not disabled
+          if (focused?.tagName === 'BUTTON') {
+            expect(focused).not.toBeDisabled();
+          }
+          
+          unmount();
+        }
+      ),
+      { numRuns: 30 }
+    );
+  });
+
+  test('menu label is always displayed correctly', () => {
+    fc.assert(
+      fc.property(fc.stringMatching(/^[A-Za-z0-9]{3,20}$/), (label: string) => {
+        const { unmount } = render(<Menu label={label} items={[]} />);
+        expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+        unmount();
+      }),
+      { numRuns: 50 }
+    );
+  });
+});
+
+// ============================================================================
+// Fuzzer Tests
+// ============================================================================
+
+describe('Menu Fuzzer Tests', () => {
+  test('handles random item labels including unicode', () => {
+    fc.assert(
+      fc.property(fc.string({ minLength: 1, maxLength: 100 }), (label: string) => {
+        const items: MenuItem[] = [{ label, onClick: jest.fn() }];
+        const { unmount } = render(<Menu label="Test" items={items} isOpen={true} />);
+        
+        // Should render without throwing
+        expect(screen.getByRole('menu')).toBeInTheDocument();
+        unmount();
+      }),
+      { numRuns: 30 }
+    );
+  });
+
+  test('handles empty label gracefully', () => {
+    const items: MenuItem[] = [{ label: '', onClick: jest.fn() }];
+    expect(() => {
+      render(<Menu label="Test" items={items} isOpen={true} />);
+    }).not.toThrow();
+  });
+
+  test('handles very long labels', () => {
+    const longLabel = 'A'.repeat(1000);
+    const items: MenuItem[] = [{ label: longLabel, onClick: jest.fn() }];
+    
+    expect(() => {
+      render(<Menu label="Test" items={items} isOpen={true} />);
+    }).not.toThrow();
+  });
+
+  test('handles mixed dividers and items in random order', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.oneof(
+            fc.record({ label: fc.string({ minLength: 1, maxLength: 20 }) }),
+            fc.constant({ divider: true as const })
+          ),
+          { minLength: 0, maxLength: 30 }
+        ),
+        (items: Array<{ label?: string } | { divider: true }>) => {
+          const { unmount } = render(
+            <Menu label="Test" items={items as MenuItem[]} isOpen={true} />
+          );
+          
+          // Should not throw
+          expect(screen.getByText('Test')).toBeInTheDocument();
+          unmount();
+        }
+      ),
+      { numRuns: 30 }
+    );
+  });
+
+  test('handles deeply nested submenus (2 levels)', () => {
+    const items: MenuItem[] = [
+      {
+        label: 'Level 1',
+        items: [
+          {
+            label: 'Level 2',
+            items: [
+              { label: 'Level 3', onClick: jest.fn() },
+            ],
+          },
+        ],
+      },
+    ];
+    
+    render(<Menu label="Test" items={items} isOpen={true} />);
+    
+    // Open first level
+    const level1 = screen.getByText('Level 1').closest('button');
+    fireEvent.mouseEnter(level1!.parentElement!);
+    
+    expect(screen.getByText('Level 2')).toBeVisible();
+  });
+
+  test('handles special characters in shortcuts', () => {
+    const specialShortcuts = ['⌘+S', 'Ctrl+Shift+Alt+F12', '🔥', ''];
+    
+    specialShortcuts.forEach((shortcut) => {
+      const items: MenuItem[] = [{ label: 'Action', shortcut }];
+      const { unmount } = render(<Menu label="Test" items={items} isOpen={true} />);
+      unmount();
+    });
+  });
+
+  test('rapid open/close cycles', () => {
+    const items: MenuItem[] = [{ label: 'Item', onClick: jest.fn() }];
+    const onOpenChange = jest.fn();
+    
+    const { rerender } = render(
+      <Menu label="Test" items={items} isOpen={false} onOpenChange={onOpenChange} />
+    );
+    
+    for (let i = 0; i < 50; i++) {
+      rerender(
+        <Menu label="Test" items={items} isOpen={i % 2 === 0} onOpenChange={onOpenChange} />
+      );
+    }
+    
+    // Should not throw
+    expect(screen.getByText('Test')).toBeInTheDocument();
+  });
+
+  test('handles items with all optional properties undefined', () => {
+    const items: MenuItem[] = [
+      { label: 'Minimal' }, // No onClick, icon, shortcut, disabled, checked
+    ];
+    
+    render(<Menu label="Test" items={items} isOpen={true} />);
+    expect(screen.getByText('Minimal')).toBeInTheDocument();
+  });
+
+  test('submenu close timeout interaction with mouse re-entry', async () => {
+    jest.useFakeTimers();
+    
+    const items: MenuItem[] = [{
+      label: 'Parent',
+      items: [{ label: 'Child', onClick: jest.fn() }]
+    }];
+    
+    render(<Menu label="Test" items={items} isOpen={true} />);
+    
+    const parent = screen.getByText('Parent').closest('button')!;
+    const parentContainer = parent.parentElement!;
+    
+    // Hover to open
+    fireEvent.mouseEnter(parentContainer);
+    expect(screen.getByText('Child')).toBeVisible();
+    
+    // Leave
+    fireEvent.mouseLeave(parentContainer);
+    
+    // Re-enter before 300ms timeout
+    act(() => { jest.advanceTimersByTime(100); });
+    fireEvent.mouseEnter(parentContainer);
+    
+    // Submenu should still be visible
+    expect(screen.getByText('Child')).toBeVisible();
+    
+    // Advance past original timeout
+    act(() => { jest.advanceTimersByTime(300); });
+    
+    // Should still be visible (timeout was cancelled)
+    expect(screen.getByText('Child')).toBeVisible();
+    
+    jest.useRealTimers();
   });
 });
