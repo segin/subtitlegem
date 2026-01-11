@@ -232,7 +232,7 @@ export function Menu({
   };
 
   return (
-    <div ref={menuRef} className="relative">
+    <div ref={menuRef} className="relative" onMouseDown={(e) => e.stopPropagation()}>
       <button
         ref={triggerRef}
         id={triggerId}
