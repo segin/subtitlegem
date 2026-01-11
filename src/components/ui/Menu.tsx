@@ -128,6 +128,20 @@ export function Menu({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [setIsOpen]);
 
+  // Stop mousedown propagation at native level to prevent click-outside from firing
+  // when clicking inside the menu (React's onMouseDown doesn't stop native events)
+  useEffect(() => {
+    const menuElement = menuRef.current;
+    if (!menuElement) return;
+    
+    const stopPropagation = (e: MouseEvent) => {
+      e.stopPropagation();
+    };
+    
+    menuElement.addEventListener("mousedown", stopPropagation);
+    return () => menuElement.removeEventListener("mousedown", stopPropagation);
+  }, []);
+
   // Keyboard navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (!isOpen) return;
@@ -191,8 +205,8 @@ export function Menu({
         const item = items[focusedIndex];
         if (item && isActionableItem(item)) {
           if (!item.items) {
-            setIsOpen(false);
             item.onClick?.();
+            setIsOpen(false);
           }
         }
         break;
@@ -232,7 +246,7 @@ export function Menu({
   };
 
   return (
-    <div ref={menuRef} className="relative" onMouseDown={(e) => e.stopPropagation()}>
+    <div ref={menuRef} className="relative">
       <button
         ref={triggerRef}
         id={triggerId}
