@@ -282,9 +282,10 @@ export function Menu({
                 role="menuitem"
                 tabIndex={focusedIndex === index ? 0 : -1}
                 disabled={item.disabled}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  item.onClick?.(e);
                   setIsOpen(false);
-                  item.onClick?.();
                 }}
                 onMouseEnter={() => setFocusedIndex(index)}
                 className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
@@ -389,8 +390,8 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
         e.preventDefault();
         const subItem = item.items![focusedIndex];
         if (subItem && isActionableItem(subItem)) {
-          onClose();
           subItem.onClick?.();
+          onClose();
         }
         break;
     }
@@ -439,9 +440,10 @@ const SubMenuItem = React.forwardRef<HTMLButtonElement, SubMenuItemProps>(({ ite
                 role="menuitem"
                 tabIndex={focusedIndex === index ? 0 : -1}
                 disabled={subItem.disabled}
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
+                  subItem.onClick?.(e);
                   onClose();
-                  subItem.onClick?.();
                 }}
                 onMouseEnter={() => setFocusedIndex(index)}
                 className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left transition-colors outline-none ${
