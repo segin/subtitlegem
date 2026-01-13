@@ -33,6 +33,7 @@ export interface DraftItem {
     sourceCount: number;
     subtitleCount: number;
     renderCount: number;
+    lifetimeRenderCount: number;
   };
 }
 

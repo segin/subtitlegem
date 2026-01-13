@@ -1188,6 +1188,7 @@ export default function Home() {
                 uploadMode={uploadMode}
                 onUploadModeChange={setUploadMode}
                 onMultiVideoUpload={handleMultiVideoUpload}
+                isProcessing={loading}
               />
               
               {/* Restore existing project option */}
@@ -1241,6 +1242,19 @@ export default function Home() {
                setQueueItems(data.items);
             }
           }}
+          onRetry={async (id: string) => {
+            await fetch('/api/queue', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'retry', id })
+            });
+            // Immediate re-fetch
+            const res = await fetch('/api/queue');
+            if (res.ok) {
+               const data = await res.json();
+               setQueueItems(data.items);
+            }
+          }}
           onRefresh={async () => {
              const res = await fetch('/api/queue');
              if (res.ok) {
@@ -1283,6 +1297,7 @@ export default function Home() {
           currentModel={config.geminiModel || "gemini-2.5-flash"}
           currentSecondaryLanguage={config.secondaryLanguage || ""}
           onReprocess={handleReprocessWithOptions}
+          videoPath={videoPath}
         />
         
         <ShiftTimingsDialog
@@ -1368,6 +1383,8 @@ export default function Home() {
             onRetranslate={handleRetranslate}
             onResetToOriginal={() => loadProject(projectState.current?.videoPath || "")}
             canReset={!!projectState.current}
+            projectConfig={projectConfig}
+            onUpdateProjectConfig={(updates) => setProjectConfig(prev => ({ ...prev, ...updates }))}
         />
       </main>
     );
@@ -1725,6 +1742,18 @@ export default function Home() {
                setQueueItems(data.items);
             }
           }}
+          onRetry={async (id: string) => {
+            await fetch('/api/queue', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'retry', id })
+            });
+            const res = await fetch('/api/queue');
+            if (res.ok) {
+               const data = await res.json();
+               setQueueItems(data.items);
+            }
+          }}
           onRefresh={async () => {
              const res = await fetch('/api/queue');
              if (res.ok) {
@@ -1763,6 +1792,8 @@ export default function Home() {
         onClose={() => setShowProjectSettings(false)}
         config={config}
         onUpdateConfig={(updates) => setConfig(prev => ({ ...prev, ...updates }))}
+        projectConfig={projectConfig}
+        onUpdateProjectConfig={(updates) => setProjectConfig(prev => ({ ...prev, ...updates }))}
         onReprocess={async (lang, model) => {
             const res = await fetch('/api/process', {
                 method: 'POST',

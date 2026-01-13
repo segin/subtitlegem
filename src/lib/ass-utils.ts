@@ -61,7 +61,6 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = R
     const alignment = style.alignment;
 
     return `Style: ${name},${finalFontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},0,${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
-
 }
 
 

@@ -180,7 +180,7 @@ describe('ffmpeg-utils', () => {
   // getVideoDimensions tests
   // ============================================================================
   describe('getVideoDimensions', () => {
-    it('should return width and height', async () => {
+    it('should return width and height from largest video stream', async () => {
       const mockProc = createMockProcess();
       (spawn as jest.Mock).mockReturnValue(mockProc);
 
@@ -188,7 +188,10 @@ describe('ffmpeg-utils', () => {
 
       const output = JSON.stringify({
         format: {},
-        streams: [{ codec_type: 'video', width: 3840, height: 2160 }],
+        streams: [
+            { codec_type: 'video', width: 480, height: 360 }, // Thumbnail
+            { codec_type: 'video', width: 3840, height: 2160 } // Main 4K
+        ],
       });
 
       mockProc.stdout.emit('data', output);

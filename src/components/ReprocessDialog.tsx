@@ -22,6 +22,7 @@ interface ReprocessDialogProps {
   currentModel?: string;
   currentSecondaryLanguage?: string;
   onReprocess: (options: ReprocessOptions) => Promise<any>;
+  videoPath?: string | null;
 }
 
 export function ReprocessDialog({
@@ -31,6 +32,7 @@ export function ReprocessDialog({
   currentModel,
   currentSecondaryLanguage,
   onReprocess,
+  videoPath,
 }: ReprocessDialogProps) {
   // Form state
   const [model, setModel] = useState(currentModel || "gemini-2.5-flash");
@@ -98,16 +100,16 @@ export function ReprocessDialog({
     setError(null);
     
     try {
-        // Find current video path (Hack: assuming available in window or needs to be passed in)
-        // Ideally this should be a prop, but for now we'll assume the page handles context
-        const filePath = (window as any).currentVideoPath; 
+        if (!videoPath) {
+            throw new Error("No video loaded");
+        }
         
         const response = await fetch('/api/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 mode: 'reprocess',
-                filePath, 
+                filePath: videoPath, 
                 // We use sampleDuration to trigger the slicing logic
                 sampleDuration: previewDuration, 
                 model,

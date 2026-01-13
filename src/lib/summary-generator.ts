@@ -16,6 +16,7 @@ export interface ProjectMetadata {
     sourceCount: number;
     subtitleCount: number;
     renderCount: number;
+    lifetimeRenderCount: number;
   };
   lastUpdated?: number;
 }

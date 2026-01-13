@@ -15,7 +15,8 @@ const mockDraft: DraftItem = {
         renderedSize: 0,
         sourceCount: 1,
         subtitleCount: 50,
-        renderCount: 2
+        renderCount: 2,
+        lifetimeRenderCount: 5
     },
     cache_summary: 'Test summary'
 };

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { SubtitleTimeline } from './SubtitleTimeline';
-import { SubtitleLine, VideoClip, TimelineClip } from '@/types/subtitle';
+import { SubtitleLine, VideoClip, TimelineClip, TimelineImage, ImageAsset } from '@/types/subtitle';
 
 // Mock ResizeObserver
 beforeAll(() => {
@@ -43,78 +43,122 @@ describe('SubtitleTimeline', () => {
     onSplit: jest.fn(),
   };
 
-  it('renders correctly in legacy single-track mode', () => {
-    // @ts-ignore - testing legacy props shape if needed, or just default props
-    render(<SubtitleTimeline {...defaultProps} onUpdate={defaultProps.onSubtitlesUpdate} />);
+  describe('Legacy/Single-Track Mode', () => {
+    it('renders correctly with only subtitles', () => {
+      // @ts-ignore - testing legacy props shape if needed, or just default props
+      render(<SubtitleTimeline {...defaultProps} onUpdate={defaultProps.onSubtitlesUpdate} />);
+      
+      expect(screen.getByText('Hello')).toBeInTheDocument();
+      expect(screen.getByText('World')).toBeInTheDocument();
+      
+      // Should show SUBS track
+      expect(screen.getByText('SUBS')).toBeInTheDocument();
+      
+      // Should NOT show VIDEO or AUDIO tracks
+      expect(screen.queryByText('VIDEO')).not.toBeInTheDocument();
+      expect(screen.queryByText('AUDIO')).not.toBeInTheDocument();
+    });
+
+    it('handles interaction with subtitles', () => {
+        const onSelect = jest.fn();
+        render(<SubtitleTimeline {...defaultProps} onSelect={onSelect} />);
     
-    expect(screen.getByText('Hello')).toBeInTheDocument();
-    expect(screen.getByText('World')).toBeInTheDocument();
-    // Should NOT show VIDEO track
-    expect(screen.queryByText('VIDEO')).not.toBeInTheDocument();
-    expect(screen.getByText('SUBS')).toBeInTheDocument();
+        fireEvent.click(screen.getByText('Hello'));
+        expect(onSelect).toHaveBeenCalledWith('1', false, false);
+    });
   });
 
-  it('renders video track in multi-video mode', () => {
-    render(
-      <SubtitleTimeline 
-        {...defaultProps}
-        videoClips={mockVideoClips}
-        timelineClips={mockTimelineClips}
-        onTimelineClipsUpdate={jest.fn()}
-      />
-    );
+  describe('Multi-Track Mode', () => {
+    const multiTrackProps = {
+        ...defaultProps,
+        videoClips: mockVideoClips,
+        timelineClips: mockTimelineClips,
+        onTimelineClipsUpdate: jest.fn(),
+    };
 
-    expect(screen.getByText('VIDEO')).toBeInTheDocument();
-    expect(screen.getByText('vid1.mp4')).toBeInTheDocument();
+    it('renders all three tracks (Video, Audio, Subs)', () => {
+      render(<SubtitleTimeline {...multiTrackProps} />);
+  
+      const videoLabel = screen.getByText('VIDEO');
+      const audioLabel = screen.getByText('AUDIO');
+      const subsLabel = screen.getByText('SUBS');
+
+      expect(videoLabel).toBeInTheDocument();
+      expect(audioLabel).toBeInTheDocument();
+      expect(subsLabel).toBeInTheDocument();
+
+      // Check content presence
+      expect(screen.getByText('vid1.mp4')).toBeInTheDocument(); // Video clip
+      expect(screen.getByText('Audio')).toBeInTheDocument(); // Audio block usage
+    });
+
+    it('renders audio waveform visualization', () => {
+        const { container } = render(<SubtitleTimeline {...multiTrackProps} />);
+        
+        // Find the SVG used for waveform
+        // We can query by class "text-[#4a9c5d]" which we used for the Kdenlive green style
+        // Or look for any path element inside the Audio block
+        
+        const svgs = container.querySelectorAll('svg');
+        // We expect at least zoom icons + the waveform SVG
+        const waveformSvg = Array.from(svgs).find(svg => svg.classList.contains('text-[#4a9c5d]'));
+        expect(waveformSvg).toBeInTheDocument();
+        expect(waveformSvg?.querySelector('path')).toBeInTheDocument();
+    });
+
+    it('handles clip selection', () => {
+      const onClipSelect = jest.fn();
+      render(
+        <SubtitleTimeline 
+          {...multiTrackProps}
+          onClipSelect={onClipSelect}
+        />
+      );
+  
+      // Clicking video block
+      fireEvent.click(screen.getByText('vid1.mp4'));
+      expect(onClipSelect).toHaveBeenCalledWith('c1');
+    });
+
+    it('context menu is triggered for video/audio clips', () => {
+        // We can't easily check the state change of contextMenu internal state without detailed querying,
+        // but we can ensure the event handler runs.
+        // Actually, checking if the block accepts context menu is enough for unit test.
+        
+        render(<SubtitleTimeline {...multiTrackProps} />);
+        const videoBlock = screen.getByText('vid1.mp4').closest('div[data-draggable="true"]');
+        expect(videoBlock).toBeInTheDocument();
+        
+        // Fire right click
+        fireEvent.contextMenu(videoBlock!);
+        // Since state is internal, we can't assert appearance unless we mock setContextMenu or check DOM for the menu portal/overlay
+        // But verifying no crash is good baseline.
+    });
   });
 
-  it('handles zoom interactions', () => {
-    render(
-      <SubtitleTimeline 
-        {...defaultProps}
-        videoClips={mockVideoClips}
-        timelineClips={mockTimelineClips}
-      />
-    );
-
-    // Initial zoom text (approx 100% of 100px/s default)
-    expect(screen.getByText('100%')).toBeInTheDocument();
-
-    const zoomInBtn = screen.getByTitle('Zoom In (+)');
-    fireEvent.click(zoomInBtn);
-
-    // 100 * 1.2 = 120
-    expect(screen.getByText('120%')).toBeInTheDocument();
-
-    const zoomOutBtn = screen.getByTitle('Zoom Out (-)');
-    fireEvent.click(zoomOutBtn); // 120 * 0.8 = 96
+  describe('Zoom and Navigation', () => {
+      it('handles zoom interaction with buttons', () => {
+        render(<SubtitleTimeline {...defaultProps} />);
     
-    expect(screen.getByText('96%')).toBeInTheDocument();
+        // Initial zoom text (approx 100% of 100px/s default)
+        expect(screen.getByText('100%')).toBeInTheDocument();
+    
+        const zoomInBtn = screen.getByTitle('Zoom In (+)');
+        fireEvent.click(zoomInBtn);
+    
+        // 100 * 1.2 = 120
+        expect(screen.getByText('120%')).toBeInTheDocument();
+    
+        const zoomOutBtn = screen.getByTitle('Zoom Out (-)');
+        fireEvent.click(zoomOutBtn); // 120 * 0.8 = 96
+        
+        expect(screen.getByText('96%')).toBeInTheDocument();
+      });
   });
 
-  it('handles selection of subtitles', () => {
-    const onSelect = jest.fn();
-    render(<SubtitleTimeline {...defaultProps} onSelect={onSelect} />);
-
-    fireEvent.click(screen.getByText('Hello'));
-    expect(onSelect).toHaveBeenCalledWith('1', false, false);
+  describe('Snap Logic (Unit)', () => {
+     // We can't fully integration test drag-snap behavior easily in JSDOM,
+     // but we can verify the snap helper logic if exported or indirectly via prop changes if we simulated drag events perfectly.
+     // For now, stick to rendering and event connection.
   });
-
-  it('handles clip selection in multi-video mode', () => {
-    const onClipSelect = jest.fn();
-    render(
-      <SubtitleTimeline 
-        {...defaultProps}
-        videoClips={mockVideoClips}
-        timelineClips={mockTimelineClips}
-        onClipSelect={onClipSelect}
-      />
-    );
-
-    fireEvent.click(screen.getByText('vid1.mp4'));
-    expect(onClipSelect).toHaveBeenCalledWith('c1');
-  });
-
-  // Mocking getBoundingClientRect is messy in JSDOM, 
-  // we primarily test that handlers are attached and fire logic.
 });

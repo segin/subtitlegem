@@ -9,6 +9,7 @@ interface QueueDrawerProps {
   isPaused: boolean;
   onPauseToggle: () => void;
   onRemove: (id: string, force?: boolean) => void;
+  onRetry?: (id: string) => void;
   onRefresh?: () => void;
   onDownload: (item: QueueItem) => void;
   width?: number;
@@ -38,6 +39,7 @@ export function QueueDrawer({
   isPaused,
   onPauseToggle,
   onRemove,
+  onRetry,
   onRefresh,
   onDownload,
   width = 300,
@@ -178,6 +180,17 @@ export function QueueDrawer({
               </span>
             )}
             
+            {/* Retry button for failed items */}
+            {item.status === 'failed' && onRetry && (
+              <button
+                onClick={() => onRetry(item.id)}
+                className="p-1 rounded-sm bg-[#d97706] hover:bg-[#f59e0b] text-white transition-colors"
+                title="Retry Job"
+              >
+                <RefreshCw className="w-3 h-3" />
+              </button>
+            )}
+            
             {/* Preview for completed */}
             {hasResult && (
               <button
@@ -201,9 +214,9 @@ export function QueueDrawer({
             )}
             
             <button
-              onClick={() => onRemove(item.id)}
+              onClick={() => onRemove(item.id, item.status === 'processing')}
               className="p-1 rounded-sm hover:bg-[#3e3e42] hover:text-red-400 text-[#888888] transition-colors"
-              title="Remove"
+              title={item.status === 'processing' ? 'Cancel & Remove' : 'Remove'}
             >
               <Trash2 className="w-3 h-3" />
             </button>

@@ -379,8 +379,9 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const RULER_HEIGHT = 24;
   const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
   const VIDEO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
+  const AUDIO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
   const SUBTITLE_TRACK_HEIGHT = 48;
-  const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 16;
+  const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + (isMultiVideoMode ? 24 : 16);
   
   // Zoom handlers
   const handleZoomIn = () => {
@@ -583,6 +584,36 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Audio Track (linked to video for now) */}
+          {isMultiVideoMode && videoClips && (
+            <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT, marginTop: 8 }}>
+               <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
+                 <span className="text-[10px] text-[#888888] font-medium">AUDIO</span>
+               </div>
+               <div className="ml-16 relative h-full">
+                  {timelineClips?.map(clip => {
+                    // Use preview state override if dragging
+                    const preview = clipPreview[clip.id];
+                    const displayClip = preview ? { ...clip, ...preview } : clip;
+                    
+                    // For now, Audio is just a visualization of the Video clip's audio
+                    // We treat it as "linked" - so we don't allow independent dragging yet
+                    // unless we implement grouping. For now, just render it.
+                    
+                    return (
+                      <AudioClipBlock
+                        key={`audio-${clip.id}`}
+                        clip={displayClip}
+                        pixelsPerSecond={pixelsPerSecond}
+                        selected={selectedClipId === clip.id}
+                        onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')} // Treat as video context for now
+                      />
+                    );
+                  })}
+               </div>
             </div>
           )}
 
@@ -1029,6 +1060,71 @@ function SubtitleBubble({ subtitle, pixelsPerSecond, onDrag, onDrop, active, sel
         className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/10 z-20 opacity-0 group-hover:opacity-100 transition-opacity" 
         onMouseDown={(e) => handleMouseDown(e, 'right')}
       />
+    </div>
+  );
+}
+
+// ============================================================================
+// Audio Clip Block (Visual Only for now)
+// ============================================================================
+
+function AudioClipBlock({ clip, pixelsPerSecond, selected, onContextMenu }: {
+  clip: TimelineClip;
+  pixelsPerSecond: number;
+  selected: boolean;
+  onContextMenu: (e: React.MouseEvent) => void;
+}) {
+  const width = Math.max(clip.clipDuration * pixelsPerSecond, 20);
+  
+  // Generate a stable pseudo-random waveform path based on clip ID
+  const waveformPath = React.useMemo(() => {
+    let d = `M 0 24`;
+    const points = Math.ceil(width / 3); // One point every 3 pixels
+    for (let i = 0; i <= points; i++) {
+       const x = i * 3;
+       // Pseudo-random height based on index + clip ID hash (simplified)
+       // Use a simple hash of the ID string
+       const hash = clip.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+       const random = Math.sin(i * 0.5 + hash) * 0.5 + 0.5; 
+       
+       // Mirror effect (centered around y=24)
+       // Height varies between 10px and ~40px
+       const height = 10 + (random * 30); 
+       const y1 = 24 - (height / 2);
+       const y2 = 24 + (height / 2);
+       
+       // Draw a vertical line for this sample
+       d += ` M ${x} ${y1} L ${x} ${y2}`;
+    }
+    return d;
+  }, [width, clip.id]);
+
+  return (
+    <div 
+      className={cn(
+        "absolute top-1 bottom-1 px-0 flex items-center overflow-hidden select-none rounded-sm border",
+        selected
+          ? "bg-[#1e3a5f] border-[#007acc] text-white z-10" // Darker blue for audio
+          : "bg-[#1a2e1a] border-[#2d402d] text-[#cccccc]" // Very dark green background
+      )}
+      style={{ 
+        left: `${clip.projectStartTime * pixelsPerSecond}px`, 
+        width: `${width}px`,
+      }}
+      onContextMenu={onContextMenu}
+    >
+         {/* Waveform Visualization */}
+         <div className="absolute inset-0 opacity-80 pointer-events-none">
+            <svg width="100%" height="100%" preserveAspectRatio="none" className="text-[#4a9c5d]">
+               <path d={waveformPath} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" vectorEffect="non-scaling-stroke" />
+            </svg>
+         </div>
+         
+         <div className="absolute top-0 left-1 right-1 h-full flex items-start pt-1">
+             <span className="text-[9px] font-mono opacity-70 relative z-10 bg-black/40 px-1 rounded truncate pointer-events-none select-none">
+               Audio
+             </span>
+         </div>
     </div>
   );
 }

@@ -10,7 +10,8 @@ export interface DraftMetrics {
   renderedSize: number;
   sourceCount: number;
   subtitleCount: number;
-  renderCount: number;
+  renderCount: number;         // Current number of exports on disk
+  lifetimeRenderCount: number; // Total exports ever made (doesn't decrement)
 }
 
 export interface ProjectMetadata {
@@ -88,5 +89,7 @@ export function computeMetrics(draft: Draft, stagingDir?: string): DraftMetrics 
     }
   }
 
-  return { sourceSize, renderedSize, sourceCount, subtitleCount, renderCount };
+  // lifetimeRenderCount must be provided by caller from stored metadata, 
+  // we return 0 here as a placeholder (caller should merge with stored value)
+  return { sourceSize, renderedSize, sourceCount, subtitleCount, renderCount, lifetimeRenderCount: 0 };
 }

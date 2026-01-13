@@ -25,6 +25,7 @@ interface VideoUploadProps {
   uploadMode?: UploadMode;
   onUploadModeChange?: (mode: UploadMode) => void;
   onMultiVideoUpload?: (files: File[]) => void;
+  isProcessing?: boolean;
 }
 
 export function VideoUpload({ 
@@ -33,6 +34,7 @@ export function VideoUpload({
   uploadMode = 'single',
   onUploadModeChange,
   onMultiVideoUpload,
+  isProcessing = false,
 }: VideoUploadProps) {
 
   const [file, setFile] = useState<File | null>(null);
@@ -937,15 +939,20 @@ export function VideoUpload({
                 }
               }
             }}
-            disabled={loading || files.length === 0}
+            disabled={loading || isProcessing || files.length === 0}
             className="w-full py-3 bg-[#007acc] hover:bg-[#0062a3] disabled:bg-[#333333] disabled:text-[#666666] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 rounded-sm"
           >
-            <ArrowUpFromLine className="w-4 h-4" />
+            {isProcessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ArrowUpFromLine className="w-4 h-4" />
+            )}
             <span>
-              {uploadMode === 'multi-video' 
-                ? `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → 1 Project`
-                : `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → ${files.length || 0} Project${files.length !== 1 ? 's' : ''}`
-              }
+              {isProcessing ? 'Processing Batch...' : (
+                uploadMode === 'multi-video' 
+                  ? `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → 1 Project`
+                  : `Process ${files.length || 0} Video${files.length !== 1 ? 's' : ''} → ${files.length || 0} Project${files.length !== 1 ? 's' : ''}`
+              )}
             </span>
           </button>
         </div>

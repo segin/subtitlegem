@@ -61,10 +61,23 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete }: ProjectCar
           </div>
 
           {/* Render Count - Magenta */}
-          <div className="flex items-center gap-1 text-fuchsia-400" title={`${draft.metrics?.renderCount || 0} Exported Videos`}>
-            <Clapperboard size={12} />
-            <span>{draft.metrics?.renderCount || 0}</span>
-          </div>
+          {(() => {
+            const current = draft.metrics?.renderCount || 0;
+            const lifetime = draft.metrics?.lifetimeRenderCount || 0;
+            const displayLifetime = lifetime > current;
+            const title = displayLifetime 
+              ? `${current} Exported Videos (${lifetime} total exports)`
+              : `${current} Exported Videos`;
+            return (
+              <div className="flex items-center gap-1 text-fuchsia-400" title={title}>
+                <Clapperboard size={12} />
+                <span>
+                  {current}
+                  {displayLifetime && <span className="text-fuchsia-500/60"> ({lifetime})</span>}
+                </span>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Expanded Content (AI Summary) - Visible on Hover or Selection (optional) */}

@@ -323,13 +323,36 @@ describe('generateAss', () => {
       expect(result).not.toContain('{\\b0}');
     });
 
-    test('handles custom video dimensions', () => {
+    test('handles custom video dimensions (scales font size)', () => {
       const subtitles = [createSubtitle()];
+      // 4K Input (3840x2160) -> 2x Reference (1920x1080)
+      // Font Size 5% of 1080 = 54. 
+      // Scaled by 2 = 108.
       const dimensions: VideoDimensions = { width: 3840, height: 2160 };
       const result = generateAss(subtitles, defaultConfig, dimensions);
       
       expect(result).toContain('PlayResX: 3840');
       expect(result).toContain('PlayResY: 2160');
+      
+      // Verify font size is scaled to ~108
+      // Style format: Name, Fontname, Fontsize, ...
+      // Default Primary font is 5% -> 108px
+      expect(result).toContain(',108,');
+    });
+
+    test('handles vertical video aspect ratio correctly', () => {
+        const subtitles = [createSubtitle()];
+        // Vertical 9:16 (1080x1920)
+        // PlayRes matches video
+        const dimensions: VideoDimensions = { width: 1080, height: 1920 };
+        const result = generateAss(subtitles, defaultConfig, dimensions);
+        
+        expect(result).toContain('PlayResX: 1080');
+        expect(result).toContain('PlayResY: 1920');
+        
+        // ScaleY = 1920/1080 = 1.777...
+        // Font 54 * 1.777 = ~96
+        expect(result).toContain(',96,');
     });
   });
 

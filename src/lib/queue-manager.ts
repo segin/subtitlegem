@@ -6,6 +6,7 @@ import os from 'os';
 import fs from 'fs';
 import { processJob } from './job-processor';
 import { EventEmitter } from 'events';
+import { secureDelete } from './security';
 
 export interface QueueItem {
   id: string;
@@ -230,19 +231,16 @@ class QueueManager extends EventEmitter {
     try {
       // 1. Delete original upload (staging)
       if (item.file.path && fs.existsSync(item.file.path)) {
-        fs.unlinkSync(item.file.path);
-        console.log(`[Queue Cleanup] Deleted source file: ${item.file.path}`);
+        secureDelete(item.file.path).catch(e => console.error(`[Queue] Failed to delete ${item.file.path}`, e));
       }
       
-      // 2. Delete result files (video, srt)
+      // Result files
       if (item.result?.videoPath && fs.existsSync(item.result.videoPath)) {
-        fs.unlinkSync(item.result.videoPath);
-        console.log(`[Queue Cleanup] Deleted output video: ${item.result.videoPath}`);
+        secureDelete(item.result.videoPath).catch(e => console.error(`[Queue] Failed to delete ${item.result!.videoPath}`, e));
       }
       
       if (item.result?.srtPath && fs.existsSync(item.result.srtPath)) {
-        fs.unlinkSync(item.result.srtPath);
-        console.log(`[Queue Cleanup] Deleted output SRT: ${item.result.srtPath}`);
+        secureDelete(item.result.srtPath).catch(e => console.error(`[Queue] Failed to delete ${item.result!.srtPath}`, e));
       }
       
     } catch (error) {
@@ -491,6 +489,8 @@ class QueueManager extends EventEmitter {
    * Mark an item as completed
    */
   completeItem(id: string, result: QueueItem['result']): void {
+    const item = this.queue.get(id);
+    
     this.updateItem(id, {
       status: 'completed',
       progress: 100,
@@ -498,8 +498,53 @@ class QueueManager extends EventEmitter {
       completedAt: Date.now(),
     });
     
+    // Increment lifetimeRenderCount for export jobs
+    // Extract draftId from the output path: exports/{draftId}/...
+    if (item?.metadata?.outputPath && result?.videoPath) {
+      try {
+        const outputPath = item.metadata.outputPath as string;
+        const pathParts = outputPath.split(path.sep);
+        const exportsIndex = pathParts.indexOf('exports');
+        if (exportsIndex !== -1 && pathParts[exportsIndex + 1]) {
+          const draftId = pathParts[exportsIndex + 1];
+          this.incrementLifetimeRenderCount(draftId);
+        }
+      } catch (e) {
+        console.warn('[Queue] Failed to increment lifetime render count:', e);
+      }
+    }
+    
     this.processing.delete(id);
     this.processNext();
+  }
+  
+  /**
+   * Increment the lifetime render count for a draft
+   */
+  private incrementLifetimeRenderCount(draftId: string): void {
+    try {
+      const { getMetadataPath } = require('./metrics-utils');
+      const metaPath = getMetadataPath(draftId);
+      
+      let metadata: Record<string, any> = {};
+      if (fs.existsSync(metaPath)) {
+        metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+      }
+      
+      // Initialize metrics if not present
+      if (!metadata.metrics) {
+        metadata.metrics = { lifetimeRenderCount: 0 };
+      }
+      
+      // Increment lifetime count
+      metadata.metrics.lifetimeRenderCount = (metadata.metrics.lifetimeRenderCount || 0) + 1;
+      metadata.lastUpdated = Date.now();
+      
+      fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2));
+      console.log(`[Queue] Incremented lifetimeRenderCount for ${draftId} to ${metadata.metrics.lifetimeRenderCount}`);
+    } catch (e) {
+      console.error('[Queue] Failed to update lifetimeRenderCount:', e);
+    }
   }
 
   /**

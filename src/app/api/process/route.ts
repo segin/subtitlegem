@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
+import { secureDelete } from "@/lib/security";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
@@ -224,6 +225,8 @@ export async function POST(req: NextRequest) {
   // Handle Multipart Upload (Existing Logic + Meta Return)
   console.log("Processing POST request to /api/process (Streamed via Busboy)");
 
+  let videoPath = ""; // Hoisted for error cleanup
+
   try {
     const contentType = req.headers.get("content-type");
     if (!contentType || !contentType.includes("multipart/form-data")) {
@@ -234,7 +237,7 @@ export async function POST(req: NextRequest) {
     const tempDir = path.join(config.stagingDir, 'temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
     
-    let videoPath = "";
+    // videoPath declared outside try block
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-2.5-flash";
@@ -388,8 +391,7 @@ export async function POST(req: NextRequest) {
 
     try {
         if (processPath !== videoPath && fs.existsSync(processPath)) {
-          fs.unlinkSync(processPath);
-          console.log(`Cleaned up audio extract: ${processPath}`);
+          secureDelete(processPath).catch(e => console.error("Cleanup error", e)); // Clean audio extract
         }
     } catch (e) { console.error("Cleanup error", e); }
 
@@ -406,6 +408,15 @@ export async function POST(req: NextRequest) {
 
   } catch (error: any) {
     console.error("Error processing video:", error);
+    
+    // Attempt cleanup of temp video file on error
+    if (videoPath && fs.existsSync(videoPath)) {
+        // Fire-and-forget secure delete
+        secureDelete(videoPath)
+          .then(() => console.log(`Cleaned up temp video on error: ${videoPath}`))
+          .catch(err => console.error("Failed to cleanup temp video:", err));
+    }
+    
     return NextResponse.json({ error: error.message || "Failed to process video" }, { status: 500 });
   }
 }

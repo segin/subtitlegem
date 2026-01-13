@@ -67,7 +67,7 @@ export function AboutDialog({ isOpen, onClose }: AboutDialogProps) {
         
         {/* Footer */}
         <div className="p-3 bg-[#1e1e1e] border-t border-[#333333] text-[10px] text-[#555555] text-center">
-          &copy; {new Date().getFullYear()} SubtitleGem. MIT License.
+          &copy; {new Date().getFullYear()} SubtitleGem. Apache License 2.0.
         </div>
       </div>
     </div>

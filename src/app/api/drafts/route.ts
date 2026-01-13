@@ -75,6 +75,11 @@ export async function GET(req: NextRequest) {
         metrics.subtitleCount = metadata.metrics.subtitleCount;
       }
       
+      // Preserve lifetimeRenderCount from cached metadata (never decrements)
+      if (metadata.metrics && metadata.metrics.lifetimeRenderCount > 0) {
+        metrics.lifetimeRenderCount = metadata.metrics.lifetimeRenderCount;
+      }
+      
       // Merge with cache (preserve summary and cache metrics)
       const newMetadata = {
         ...metadata,

@@ -80,7 +80,19 @@ export async function ffprobe(filePath: string): Promise<VideoMetadata> {
 
       try {
         const data = JSON.parse(stdout);
-        const videoStream = data.streams?.find((s: any) => s.codec_type === 'video');
+        
+        // Find all video streams
+        const videoStreams = data.streams?.filter((s: any) => s.codec_type === 'video') || [];
+        
+        // Select the "best" video stream (largest resolution)
+        // This handles cases where file might have a cover art stream or mjpeg thumbnail stream first
+        videoStreams.sort((a: any, b: any) => {
+             const resA = (a.width || 0) * (a.height || 0);
+             const resB = (b.width || 0) * (b.height || 0);
+             return resB - resA; // Descending
+        });
+
+        const videoStream = videoStreams[0];
         const audioStream = data.streams?.find((s: any) => s.codec_type === 'audio');
         const format = data.format || {};
 
