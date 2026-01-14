@@ -151,16 +151,18 @@ export function DraftsSidebar({
       <div className="h-10 bg-[#333333] flex items-center justify-between px-3 text-xs font-semibold text-[#cccccc] select-none shrink-0 border-b border-[#454545]">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <FolderOpen className="w-3.5 h-3.5 text-[#888888] shrink-0" />
-          <span className="truncate">RECENT PROJECTS</span>
+          <span className="truncate">{isExpanded ? 'ALL PROJECTS' : 'RECENT PROJECTS'}</span>
         </div>
         <div className="flex items-center gap-1">
           {isDesktop && onToggleExpand && (
             <button 
               onClick={onToggleExpand}
-              className="p-1 hover:bg-[#454545] rounded transition-colors"
+              className="p-1.5 hover:bg-[#454545] rounded-md transition-all duration-200 hover:scale-110 active:scale-95"
                 title={isExpanded ? "Collapse Sidebar" : "Full Screen Projects"}
             >
-              {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <div className="transition-transform duration-300 ease-out" style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </div>
             </button>
           )}
           {!isDesktop && (
@@ -204,22 +206,24 @@ export function DraftsSidebar({
               />
               
               {deleteConfirm === draft.id ? (
-                // Delete Confirmation State
-                <div className="mb-2 p-2 bg-red-900/20 border border-red-500/30 rounded flex items-center justify-between">
-                   <span className="text-xs text-red-200">Confirm Delete?</span>
-                   <div className="flex gap-2">
-                      <button 
-                        onClick={(e) => handleDelete(e, draft.id)}
-                        className="px-2 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700"
-                      >
-                        Yes
-                      </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
-                        className="px-2 py-0.5 text-[10px] bg-gray-700 text-gray-300 rounded hover:bg-gray-600"
-                      >
-                        No
-                      </button>
+                // Delete Confirmation State with animation
+                <div className="mb-2 p-3 bg-red-900/30 border border-red-500/40 rounded-lg animate-in fade-in zoom-in-95 duration-200 shadow-lg shadow-red-500/10">
+                   <div className="flex items-center justify-between">
+                     <span className="text-xs text-red-200 font-medium">Delete this project?</span>
+                     <div className="flex gap-2">
+                        <button 
+                          onClick={(e) => handleDelete(e, draft.id)}
+                          className="px-3 py-1 text-[10px] font-medium bg-red-600 text-white rounded-md hover:bg-red-500 transition-all duration-150 hover:scale-105 shadow-sm"
+                        >
+                          Delete
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
+                          className="px-3 py-1 text-[10px] font-medium bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-all duration-150 hover:scale-105"
+                        >
+                          Cancel
+                        </button>
+                     </div>
                    </div>
                 </div>
               ) : (
@@ -227,7 +231,7 @@ export function DraftsSidebar({
                   draggable
                   onDragStart={(e) => handleDragStart(e, draft.id, index)}
                   onDragEnd={handleDragEnd}
-                  className={`transition-all duration-300 ease-in-out ${deletingIds.includes(draft.id) ? 'opacity-0 scale-90 max-h-0 mb-0 pointer-events-none' : 'max-h-[500px] mb-0'}`}
+                  className={`transition-all duration-300 ease-out ${deletingIds.includes(draft.id) ? 'opacity-0 scale-95 -translate-x-4 max-h-0 mb-0 pointer-events-none' : 'max-h-[500px] mb-0'}`}
                 >
                   <ProjectCard
                     draft={draft}
@@ -248,6 +252,7 @@ export function DraftsSidebar({
                       onMouseLeave: () => { if (!draggedId) canDragRef.current = false; }
                     }}
                     forceExpanded={isExpanded}
+                    animationDelay={index * 50}
                   />
                 </div>
               )}
@@ -272,8 +277,11 @@ export function DraftsSidebar({
       </div>
 
       {/* Footer */}
-      <div className="p-2 border-t border-[#333333] text-[9px] text-[#555555] text-center bg-[#252526]">
-        {drafts.length} incomplete project{drafts.length !== 1 ? "s" : ""}
+      <div className="p-2.5 border-t border-[#333333] text-[10px] text-[#666666] text-center bg-[#252526] transition-all duration-300">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="font-medium text-[#888888]">{drafts.length}</span>
+          <span>project{drafts.length !== 1 ? "s" : ""}</span>
+        </span>
       </div>
 
       <RenameProjectModal

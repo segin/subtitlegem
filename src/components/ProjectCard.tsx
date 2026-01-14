@@ -13,9 +13,10 @@ interface ProjectCardProps {
   isDragging?: boolean;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   forceExpanded?: boolean;
+  animationDelay?: number;
 }
 
-export function ProjectCard({ draft, isSelected, onClick, onDelete, onRename, isDragging, dragHandleProps, forceExpanded }: ProjectCardProps) {
+export function ProjectCard({ draft, isSelected, onClick, onDelete, onRename, isDragging, dragHandleProps, forceExpanded, animationDelay = 0 }: ProjectCardProps) {
   // Format creation date
   const dateStr = new Date(draft.createdAt).toLocaleDateString(undefined, {
     month: 'short',
@@ -28,22 +29,25 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete, onRename, is
   return (
     <div
       onClick={onClick}
+      style={{ animationDelay: `${animationDelay}ms` }}
       className={`
-        group relative w-full mb-2 rounded-lg border transition-all duration-200 cursor-pointer overflow-hidden
-        animate-in fade-in zoom-in-95 duration-300
+        group relative w-full mb-2 rounded-lg border cursor-pointer overflow-hidden
+        animate-in fade-in slide-in-from-left-2 duration-300 fill-mode-backwards
+        transition-all duration-200 ease-out
+        hover:scale-[1.02] hover:shadow-lg hover:shadow-black/20
         ${isSelected 
-          ? 'bg-[#37373d] border-l-4 border-l-blue-500 border-y-transparent border-r-transparent' 
-          : 'bg-[#252526] border-transparent hover:bg-[#2a2d2e]'}
-        ${isDragging ? 'opacity-50 shadow-lg ring-2 ring-blue-500/50' : ''}
+          ? 'bg-[#37373d] border-l-4 border-l-blue-500 border-y-transparent border-r-transparent shadow-md shadow-blue-500/10' 
+          : 'bg-[#252526] border-transparent hover:bg-[#2a2d2e] hover:border-[#3e3e42]'}
+        ${isDragging ? 'opacity-60 scale-105 shadow-xl ring-2 ring-blue-500/50 rotate-1' : ''}
       `}
     >
       {/* Grab Handle (2x3 dots) */}
       <div 
         {...dragHandleProps}
-        className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-r from-[#333333] to-transparent"
+        className="absolute left-0 top-0 bottom-0 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-all duration-200 bg-gradient-to-r from-[#333333]/80 to-transparent"
         onClick={(e) => e.stopPropagation()}
       >
-        <GripVertical className="w-4 h-4 text-gray-500" />
+        <GripVertical className="w-4 h-4 text-gray-500 group-hover:text-gray-400 transition-colors" />
       </div>
       
       <div className="p-3 pl-7 flex flex-col gap-1">
@@ -120,14 +124,14 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete, onRename, is
       </div>
       
       {/* Action Buttons (Visible on Hover) */}
-      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-1 group-hover:translate-y-0">
         {onRename && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               onRename(e);
             }}
-            className="p-1 text-gray-500 hover:text-blue-400 bg-[#252526]/80 rounded"
+            className="p-1.5 text-gray-500 hover:text-blue-400 bg-[#252526]/90 hover:bg-[#333333] rounded-md transition-all duration-150 hover:scale-110 shadow-sm"
             title="Rename Project"
           >
             <Pencil size={12} />
@@ -135,7 +139,7 @@ export function ProjectCard({ draft, isSelected, onClick, onDelete, onRename, is
         )}
         <button
           onClick={onDelete}
-          className="p-1 text-gray-500 hover:text-red-400 bg-[#252526]/80 rounded"
+          className="p-1.5 text-gray-500 hover:text-red-400 bg-[#252526]/90 hover:bg-[#333333] rounded-md transition-all duration-150 hover:scale-110 shadow-sm"
           title="Delete Draft"
         >
           <Trash2 size={12} />
