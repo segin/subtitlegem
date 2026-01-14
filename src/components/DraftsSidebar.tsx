@@ -322,8 +322,8 @@ export function DraftsSidebar({
       {/* DESKTOP: Inline Sidebar */}
       {isDesktop && (
         <div className={`
-          ${isExpanded ? 'w-full' : 'w-72'} 
-          bg-[#252526] border-r border-[#333333] flex flex-col shrink-0 transition-all duration-300 ease-in-out
+          ${isExpanded ? 'flex-1' : 'w-72'} 
+          bg-[#252526] border-r border-[#333333] flex flex-col ${isExpanded ? '' : 'shrink-0'} transition-all duration-300 ease-in-out
           ${className}
         `}>
           {renderSidebarContent()}
