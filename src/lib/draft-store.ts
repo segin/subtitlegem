@@ -427,6 +427,18 @@ export function isV2Draft(draft: Draft): draft is DraftV2 {
 }
 
 /**
+ * Rename a draft by ID
+ */
+export function renameDraft(id: string, newName: string): boolean {
+  const result = db.prepare("UPDATE drafts SET name = ?, updated_at = ? WHERE id = ?").run(
+    newName,
+    Date.now(),
+    id
+  );
+  return result.changes > 0;
+}
+
+/**
  * Close the database connection
  */
 export function close(): void {

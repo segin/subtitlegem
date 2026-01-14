@@ -22,8 +22,18 @@ export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get("id");
   
   if (id) {
-    const draft = loadDraft(id);
+    let draft = loadDraft(id);
     if (draft) {
+      // Auto-migrate V1 projects to V2 for unified multi-track UI
+      if (!('version' in draft) || draft.version === 1) {
+        console.log(`[DraftAPI] Auto-migrating V1 draft ${id} to V2 format`);
+        const { migrateDraftToV2 } = await import("@/lib/draft-store");
+        const v2Draft = migrateDraftToV2(id);
+        if (v2Draft) {
+          draft = v2Draft;
+        }
+      }
+      
       // Perform integrity check on load (Existing Logic)
       if ('version' in draft && draft.version === 2) {
          const v2 = draft as DraftV2;
@@ -215,10 +225,31 @@ export async function DELETE(req: NextRequest) {
   // Cleanup remote files first
   try {
     const draft = loadDraft(id);
-    // Safe access to config.fileId (works for V1 and V2 if available)
-    if (draft && 'config' in draft && draft.config?.fileId) {
-       // Fire and forget, or await? Await to ensure clean state.
-       await deleteFileFromGemini(draft.config.fileId);
+    if (draft) {
+      // V1: Clean up single config.fileId
+      if ('config' in draft && draft.config?.fileId) {
+        await deleteFileFromGemini(draft.config.fileId);
+        console.log(`[DraftAPI] Deleted Gemini file for V1 draft: ${draft.config.fileId}`);
+      }
+      
+      // V2: Clean up all clip Gemini files
+      if ('version' in draft && draft.version === 2) {
+        const v2 = draft as DraftV2;
+        for (const clip of v2.clips) {
+          if (clip.geminiFileUri) {
+            try {
+              // Extract file ID from URI (format: files/{fileId})
+              const fileId = clip.fileId || clip.geminiFileUri.split('/').pop();
+              if (fileId) {
+                await deleteFileFromGemini(fileId);
+                console.log(`[DraftAPI] Deleted Gemini file for clip ${clip.id}: ${fileId}`);
+              }
+            } catch (clipErr) {
+              console.error(`[DraftAPI] Failed to delete Gemini file for clip ${clip.id}`, clipErr);
+            }
+          }
+        }
+      }
     }
   } catch (err) {
     console.error(`[DraftAPI] Failed to cleanup remote file for ${id}`, err);
@@ -234,3 +265,29 @@ export async function DELETE(req: NextRequest) {
   
   return NextResponse.json({ success: true });
 }
+
+/**
+ * PATCH /api/drafts - Rename a draft
+ */
+export async function PATCH(req: NextRequest) {
+  try {
+    const { id, name } = await req.json();
+    
+    if (!id || !name) {
+      return NextResponse.json({ error: "ID and name are required" }, { status: 400 });
+    }
+    
+    const { renameDraft } = await import("@/lib/draft-store");
+    const success = renameDraft(id, name);
+    
+    if (!success) {
+      return NextResponse.json({ error: "Draft not found" }, { status: 404 });
+    }
+    
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("[Drafts API] Error renaming draft:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+

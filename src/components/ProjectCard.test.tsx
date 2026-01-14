@@ -67,4 +67,30 @@ describe('ProjectCard', () => {
         // Check for border class or style
         expect(container.firstChild).toHaveClass('border-l-blue-500');
     });
+
+    test('handles rename interaction', () => {
+        const onRename = jest.fn();
+        render(<ProjectCard draft={mockDraft} isSelected={false} onClick={onClick} onDelete={onDelete} onRename={onRename} />);
+        
+        // Pencil icon button should be present
+        const renameBtn = screen.getByTitle('Rename Project');
+        expect(renameBtn).toBeInTheDocument();
+        
+        fireEvent.click(renameBtn);
+        expect(onRename).toHaveBeenCalled();
+    });
+
+    test('default state is collapsed', () => {
+        render(<ProjectCard draft={mockDraft} isSelected={false} onClick={onClick} onDelete={onDelete} />);
+        const summary = screen.getByText('Test summary').closest('div')?.parentElement;
+        expect(summary).toHaveClass('max-h-0');
+        expect(summary).not.toHaveClass('max-h-40');
+    });
+
+    test('forceExpanded state is expanded', () => {
+        render(<ProjectCard draft={mockDraft} isSelected={false} onClick={onClick} onDelete={onDelete} forceExpanded={true} />);
+        const summary = screen.getByText('Test summary').closest('div')?.parentElement;
+        expect(summary).toHaveClass('max-h-40');
+        expect(summary).toHaveClass('opacity-100');
+    });
 });

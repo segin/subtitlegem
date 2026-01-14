@@ -36,6 +36,7 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #525252;
+  border: 2px solid #171717;
 }
 ::-webkit-scrollbar-corner {
   background: #171717;
@@ -58,4 +59,17 @@ input[type=range] {
 }
 .timeline-transitioning [data-ruler-tick] {
   transition: left 0.3s ease-in-out;
+}
+
+@keyframes gradient-x {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+.animate-gradient-x {
+  animation: gradient-x 3s ease infinite;
+  background-size: 200% 200%;
 }

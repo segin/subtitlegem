@@ -30,6 +30,7 @@ export interface ExportConfig {
   preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
   resolution: string;
+  codec: 'libx264' | 'libx265' | 'libvpx-vp9' | 'prores_ks';
 }
 
 interface FFmpegConfigPanelProps {
@@ -42,6 +43,7 @@ const DEFAULT_CONFIG: ExportConfig = {
   preset: 'veryfast',
   crf: 23,
   resolution: 'original',
+  codec: 'libx264',
 };
 
 const RESOLUTIONS = [
@@ -169,6 +171,24 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
             {capabilities?.hwaccels.includes('v4l2m2m') && <option value="v4l2m2m">V4L2 M2M (ARM)</option>}
             {capabilities?.hwaccels.includes('rkmpp') && <option value="rkmpp">Rockchip (RKMPP)</option>}
             {capabilities?.hwaccels.includes('omx') && <option value="omx">OpenMAX (RPi)</option>}
+          </select>
+        </div>
+
+        {/* Video Codec */}
+        <div className="space-y-1">
+          <label className="flex items-center space-x-1 text-[10px] uppercase font-bold text-[#666666] tracking-wider">
+            <Film className="w-3 h-3" />
+            <span>Video Codec</span>
+          </label>
+          <select
+            value={config.codec || 'libx264'}
+            onChange={(e) => update({ codec: e.target.value as any })}
+            className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
+          >
+            <option value="libx264">H.264 (Common)</option>
+            <option value="libx265">H.265 / HEVC (High Efficiency)</option>
+            <option value="libvpx-vp9">VP9 (Web/YouTube)</option>
+            <option value="prores_ks">ProRes (Editing/High Quality)</option>
           </select>
         </div>
 

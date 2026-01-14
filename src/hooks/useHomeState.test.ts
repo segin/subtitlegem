@@ -172,4 +172,16 @@ describe('useHomeState', () => {
 
     expect(result.current.isMultiVideoMode).toBe(true);
   });
+
+  test('sidebar expansion state', () => {
+      const { result } = renderHook(() => useHomeState());
+      
+      expect(result.current.isSidebarExpanded).toBe(false);
+      
+      act(() => {
+          result.current.setIsSidebarExpanded(true);
+      });
+      
+      expect(result.current.isSidebarExpanded).toBe(true);
+  });
 });

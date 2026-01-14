@@ -17,7 +17,7 @@ subtitlegem/
 │   │   ├── api/                # API Routes (12 endpoints)
 │   │   │   ├── cleanup/        # File cleanup endpoint
 │   │   │   ├── download/       # File download handler
-│   │   │   ├── drafts/         # Draft project persistence
+│   │   │   ├── drafts/         # Draft project persistence (CRUD + Rename)
 │   │   │   ├── export/         # Video export with subtitles
 │   │   │   ├── ffmpeg/         # FFmpeg capability detection
 │   │   │   ├── models/         # Available Gemini models list
@@ -34,7 +34,7 @@ subtitlegem/
 │   │
 │   ├── components/             # React UI Components (21 files)
 │   │   ├── ConfigPanel.tsx     # Subtitle style configuration
-│   │   ├── DraftsSidebar.tsx   # Project drafts list (collapsible sidebar)
+│   │   ├── DraftsSidebar.tsx   # Project drafts list (collapsible/expandable sidebar)
 │   │   ├── ExportControls.tsx  # Export button + options
 │   │   ├── FFmpegConfigPanel.tsx # Hardware encoder settings
 │   │   ├── FindReplaceDialog.tsx # Find and replace in subtitles
@@ -159,6 +159,7 @@ subtitlegem/
 - `generateSubtitles()` - Full video transcription (Robust JSON parsing with markdown stripping)
 - `generateSubtitlesInline()` - Small file (<10MB) inline processing
 - `translateSubtitles()` - Re-translation (Enforced Structured Output Schema)
+- `PATCH /api/drafts` - Project renaming (Lightweight partial update)
 
 #### 3.2.3. Export Queue Service
 **Endpoints:** `/api/queue`, `/api/export`  
@@ -384,7 +385,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-01-07 |
+| **Date of Last Update** | 2026-01-13 |
 
 ---
 

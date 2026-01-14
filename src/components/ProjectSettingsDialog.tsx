@@ -112,7 +112,6 @@ export function ProjectSettingsDialog({
            fps
        });
        onClose();
-// ... existing closing brace ...
   };
 
   const handleReprocess = async () => {
@@ -237,51 +236,6 @@ export function ProjectSettingsDialog({
                             <RefreshCw className={`w-3 h-3 ${isProcessing ? "animate-spin" : ""}`} />
                             Reprocess
                         </button>
-                        </div>
-                    </div>
-
-                    {/* Output Resolution Settings */}
-                    <div className="space-y-4 pt-4 border-t border-[#3e3e42]">
-                        <h3 className="text-xs font-bold text-[#e1e1e1] uppercase tracking-wider">Output Settings</h3>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-xs font-medium text-[#888888]">Resolution (WxH)</label>
-                                <div className="flex gap-2 items-center">
-                                    <input 
-                                        type="number"
-                                        value={width}
-                                        onChange={(e) => setWidth(Number(e.target.value))}
-                                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded px-2 py-1.5 text-sm focus:border-[#007fd4] outline-none text-[#ccc]"
-                                        placeholder="Width"
-                                    />
-                                    <span className="text-[#666]">x</span>
-                                    <input 
-                                        type="number"
-                                        value={height}
-                                        onChange={(e) => setHeight(Number(e.target.value))}
-                                        className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded px-2 py-1.5 text-sm focus:border-[#007fd4] outline-none text-[#ccc]"
-                                        placeholder="Height"
-                                    />
-                                </div>
-                                {/* Presets */}
-                                <div className="flex gap-1.5 flex-wrap">
-                                    <button onClick={() => { setWidth(1920); setHeight(1080); }} className="px-1.5 py-0.5 bg-[#333] hover:bg-[#444] rounded text-[10px] text-[#aaa]">1080p</button>
-                                    <button onClick={() => { setWidth(3840); setHeight(2160); }} className="px-1.5 py-0.5 bg-[#333] hover:bg-[#444] rounded text-[10px] text-[#aaa]">4K</button>
-                                    <button onClick={() => { setWidth(1080); setHeight(1920); }} className="px-1.5 py-0.5 bg-[#333] hover:bg-[#444] rounded text-[10px] text-[#aaa]">Vertical</button>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-xs font-medium text-[#888888]">Frame Rate (FPS)</label>
-                                <input 
-                                    type="number"
-                                    value={fps}
-                                    onChange={(e) => setFps(Number(e.target.value))}
-                                    className="w-full bg-[#1e1e1e] border border-[#3e3e42] rounded px-2 py-1.5 text-sm focus:border-[#007fd4] outline-none text-[#ccc]"
-                                    placeholder="FPS"
-                                />
-                            </div>
                         </div>
                     </div>
 

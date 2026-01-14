@@ -14,8 +14,16 @@ export type UploadMode =
 
 export interface StagedProject {
   id: string;
+  name: string;
   files: File[];
   isDragging: boolean;
+}
+
+// Upload progress tracking
+export interface FileProgress {
+  loaded: number;
+  total: number;
+  status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error';
 }
 
 interface VideoUploadProps {
@@ -24,7 +32,7 @@ interface VideoUploadProps {
   // Multi-video support
   uploadMode?: UploadMode;
   onUploadModeChange?: (mode: UploadMode) => void;
-  onMultiVideoUpload?: (files: File[]) => void;
+  onMultiVideoUpload?: (files: File[], draftId?: string) => void;
   isProcessing?: boolean;
 }
 
@@ -44,6 +52,7 @@ export function VideoUpload({
   const [secondaryLanguage, setSecondaryLanguage] = useState("Simplified Chinese");
   const [model, setModel] = useState("gemini-2.5-flash");
   const [isDragging, setIsDragging] = useState(false);
+  const [multiVideoProjectName, setMultiVideoProjectName] = useState("New Project");
   
   const [progress, setProgress] = useState(0);
   const [uploadedBytes, setUploadedBytes] = useState(0);
@@ -52,8 +61,13 @@ export function VideoUpload({
 
   // Advanced Mode State (Mode 3)
   const [advancedProjects, setAdvancedProjects] = useState<StagedProject[]>([
-    { id: generateClipId(), files: [], isDragging: false }
+    { id: generateClipId(), name: 'Project 1', files: [], isDragging: false }
   ]);
+
+  // Upload Progress Tracking
+  const [fileProgressMap, setFileProgressMap] = useState<Record<string, FileProgress>>({});
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadStartTime, setUploadStartTime] = useState<number>(0);
 
   // Drag reorder state
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
@@ -78,6 +92,7 @@ export function VideoUpload({
 
   const startTimeRef = useRef<number>(0);
   const dragCounterRef = useRef(0);
+  const uploadHistoryRef = useRef<{ timestamp: number; loaded: number }[]>([]);
 
   // Fetch available models from API
   const fetchModels = async () => {
@@ -164,6 +179,26 @@ export function VideoUpload({
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
+
+  const calculateCurrentSpeed = (loaded: number) => {
+    const now = Date.now();
+    uploadHistoryRef.current.push({ timestamp: now, loaded });
+    
+    // Maintain 2s window
+    const cutoff = now - 2000;
+    while (uploadHistoryRef.current.length > 0 && uploadHistoryRef.current[0].timestamp < cutoff) {
+      uploadHistoryRef.current.shift();
+    }
+    
+    if (uploadHistoryRef.current.length < 2) return 0;
+    
+    const first = uploadHistoryRef.current[0];
+    const last = uploadHistoryRef.current[uploadHistoryRef.current.length - 1];
+    const timeDiff = (last.timestamp - first.timestamp) / 1000;
+    const bytesDiff = last.loaded - first.loaded;
+    
+    return timeDiff > 0 ? bytesDiff / timeDiff : 0;
   };
 
   const handleFileSelect = useCallback((selectedFile: File) => {
@@ -275,9 +310,8 @@ export function VideoUpload({
 
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) {
-        const now = Date.now();
-        const timeDiff = (now - startTimeRef.current) / 1000;
-        if (timeDiff > 0) setUploadSpeed(event.loaded / timeDiff);
+        const speed = calculateCurrentSpeed(event.loaded);
+        setUploadSpeed(speed);
         setProgress(Math.round((event.loaded / event.total) * 100));
         setUploadedBytes(event.loaded);
         setTotalBytes(event.total);
@@ -519,8 +553,10 @@ export function VideoUpload({
             <button
               type="button"
               onClick={() => {
+                const projectNum = advancedProjects.length + 1;
                 setAdvancedProjects(prev => [...prev, {
                   id: generateClipId(),
+                  name: `Project ${projectNum}`,
                   files: [],
                   isDragging: false
                 }]);
@@ -541,47 +577,85 @@ export function VideoUpload({
                 className={`${projectIndex > 0 ? 'border-t border-[#333333]' : ''}`}
               >
                 {/* Project Section Header */}
-                <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526]">
-                  <div className="flex items-center gap-2">
-                    {/* Add Files Button */}
-                    <label className="flex items-center gap-1 px-2 py-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#888888] text-[10px] rounded-sm hover:bg-[#3e3e42] hover:text-[#cccccc] cursor-pointer transition-colors">
-                      <Plus className="w-3 h-3" />
-                      <span>Add Files</span>
-                      <input
-                        type="file"
-                        accept="video/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files) {
-                            const newFiles = Array.from(e.target.files).filter(f => f.type.startsWith('video/'));
-                            setAdvancedProjects(prev => prev.map(p => 
-                              p.id === project.id 
-                                ? { ...p, files: [...p.files, ...newFiles] }
-                                : p
-                            ));
-                          }
-                        }}
-                      />
-                    </label>
-                    <span className="text-[10px] text-[#555555]">
-                      {project.files.length} file{project.files.length !== 1 ? 's' : ''}
-                    </span>
-                  </div>
-                  {/* Remove Project Button */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (advancedProjects.length > 1) {
-                        setAdvancedProjects(prev => prev.filter(p => p.id !== project.id));
+                <div className="relative">
+                  {/* Project-level progress bar (aggregate of files) */}
+                  {isUploading && (() => {
+                    const projectFiles = project.files;
+                    const projectProgress = projectFiles.reduce((acc, f) => {
+                      const key = `${project.id}-${f.name}`;
+                      const prog = fileProgressMap[key];
+                      if (prog) {
+                        acc.loaded += prog.loaded;
+                        acc.total += prog.total;
                       }
-                    }}
-                    disabled={advancedProjects.length <= 1}
-                    className="p-1 text-[#666666] hover:text-[#f44336] disabled:opacity-30 disabled:hover:text-[#666666] transition-colors"
-                    title={advancedProjects.length <= 1 ? "Cannot remove the only project" : "Remove project"}
-                  >
-                    <Minus className="w-4 h-4" />
-                  </button>
+                      return acc;
+                    }, { loaded: 0, total: 0 });
+                    const percent = projectProgress.total > 0 ? (projectProgress.loaded / projectProgress.total) * 100 : 0;
+                    return percent > 0 && percent < 100 ? (
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#333333]">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 transition-all duration-300"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                    ) : null;
+                  })()}
+                  
+                  <div className="flex items-center justify-between px-3 py-1.5 bg-[#252526]">
+                    <div className="flex items-center gap-2">
+                      {/* Project Name Input */}
+                      <input
+                        type="text"
+                        value={project.name}
+                        onChange={(e) => {
+                          setAdvancedProjects(prev => prev.map(p =>
+                            p.id === project.id ? { ...p, name: e.target.value } : p
+                          ));
+                        }}
+                        className="w-32 px-2 py-0.5 bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs rounded focus:border-[#007acc] focus:outline-none"
+                        placeholder="Project name"
+                      />
+                      
+                      {/* Add Files Button */}
+                      <label className="flex items-center gap-1 px-2 py-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#888888] text-[10px] rounded-sm hover:bg-[#3e3e42] hover:text-[#cccccc] cursor-pointer transition-colors">
+                        <Plus className="w-3 h-3" />
+                        <span>Add Files</span>
+                        <input
+                          type="file"
+                          accept="video/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              const newFiles = Array.from(e.target.files).filter(f => f.type.startsWith('video/'));
+                              setAdvancedProjects(prev => prev.map(p => 
+                                p.id === project.id 
+                                  ? { ...p, files: [...p.files, ...newFiles] }
+                                  : p
+                              ));
+                            }
+                          }}
+                        />
+                      </label>
+                      <span className="text-[10px] text-[#555555]">
+                        {project.files.length} file{project.files.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {/* Remove Project Button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (advancedProjects.length > 1) {
+                          setAdvancedProjects(prev => prev.filter(p => p.id !== project.id));
+                        }
+                      }}
+                      disabled={advancedProjects.length <= 1}
+                      className="p-1 text-[#666666] hover:text-[#f44336] disabled:opacity-30 disabled:hover:text-[#666666] transition-colors"
+                      title={advancedProjects.length <= 1 ? "Cannot remove the only project" : "Remove project"}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 {/* File Drop Zone */}
@@ -776,6 +850,29 @@ export function VideoUpload({
                                 : 'border-[#333333]'
                             }`}
                           >
+                            {/* File-level progress bar */}
+                            {isUploading && (() => {
+                                const key = `${project.id}-${f.name}`;
+                                const prog = fileProgressMap[key];
+                                const percent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                                
+                                if (prog && prog.status !== 'pending' && prog.status !== 'error') {
+                                  return (
+                                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#333333] z-20 overflow-hidden">
+                                      <div 
+                                        className={`h-full transition-all duration-300 ${
+                                          prog.status === 'processing' 
+                                            ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-[length:200%_100%] animate-gradient-x w-full' 
+                                            : 'bg-blue-500'
+                                        }`}
+                                        style={{ width: prog.status === 'processing' || prog.status === 'complete' ? '100%' : `${percent}%` }}
+                                      />
+                                    </div>
+                                  );
+                                }
+                                return null;
+                            })()}
+                            
                             <GripVertical className="w-3 h-3 text-[#444444]" />
                             <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
                             <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
@@ -809,23 +906,190 @@ export function VideoUpload({
             ))}
           </div>
 
+          
+          {/* Job-Level Progress Bar & Speed */}
+          {isUploading && (
+            <div className="mb-4 space-y-1">
+              <div className="flex justify-between text-[10px] text-[#888888]">
+                <span>Total Progress</span>
+                <div className="flex gap-2">
+                  <span>{formatBytes(uploadSpeed)}/s</span>
+                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 bg-[length:200%_100%] animate-gradient-x transition-all duration-300"
+                  style={{ width: `${totalBytes > 0 ? (uploadedBytes / totalBytes) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Process All Button */}
           <button
             type="button"
-            onClick={() => {
-              // Collect all files from all projects and trigger processing
-              const allProjects = advancedProjects.filter(p => p.files.length > 0);
-              if (allProjects.length > 0 && onMultiVideoUpload) {
-                // For now, flatten all files - the actual processing logic will need
-                // to be implemented to handle the project structure
-                console.log('Processing projects:', allProjects);
+            onClick={async () => {
+              // 1. Validate and Setup
+              const projectsToProcess = advancedProjects.filter(p => p.files.length > 0);
+              if (projectsToProcess.length === 0) return;
+
+              setLoading(true);
+              setIsUploading(true);
+              const startTime = Date.now();
+              setUploadStartTime(startTime);
+              setUploadedBytes(0);
+              setUploadSpeed(0);
+
+              // Calculate totals
+              let totalSize = 0;
+              const initialProgress: Record<string, FileProgress> = {};
+              
+              projectsToProcess.forEach(p => {
+                p.files.forEach(f => {
+                  totalSize += f.size;
+                  initialProgress[`${p.id}-${f.name}`] = {
+                    loaded: 0,
+                    total: f.size,
+                    status: 'pending'
+                  };
+                });
+              });
+              
+              setTotalBytes(totalSize);
+              setFileProgressMap(initialProgress);
+
+              try {
+                // 2. Process each project sequentially (could be parallelized)
+                for (const project of projectsToProcess) {
+                  const uploadedClips = [];
+
+                  // Process files in project
+                  for (const file of project.files) {
+                      const formData = prepareUploadFormData(file, {
+                        secondaryLanguage,
+                        model
+                      });
+
+                      // Wrapped XHR Promise for Upload
+                      const result = await new Promise<any>((resolve, reject) => {
+                          const xhr = new XMLHttpRequest();
+                          const key = `${project.id}-${file.name}`;
+                          
+                          xhr.upload.onprogress = (e) => {
+                              if (e.lengthComputable) {
+                                  // Update file progress
+                                  setFileProgressMap(prev => {
+                                      const now = Date.now();
+                                      const elapsed = (now - startTime) / 1000;
+                                      
+                                      // Calculate aggregate loaded
+                                      const newMap = {
+                                          ...prev,
+                                          [key]: { 
+                                            loaded: e.loaded, 
+                                            total: e.total, 
+                                            status: (e.loaded === e.total ? 'processing' : 'uploading') as FileProgress['status']
+                                          }
+                                      };
+                                      
+                                      // Update global metrics
+                                      const totalLoaded = Object.values(newMap).reduce((acc, curr) => acc + curr.loaded, 0);
+                                      setUploadedBytes(totalLoaded);
+                                      if (elapsed > 0) {
+                                          setUploadSpeed(totalLoaded / elapsed);
+                                      }
+                                      
+                                      return newMap;
+                                  });
+                              }
+                          };
+
+                          xhr.onload = () => {
+                              if (xhr.status >= 200 && xhr.status < 300) {
+                                  setFileProgressMap(prev => ({
+                                      ...prev,
+                                      [key]: { ...prev[key], status: 'complete', loaded: prev[key].total }
+                                  }));
+                                  resolve(JSON.parse(xhr.responseText));
+                              } else {
+                                  reject(new Error(xhr.responseText || 'Upload failed'));
+                              }
+                          };
+
+                          xhr.onerror = () => reject(new Error('Network error'));
+                          xhr.open('POST', '/api/process');
+                          xhr.send(formData);
+                      });
+
+                      // Handle Result
+                      if (result.videoPath) {
+                          uploadedClips.push({
+                              id: generateClipId(),
+                              originalFilename: file.name,
+                              filePath: result.videoPath,
+                              duration: 0, // Will be filled by integrity check or metadata
+                              width: 0,
+                              height: 0,
+                              geminiFileUri: result.geminiFileUri,
+                              subtitles: result.subtitles || []
+                          });
+                      }
+                  }
+
+                  // 3. Create Draft for Project
+                  if (uploadedClips.length > 0) {
+                      await fetch('/api/drafts', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              name: project.name || 'Untitled Project',
+                              version: 2,
+                              clips: uploadedClips.map(c => ({
+                                  ...c,
+                                  subtitles: [], // Clipped subtitles will be managed by project
+                              })),
+                              timeline: uploadedClips.map((c, i) => ({
+                                  id: `timeline-${c.id}`,
+                                  videoClipId: c.id,
+                                  projectStartTime: i * 10, // Placeholder stagger
+                                  sourceInPoint: 0,
+                                  clipDuration: 0 // Will auto expand
+                              })),
+                              subtitleConfig: {
+                                  primaryLanguage: 'English',
+                                  // Store raw subtitles in clips for now
+                              }
+                          })
+                      });
+                  }
+                }
+
+                // Complete
+                onUploadComplete([], '', '', '', '', '', 0); // Trigger refresh/redirect
+                
+              } catch (err: any) {
+                console.error('Upload failed:', err);
+                setError(err.message || 'Upload failed');
+              } finally {
+                setLoading(false);
+                setIsUploading(false);
               }
             }}
             disabled={loading || advancedProjects.every(p => p.files.length === 0)}
             className="w-full py-3 bg-[#007acc] hover:bg-[#0062a3] disabled:bg-[#333333] disabled:text-[#666666] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 rounded-sm"
           >
-            <ArrowUpFromLine className="w-4 h-4" />
-            <span>Process All Projects</span>
+            {loading ? (
+                <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing...</span>
+                </>
+            ) : (
+                <>
+                    <ArrowUpFromLine className="w-4 h-4" />
+                    <span>Process All Projects</span>
+                </>
+            )}
           </button>
         </div>
       ) : (uploadMode === 'multi-video' || uploadMode === 'batch') ? (
@@ -870,10 +1134,24 @@ export function VideoUpload({
           {files.length > 0 && (
             <div className="bg-[#1e1e1e] border border-[#333333] rounded-md overflow-hidden">
               <div className="flex items-center justify-between px-3 py-2 bg-[#252526] border-b border-[#333333]">
-                <span className="text-xs text-[#888888]">
-                  {files.length} video{files.length !== 1 ? 's' : ''} staged
-                  {uploadMode === 'batch' && ` → ${files.length} project${files.length !== 1 ? 's' : ''}`}
-                </span>
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="text-xs text-[#888888]">
+                    {files.length} video{files.length !== 1 ? 's' : ''} staged
+                    {uploadMode === 'batch' && ` → ${files.length} project${files.length !== 1 ? 's' : ''}`}
+                  </span>
+                  {uploadMode === 'multi-video' && (
+                     <>
+                       <span className="text-[#444444]">|</span>
+                       <input
+                          type="text"
+                          value={multiVideoProjectName}
+                          onChange={(e) => setMultiVideoProjectName(e.target.value)}
+                          className="flex-1 max-w-[200px] px-2 py-0.5 bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs rounded focus:border-[#007acc] focus:outline-none"
+                          placeholder="Project Name"
+                       />
+                     </>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setFiles([])}
@@ -890,21 +1168,58 @@ export function VideoUpload({
                   return (
                     <div 
                       key={`${f.name}-${idx}`}
-                      className="flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group"
+                      className="relative flex items-center gap-2 px-2 py-1.5 bg-[#252526] border border-[#333333] rounded-sm group overflow-hidden"
                     >
+                      {/* File Progress Bar */}
+                      {isUploading && (() => {
+                          const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
+                          const key = `${projectId}-${f.name}`;
+                          const prog = fileProgressMap[key];
+                          const percent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                          
+                          if (prog && prog.status !== 'pending' && prog.status !== 'error') {
+                            return (
+                              <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#333333] z-10 overflow-hidden">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${
+                                    prog.status === 'processing' 
+                                      ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-[length:200%_100%] animate-gradient-x w-full' 
+                                      : 'bg-blue-500'
+                                  }`}
+                                  style={{ width: prog.status === 'processing' || prog.status === 'complete' ? '100%' : `${percent}%` }}
+                                />
+                              </div>
+                            );
+                          }
+                          return null;
+                      })()}
                       {isProjectFile ? (
                         <Lock className="w-3 h-3 text-[#f0a000]" />
                       ) : (
                         <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
                       )}
                       <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
-                      <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
-                      {isProjectFile && (
-                        <span className="px-1.5 py-0.5 bg-[#4a3000] text-[#f0a000] text-[8px] rounded flex items-center gap-1">
-                          <Lock className="w-2 h-2" />
-                          restore
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
+                        
+                        {/* Processing Indicator */}
+                        {isUploading && (() => {
+                          const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
+                          const key = `${projectId}-${f.name}`;
+                          const status = fileProgressMap[key]?.status;
+                          if (status === 'processing') {
+                            return (
+                              <div className="flex items-center gap-0.5 ml-1">
+                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce" />
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+
                       {!isProjectFile && uploadMode === 'multi-video' && idx === 0 && !hasProjectFile && (
                         <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
                       )}
@@ -925,20 +1240,197 @@ export function VideoUpload({
             </div>
           )}
 
+          {/* Job-Level Progress Bar & Speed (Multi/Batch) */}
+          {isUploading && (uploadMode === 'multi-video' || uploadMode === 'batch') && (
+            <div className="mb-4 space-y-1">
+              <div className="flex justify-between text-[10px] text-[#888888]">
+                <span>Total Progress</span>
+                <div className="flex gap-2">
+                  <span>{formatBytes(uploadSpeed)}/s</span>
+                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                </div>
+              </div>
+              <div className="h-1.5 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 bg-[length:200%_100%] animate-gradient-x transition-all duration-300"
+                  style={{ width: `${totalBytes > 0 ? (uploadedBytes / totalBytes) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* Process Button */}
           <button
             type="button"
-            onClick={() => {
-              if (files.length > 0) {
-                console.log(`Processing ${files.length} files in ${uploadMode} mode`);
-                // TODO: Implement actual processing logic
-                // For multi-video: create single project with all files
-                // For batch: create separate projects for each file
-                if (onMultiVideoUpload) {
-                  onMultiVideoUpload(files);
-                }
+            onClick={async () => {
+              if (files.length === 0) return;
+
+              setLoading(true);
+              setIsUploading(true);
+              setUploadedBytes(0);
+              setUploadSpeed(0);
+              uploadHistoryRef.current = [];
+
+              // Calculate totals
+              let totalSize = 0;
+              const initialProgress: Record<string, FileProgress> = {};
+              
+              files.forEach((f, idx) => {
+                totalSize += f.size;
+                const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
+                initialProgress[`${projectId}-${f.name}`] = {
+                  loaded: 0,
+                  total: f.size,
+                  status: 'pending'
+                };
+              });
+              
+              setTotalBytes(totalSize);
+              setFileProgressMap(initialProgress);
+
+              try {
+                // 1. Prepare Projects
+                const projectsToCreate = uploadMode === 'multi-video' 
+                  ? [{ id: 'multi-video', name: multiVideoProjectName || 'New Project', files: files }]
+                  : files.map((f, i) => ({ id: `batch-${i}`, name: f.name, files: [f] }));
+
+                // 2. Prepare Upload Queue
+                const uploadQueue: { file: File; project: any; key: string }[] = [];
+                projectsToCreate.forEach(p => {
+                  p.files.forEach(f => {
+                    uploadQueue.push({ file: f, project: p, key: `${p.id}-${f.name}` });
+                  });
+                });
+
+                const projectResults: Record<string, any[]> = {};
+                let nextToUpload = 0;
+                let activeUploads = 0;
+                let completedCount = 0;
+
+                return new Promise<void>((resolve, reject) => {
+                  const checkCompletion = () => {
+                    if (completedCount === uploadQueue.length) {
+                      onUploadComplete([], '', '', '', '', '', 0);
+                      resolve();
+                    }
+                  };
+
+                  const startUpload = (index: number) => {
+                    if (index >= uploadQueue.length) return;
+                    activeUploads++;
+                    nextToUpload = index + 1;
+
+                    const item = uploadQueue[index];
+                    const formData = prepareUploadFormData(item.file, { secondaryLanguage, model });
+                    const xhr = new XMLHttpRequest();
+                    let pipelined = false;
+
+                    xhr.upload.onprogress = (e) => {
+                      if (e.lengthComputable) {
+                        setFileProgressMap(prev => {
+                          const newMap = {
+                            ...prev,
+                            [item.key]: { 
+                              loaded: e.loaded, 
+                              total: e.total, 
+                              status: (e.loaded === e.total ? 'processing' : 'uploading') as FileProgress['status']
+                            }
+                          };
+                          
+                          // Pipeline logic: Start next upload as soon as this one hits 100%
+                          if (e.loaded === e.total && !pipelined && nextToUpload < uploadQueue.length) {
+                            pipelined = true;
+                            startUpload(nextToUpload);
+                          }
+
+                          const totalLoaded = Object.values(newMap).reduce((acc, curr) => acc + curr.loaded, 0);
+                          setUploadedBytes(totalLoaded);
+                          setUploadSpeed(calculateCurrentSpeed(totalLoaded));
+                          return newMap;
+                        });
+                      }
+                    };
+
+                    xhr.onload = async () => {
+                      try {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                          const data = JSON.parse(xhr.responseText);
+                          if (!projectResults[item.project.id]) projectResults[item.project.id] = [];
+                          
+                          if (data.videoPath) {
+                            projectResults[item.project.id].push({
+                              id: generateClipId(),
+                              originalFilename: item.file.name,
+                              filePath: data.videoPath,
+                              geminiFileUri: data.geminiFileUri,
+                              subtitles: data.subtitles || []
+                            });
+                          }
+
+                          setFileProgressMap(prev => ({
+                            ...prev,
+                            [item.key]: { ...prev[item.key], status: 'complete' }
+                          }));
+
+                          // If all files for THIS project are done, create draft
+                          const projectFilesDone = item.project.files.every((f: File) => 
+                            uploadQueue.find(q => q.key === `${item.project.id}-${f.name}`)?.key === item.key || // current
+                            fileProgressMap[`${item.project.id}-${f.name}`]?.status === 'complete'
+                          );
+
+                          // Note: Simplified logic, usually we'd track actual project completion
+                          if (projectResults[item.project.id].length === item.project.files.length) {
+                             await fetch('/api/drafts', {
+                               method: 'POST',
+                               headers: { 'Content-Type': 'application/json' },
+                               body: JSON.stringify({
+                                 name: item.project.name,
+                                 version: 2,
+                                 clips: projectResults[item.project.id].map(c => ({ ...c, subtitles: [] })),
+                                 timeline: projectResults[item.project.id].map((c, i) => ({
+                                   id: `timeline-${c.id}`,
+                                   videoClipId: c.id,
+                                   projectStartTime: i * 10,
+                                   sourceInPoint: 0,
+                                   clipDuration: 0
+                                 })),
+                                 subtitleConfig: { primaryLanguage: 'English' }
+                               })
+                             });
+                          }
+
+                          completedCount++;
+                          activeUploads--;
+                          if (nextToUpload < uploadQueue.length && activeUploads === 0) {
+                             // Fallback if pipelining didn't trigger
+                             startUpload(nextToUpload);
+                          }
+                          checkCompletion();
+                        } else {
+                          throw new Error(`Upload failed for ${item.file.name}`);
+                        }
+                      } catch (err: any) {
+                        reject(err);
+                      }
+                    };
+
+                    xhr.onerror = () => reject(new Error('Network error'));
+                    xhr.open('POST', '/api/process');
+                    xhr.send(formData);
+                  };
+
+                  startUpload(0);
+                });
+
+              } catch (err: any) {
+                console.error('Upload failed:', err);
+                setError(err.message || 'Upload failed');
+              } finally {
+                setLoading(false);
+                setIsUploading(false);
               }
             }}
+
             disabled={loading || isProcessing || files.length === 0}
             className="w-full py-3 bg-[#007acc] hover:bg-[#0062a3] disabled:bg-[#333333] disabled:text-[#666666] text-white text-sm font-semibold shadow-sm transition-colors flex items-center justify-center gap-2 rounded-sm"
           >

@@ -110,6 +110,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [followPlayhead, setFollowPlayhead] = useState(true);
+  const [isV2Collapsed, setIsV2Collapsed] = useState(false);
   
   // Context Menu state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -377,20 +378,25 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
 
   // Track heights and label width
   const RULER_HEIGHT = 24;
-  const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
-  const VIDEO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
-  const AUDIO_TRACK_HEIGHT = isMultiVideoMode ? 48 : 0;
+  const TRACK_LABEL_WIDTH = 64; 
+  
+  const V2_ENABLED = isMultiVideoMode && !isV2Collapsed;
+  const VIDEO_TRACK_HEIGHT = 48;
+  const AUDIO_TRACK_HEIGHT = 48;
   const SUBTITLE_TRACK_HEIGHT = 48;
-  const TOTAL_TRACKS_HEIGHT = VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + (isMultiVideoMode ? 24 : 16);
+  
+  const TOTAL_TRACKS_HEIGHT = 
+    (V2_ENABLED ? VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + 16 : 0) + 
+    VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 24;
   
   // Zoom handlers
   const handleZoomIn = () => {
     triggerTransition();
-    setPixelsPerSecond(prev => Math.min(400, prev * 1.2));
+    setPixelsPerSecond(prev => Math.min(10000, prev * 1.2));
   };
   const handleZoomOut = () => {
     triggerTransition();
-    setPixelsPerSecond(prev => Math.max(20, prev * 0.8));
+    setPixelsPerSecond(prev => Math.max(0.1, prev * 0.8));
   };
 
   React.useImperativeHandle(ref, () => ({
@@ -401,8 +407,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   // Fit to View: Calculate zoom level to fit entire duration in visible area
   const handleFitToView = useCallback(() => {
     if (!containerRef.current || duration <= 0) return;
-    const containerWidth = containerRef.current.clientWidth - 64; // Subtract track label width
-    const newPPS = Math.max(20, Math.min(400, containerWidth / duration));
+    const containerWidth = containerRef.current.clientWidth - 100; // Subtract labels + margin
+    const newPPS = Math.max(0.1, Math.min(10000, containerWidth / duration));
     setPixelsPerSecond(newPPS);
     containerRef.current.scrollLeft = 0;
   }, [duration]);
@@ -530,95 +536,122 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
         {/* Tracks Container */}
         <div className="relative">
           
-          {/* Video Track (only in multi-video mode) */}
-          {isMultiVideoMode && videoClips && (
-            <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT }}>
-              <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
-                <span className="text-[10px] text-[#888888] font-medium">VIDEO</span>
+          {/* TRACK ORDER: Audio 2, Video 2, Video 1, Audio 1, Subs */}
+
+          {/* Audio 2 & Video 2 (Conditional) */}
+          {V2_ENABLED && (
+            <>
+              {/* Audio 2 */}
+              <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT }}>
+                <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex flex-col items-center justify-center z-10">
+                  <span className="text-[8px] text-[#555555]">AUDIO 2</span>
+                  <button onClick={() => setIsV2Collapsed(true)} title="Collapse V2" className="mt-1 hover:text-white transition-colors">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                  </button>
+                </div>
+                <div className="ml-16 relative h-full">
+                  {/* Future: Audio 2 content */}
+                </div>
               </div>
-              <div className="ml-16 relative h-full">
-                {timelineClips?.map(clip => {
-                  const videoClip = videoClips.find(v => v.id === clip.videoClipId);
-                  if (!videoClip) return null;
-                  
-                  // Use preview state override if dragging
+
+              {/* Video 2 */}
+              <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT, marginTop: 4 }}>
+                <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
+                  <span className="text-[8px] text-[#555555]">VIDEO 2</span>
+                </div>
+                <div className="ml-16 relative h-full">
+                  {/* Future: Video 2 content (overlays) */}
+                </div>
+              </div>
+              <div className="h-4" /> {/* Gap between V2 and V1 */}
+            </>
+          )}
+
+          {/* V2 Collapsed Indicator */}
+          {isMultiVideoMode && isV2Collapsed && (
+             <div className="h-6 relative border-b border-[#333333] bg-[#1a1a1b] flex items-center">
+                <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
+                   <button onClick={() => setIsV2Collapsed(false)} title="Expand V2" className="hover:text-white transition-colors">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                   </button>
+                </div>
+                <span className="ml-20 text-[9px] text-[#444444] uppercase tracking-widest font-bold">V2 Tracks Collapsed</span>
+             </div>
+          )}
+
+          {/* Video 1 (Main) */}
+          <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT, marginTop: 4 }}>
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
+              <span className="text-[10px] text-[#888888] font-medium">{isMultiVideoMode ? 'VIDEO 1' : 'VIDEO'}</span>
+            </div>
+            <div className="ml-16 relative h-full">
+              {isMultiVideoMode && videoClips && timelineClips?.map(clip => {
+                const videoClip = videoClips.find(v => v.id === clip.videoClipId);
+                if (!videoClip) return null;
+                const preview = clipPreview[clip.id];
+                const displayClip = preview ? { ...clip, ...preview } : clip;
+                return (
+                  <VideoClipBlock
+                    key={clip.id}
+                    clip={displayClip}
+                    videoClip={videoClip}
+                    pixelsPerSecond={pixelsPerSecond}
+                    selected={selectedClipId === clip.id}
+                    onDrag={(side, deltaX) => handleClipDrag(clip.id, side, deltaX)}
+                    onDrop={() => handleClipDrop(clip.id)}
+                    onClick={() => onClipSelect?.(clip.id)}
+                    onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')}
+                  />
+                );
+              })}
+
+              {/* Timeline Images (mapped to Video 1 for now) */}
+              {isMultiVideoMode && timelineImages?.map(img => {
+                const asset = imageAssets?.find(a => a.id === img.imageAssetId);
+                if (!asset) return null;
+                const preview = imagePreview[img.id];
+                const displayImg = preview ? { ...img, ...preview } : img;
+                return (
+                  <ImageClipBlock
+                    key={img.id}
+                    item={displayImg}
+                    asset={asset}
+                    pixelsPerSecond={pixelsPerSecond}
+                    selected={selectedImageId === img.id}
+                    onDrag={(side, deltaX) => handleImageDrag(img.id, side, deltaX)}
+                    onDrop={() => handleImageDrop(img.id)}
+                    onClick={() => onImageSelect?.(img.id)}
+                    onContextMenu={(e) => handleContextMenu(e, img.id, 'image')}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Audio 1 (Linked) */}
+          <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT, marginTop: 8 }}>
+             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
+               <span className="text-[10px] text-[#888888] font-medium">{isMultiVideoMode ? 'AUDIO 1' : 'AUDIO'}</span>
+             </div>
+             <div className="ml-16 relative h-full">
+                {isMultiVideoMode && timelineClips?.map(clip => {
                   const preview = clipPreview[clip.id];
                   const displayClip = preview ? { ...clip, ...preview } : clip;
-
                   return (
-                    <VideoClipBlock
-                      key={clip.id}
+                    <AudioClipBlock
+                      key={`audio-${clip.id}`}
                       clip={displayClip}
-                      videoClip={videoClip}
                       pixelsPerSecond={pixelsPerSecond}
                       selected={selectedClipId === clip.id}
-                      onDrag={(side, deltaX) => handleClipDrag(clip.id, side, deltaX)}
-                      onDrop={() => handleClipDrop(clip.id)}
-                      onClick={() => onClipSelect?.(clip.id)}
                       onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')}
                     />
                   );
                 })}
-
-                {/* Timeline Images */}
-                {isMultiVideoMode && timelineImages?.map(img => {
-                  const asset = imageAssets?.find(a => a.id === img.imageAssetId);
-                  if (!asset) return null;
-                  
-                  // Use preview state override if dragging
-                  const preview = imagePreview[img.id];
-                  const displayImg = preview ? { ...img, ...preview } : img;
-
-                  return (
-                    <ImageClipBlock
-                      key={img.id}
-                      item={displayImg}
-                      asset={asset}
-                      pixelsPerSecond={pixelsPerSecond}
-                      selected={selectedImageId === img.id}
-                      onDrag={(side, deltaX) => handleImageDrag(img.id, side, deltaX)}
-                      onDrop={() => handleImageDrop(img.id)}
-                      onClick={() => onImageSelect?.(img.id)}
-                      onContextMenu={(e) => handleContextMenu(e, img.id, 'image')}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Audio Track (linked to video for now) */}
-          {isMultiVideoMode && videoClips && (
-            <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT, marginTop: 8 }}>
-               <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
-                 <span className="text-[10px] text-[#888888] font-medium">AUDIO</span>
-               </div>
-               <div className="ml-16 relative h-full">
-                  {timelineClips?.map(clip => {
-                    // Use preview state override if dragging
-                    const preview = clipPreview[clip.id];
-                    const displayClip = preview ? { ...clip, ...preview } : clip;
-                    
-                    // For now, Audio is just a visualization of the Video clip's audio
-                    // We treat it as "linked" - so we don't allow independent dragging yet
-                    // unless we implement grouping. For now, just render it.
-                    
-                    return (
-                      <AudioClipBlock
-                        key={`audio-${clip.id}`}
-                        clip={displayClip}
-                        pixelsPerSecond={pixelsPerSecond}
-                        selected={selectedClipId === clip.id}
-                        onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')} // Treat as video context for now
-                      />
-                    );
-                  })}
-               </div>
-            </div>
-          )}
+             </div>
+          </div>
 
           {/* Subtitle Track */}
-          <div className="relative" style={{ height: SUBTITLE_TRACK_HEIGHT, marginTop: isMultiVideoMode ? 8 : 0 }}>
+          <div className="relative" style={{ height: SUBTITLE_TRACK_HEIGHT, marginTop: 8 }}>
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
               <span className="text-[10px] text-[#888888] font-medium">SUBS</span>
             </div>
@@ -627,10 +660,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
               onClick={() => onSelect("", false, false)}
             >
               {subtitles.map((sub) => {
-                // Use preview state override if dragging
                 const preview = subtitlePreview[sub.id];
                 const displaySub = preview ? { ...sub, ...preview } : sub;
-
                 return (
                   <SubtitleBubble 
                     key={sub.id} 

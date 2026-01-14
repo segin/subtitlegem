@@ -1,4 +1,4 @@
-import { saveDraftV1, loadDraft, saveDraftV2 } from './draft-store';
+import { saveDraftV1, loadDraft, saveDraftV2, renameDraft } from './draft-store';
 import { SubtitleConfig } from '@/types/subtitle';
 
 // Mock better-sqlite3
@@ -119,6 +119,36 @@ describe('draft-store', () => {
       saveDraftV2(v2Input);
 
       expect(mPrepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE drafts SET'));
+    });
+  });
+
+  describe('renameDraft', () => {
+    it('renames an existing draft', () => {
+      const id = 'existing-id';
+      const newName = 'Renamed Draft';
+      
+      const result = renameDraft(id, newName);
+      
+      expect(mPrepare).toHaveBeenCalledWith(expect.stringContaining('UPDATE drafts SET'));
+      expect(result).toBe(true);
+    });
+
+    it('returns false if draft not found/not updated', () => {
+        // Force the next run to return changes: 0 by utilizing the mock behavior we set up or want to setup
+        // The mock defined at top returns { changes: 1 }. 
+        // We can use mRun.mockReturnValueOnce({ changes: 0 }) if we had access to mRun.
+        // We access mPrepare. 
+        // mPrepare returns an object with run(), so we need to mock THAT return value.
+        // Since mPrepare is a jest.fn(), we can make it return a specific object for one call.
+        
+        mPrepare.mockReturnValueOnce({
+            run: jest.fn(() => ({ changes: 0 })),
+            get: jest.fn(),
+            all: jest.fn()
+        });
+
+        const result = renameDraft('non-existent', 'New Name');
+        expect(result).toBe(false);
     });
   });
 });

@@ -59,6 +59,7 @@ export function useDialogState() {
   const [showVideoLibrary, setShowVideoLibrary] = useState(false);
   const [showQueue, setShowQueue] = useState(true);
   const [showRestoreOption, setShowRestoreOption] = useState(false);
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
   return {
     showProjectSettings, setShowProjectSettings,
@@ -72,6 +73,7 @@ export function useDialogState() {
     showVideoLibrary, setShowVideoLibrary,
     showQueue, setShowQueue,
     showRestoreOption, setShowRestoreOption,
+    isSidebarExpanded, setIsSidebarExpanded,
   };
 }
 
@@ -243,7 +245,7 @@ export function useMultiVideoState() {
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
 
-  const isMultiVideoMode = videoClips.length > 1 || uploadMode === 'multi-video';
+  const isMultiVideoMode = videoClips.length > 0 || uploadMode === 'multi-video';
 
   // Timeline Zoom Ref
   const timelineRef = useRef<TimelineRef>(null);

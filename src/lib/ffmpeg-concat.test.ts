@@ -2,10 +2,35 @@
  * ffmpeg-concat.test.ts - Unit tests for multi-video concatenation logic
  */
 
-import { generateFilterComplex } from './ffmpeg-concat';
-import { ProjectConfig, TimelineClip, TimelineImage } from '@/types/subtitle';
+import { EventEmitter } from 'events';
+
+// Mock child_process for exportMultiVideo
+jest.mock('child_process', () => ({
+  spawn: jest.fn(),
+}));
+
+jest.mock('fs', () => ({
+  existsSync: jest.fn().mockReturnValue(true),
+}));
+
+import { spawn } from 'child_process';
+import { generateFilterComplex, exportMultiVideo } from './ffmpeg-concat';
+import { ProjectConfig, TimelineClip, TimelineImage, MultiVideoProjectState } from '@/types/subtitle';
+
+// Helper to create mock process
+function createMockProcess() {
+  const proc = new EventEmitter() as any;
+  proc.stdout = new EventEmitter();
+  proc.stderr = new EventEmitter();
+  proc.stdin = { write: jest.fn(), end: jest.fn() };
+  return proc;
+}
 
 describe('ffmpeg-concat', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe('generateFilterComplex', () => {
     const config: ProjectConfig = {
       width: 1920,
@@ -119,11 +144,56 @@ describe('ffmpeg-concat', () => {
       const { filterGraph } = generateFilterComplex(inputs, timeline, config);
       
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Could not find input'));
-      // n=0 concat would fail, but let's see what happens.
-      // Current implementation might produce an invalid graph or just empty.
-      // In this case it should be empty since no segments are added.
       
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('exportMultiVideo', () => {
+    const project: MultiVideoProjectState = {
+        clips: [{ id: 'v1', filePath: '/path/to/video1.mp4', originalFilename: 'v1.mp4', duration: 100, width: 1920, height: 1080, fps: 30 }],
+        timeline: [{ id: 'c1', videoClipId: 'v1', projectStartTime: 0, sourceInPoint: 0, clipDuration: 10 }],
+        timelineImages: [],
+        imageAssets: [],
+        projectConfig: { width: 1920, height: 1080, fps: 30, scalingMode: 'fit' }
+    };
+
+    it('should use specified video codec', async () => {
+        const mockProc = createMockProcess();
+        (spawn as jest.Mock).mockReturnValue(mockProc);
+
+        const promise = exportMultiVideo(project, '/subs.ass', '/output.mp4', {
+            codec: 'libx265'
+        });
+
+        // Simulate FFmpeg finish
+        setTimeout(() => mockProc.emit('close', 0), 10);
+
+        await promise;
+
+        const call = (spawn as jest.Mock).mock.calls.find(c => c[0] === 'ffmpeg');
+        expect(call).toBeDefined();
+        // Check args
+        const args = call[1];
+        const codecIndex = args.findIndex((a: string) => a === '-c:v');
+        expect(codecIndex).toBeGreaterThan(-1);
+        expect(args[codecIndex + 1]).toBe('libx265');
+    });
+
+    it('should fall back to libx264 if no codec specified', async () => {
+        const mockProc = createMockProcess();
+        (spawn as jest.Mock).mockReturnValue(mockProc);
+
+        const promise = exportMultiVideo(project, '/subs.ass', '/output.mp4', {});
+
+        setTimeout(() => mockProc.emit('close', 0), 10);
+
+        await promise;
+
+        const call = (spawn as jest.Mock).mock.calls.find(c => c[0] === 'ffmpeg');
+        const args = call[1];
+        const codecIndex = args.findIndex((a: string) => a === '-c:v');
+        expect(args[codecIndex + 1]).toBe('libx264');
     });
   });
 });

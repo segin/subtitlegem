@@ -313,6 +313,37 @@ describe('ffmpeg-utils', () => {
       expect(ffmpegCall[1]).toContain('h264_nvenc');
     });
 
+    it('should use specified video codec', async () => {
+      const mockFfprobeProc = createMockProcess();
+      const mockFfmpegProc = createMockProcess();
+      
+      (spawn as jest.Mock)
+        .mockReturnValueOnce(mockFfprobeProc)
+        .mockReturnValueOnce(mockFfmpegProc);
+
+      const promise = burnSubtitles('/input.mp4', '/subs.ass', '/output.mp4', {
+        codec: 'libx265',
+      });
+
+      const probeOutput = JSON.stringify({
+        format: { duration: '100' },
+        streams: [{ codec_type: 'video', width: 1920, height: 1080 }],
+      });
+      mockFfprobeProc.stdout.emit('data', probeOutput);
+      mockFfprobeProc.emit('close', 0);
+
+      await new Promise(r => setTimeout(r, 10));
+      mockFfmpegProc.emit('close', 0);
+
+      await promise;
+
+      const ffmpegCall = (spawn as jest.Mock).mock.calls.find(
+        call => call[0] === 'ffmpeg'
+      );
+      expect(ffmpegCall[1]).toContain('-c:v');
+      expect(ffmpegCall[1]).toContain('libx265');
+    });
+
     it('should add sample duration flag when specified', async () => {
       const mockFfprobeProc = createMockProcess();
       const mockFfmpegProc = createMockProcess();

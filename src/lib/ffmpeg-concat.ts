@@ -9,6 +9,7 @@ export interface BurnOptions {
   preset?: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf?: number;
   resolution?: string; // Not typically used for multi-video export as project config defines this
+  codec?: string;
   onProgress?: (progress: number, details?: any) => void;
 }
 
@@ -178,6 +179,7 @@ export async function exportMultiVideo(
             hwaccel = 'none', 
             preset = 'veryfast', 
             crf = 23, 
+            codec,
             onProgress 
         } = options;
 
@@ -247,7 +249,7 @@ export async function exportMultiVideo(
             none: 'libx264',
         };
 
-        const videoCodec = encoderMap[hwaccel] || 'libx264';
+        const videoCodec = codec || encoderMap[hwaccel] || 'libx264';
         args.push('-c:v', videoCodec);
 
         if (videoCodec === 'libx264') {

@@ -275,72 +275,7 @@ export default function Home() {
     }
   };
 
-  const handleMultiVideoUpload = async (files: File[]) => {
-    setLoading(true);
-    const newClips: VideoClip[] = [];
-    
-    for (const f of files) {
-      try {
-        const formData = new FormData();
-        formData.append("video", f);
-        formData.append("secondaryLanguage", config.secondaryLanguage || "Simplified Chinese");
-        formData.append("model", "gemini-2.5-flash");
 
-        const res = await fetch('/api/process', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!res.ok) throw new Error(`Upload failed for ${f.name}`);
-        
-        const data = await res.json();
-        const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(data.videoPath)}`);
-        const info = await infoRes.json();
-        
-        const clip: VideoClip = {
-          id: uuidv4(),
-          filePath: data.videoPath,
-          originalFilename: f.name,
-          duration: info.duration || 0,
-          width: info.width || 0,
-          height: info.height || 0,
-          fileSize: f.size,
-          subtitles: data.subtitles || [],
-        };
-        
-        newClips.push(clip);
-        
-        if (!videoUrl && newClips.length === 1) {
-          setVideoUrl(URL.createObjectURL(f));
-          setVideoPath(data.videoPath);
-          setSubtitles(data.subtitles || []);
-          setDuration(info.duration || 0);
-        }
-      } catch (err) {
-        console.error(`Error uploading ${f.name}:`, err);
-      }
-    }
-    
-    setVideoClips(prev => [...prev, ...newClips]);
-    setShowVideoLibrary(true);
-    setLoading(false);
-    
-    if (timelineClips.length === 0) {
-      let currentStartTime = 0;
-      const initialTimeline: TimelineClip[] = newClips.map(clip => {
-        const tc: TimelineClip = {
-          id: uuidv4(),
-          videoClipId: clip.id,
-          projectStartTime: currentStartTime,
-          sourceInPoint: 0,
-          clipDuration: clip.duration,
-        };
-        currentStartTime += clip.duration;
-        return tc;
-      });
-      setTimelineClips(initialTimeline);
-    }
-  };
 
 
   const handleUploadComplete = async (rawSubtitles: RawSubtitleItem[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
@@ -407,7 +342,7 @@ export default function Home() {
            console.error("Failed to fetch video info on upload complete", err);
        }
 
-       const newClip: VideoClip = {
+        const newClip: VideoClip = {
           id: uuidv4(),
           filePath: serverPath,
           originalFilename: originalFilename || "Untitled",
@@ -416,9 +351,19 @@ export default function Home() {
           height: height,
           fileSize: fileSize,
           subtitles: mapped
-       };
-       setVideoClips([newClip]);
-    }
+        };
+        setVideoClips([newClip]);
+
+        // Prepopulate timeline with the primary video
+        const newTimelineClip: TimelineClip = {
+           id: uuidv4(),
+           videoClipId: newClip.id,
+           projectStartTime: 0,
+           sourceInPoint: 0,
+           clipDuration: dur,
+        };
+        setTimelineClips([newTimelineClip]);
+     }
   };
   
   const handleEditFromQueue = async (item: QueueItem) => {
@@ -1168,15 +1113,31 @@ export default function Home() {
                 closeProject();
               }
             }}
+            onRename={async (id, newName) => {
+              const res = await fetch('/api/drafts', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, name: newName })
+              });
+              if (res.ok) {
+                fetchDrafts();
+              } else {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to rename project');
+              }
+            }}
+            isExpanded={homeState.isSidebarExpanded}
+            onToggleExpand={() => homeState.setIsSidebarExpanded(!homeState.isSidebarExpanded)}
           />
 
           {/* Main Upload Area - Center */}
-          <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-auto">
-          <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
-            <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
-              SubtitleGem - New Project
-            </div>
-            <div className="p-5 flex flex-col items-center">
+          {!homeState.isSidebarExpanded && (
+            <div className="flex-1 flex flex-col items-center justify-center p-2 overflow-auto">
+            <div className="w-full max-w-lg lg:max-w-2xl xl:max-w-3xl border border-[#333333] bg-[#252526] shadow-xl">
+              <div className="h-8 bg-[#333333] flex items-center px-3 text-xs font-semibold text-[#cccccc] select-none">
+                SubtitleGem - New Project
+              </div>
+              <div className="p-5 flex flex-col items-center">
               <div className="mb-4 p-3 bg-[#1e1e1e] border border-[#333333]">
                 <FileVideo className="w-10 h-10 text-[#555555]" />
               </div>
@@ -1187,48 +1148,56 @@ export default function Home() {
                 pendingProjectFile={pendingProjectFile}
                 uploadMode={uploadMode}
                 onUploadModeChange={setUploadMode}
-                onMultiVideoUpload={handleMultiVideoUpload}
+                onMultiVideoUpload={(files: File[], draftId?: string) => {
+                  fetchDrafts();
+                  if (draftId && (uploadMode === 'single' || files.length === 1)) {
+                    // Selection logic if needed
+                  }
+                }}
                 isProcessing={loading}
               />
               
-              {/* Restore existing project option */}
-              <div className="mt-6 w-full max-w-sm">
-                <label className="flex items-center gap-2 text-sm text-[#888888] cursor-pointer hover:text-[#cccccc] transition-colors">
-                  <input 
-                    type="checkbox" 
-                    checked={showRestoreOption}
-                    onChange={(e) => {
-                      setShowRestoreOption(e.target.checked);
-                      if (!e.target.checked) setPendingProjectFile(null);
-                    }}
-                    className="accent-[#0e639c]"
-                  />
-                  Restore existing project export
-                </label>
-                
-                {showRestoreOption && (
-                  <div className="mt-3 p-3 bg-[#1e1e1e] border border-[#333333] rounded">
-                    <p className="text-xs text-[#666666] mb-2">Select a .sgproj file to restore subtitles after video upload:</p>
+              {/* Restore existing project option - ONLY for Single Mode */}
+              {uploadMode === 'single' && (
+                <div className="mt-6 w-full max-w-sm">
+                  <label className="flex items-center gap-2 text-sm text-[#888888] cursor-pointer hover:text-[#cccccc] transition-colors">
                     <input 
-                      type="file" 
-                      accept=".sgproj,.json"
+                      type="checkbox" 
+                      checked={showRestoreOption}
                       onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        setPendingProjectFile(file || null);
+                        setShowRestoreOption(e.target.checked);
+                        if (!e.target.checked) setPendingProjectFile(null);
                       }}
-                      className="text-xs text-[#888888] file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-[#3e3e42] file:text-[#cccccc] file:cursor-pointer hover:file:bg-[#4e4e52]"
+                      className="accent-[#0e639c]"
                     />
-                    {pendingProjectFile && (
-                      <p className="mt-2 text-xs text-green-400">✓ {pendingProjectFile.name}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+                    Restore existing project export
+                  </label>
+                  
+                  {showRestoreOption && (
+                    <div className="mt-3 p-3 bg-[#1e1e1e] border border-[#333333] rounded">
+                      <p className="text-xs text-[#666666] mb-2">Select a .sgproj file to restore subtitles after video upload:</p>
+                      <input 
+                        type="file" 
+                        accept=".sgproj,.json"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          setPendingProjectFile(file || null);
+                        }}
+                        className="text-xs text-[#888888] file:mr-2 file:py-1 file:px-2 file:border-0 file:text-xs file:bg-[#3e3e42] file:text-[#cccccc] file:cursor-pointer hover:file:bg-[#4e4e52]"
+                      />
+                      {pendingProjectFile && (
+                        <p className="mt-2 text-xs text-green-400">✓ {pendingProjectFile.name}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
+          </div>
+          )}
         </div>
 
-        {/* Queue Drawer - Right side */}
         <QueueDrawer
           items={queueItems}
           isPaused={queuePaused}
@@ -1271,120 +1240,6 @@ export default function Home() {
           onWidthChange={handleQueueWidthChange}
           isOpen={showQueue}
           onClose={() => setShowQueue(false)}
-        />
-        </div>
-        
-        <GlobalSettingsDialog
-          isOpen={showGlobalSettings}
-          onClose={() => setShowGlobalSettings(false)}
-          initialTab={globalSettingsTab}
-        />
-        
-        <KeyboardShortcutsDialog
-          isOpen={showShortcuts}
-          onClose={() => setShowShortcuts(false)}
-        />
-
-        <AboutDialog
-          isOpen={showAbout}
-          onClose={() => setShowAbout(false)}
-        />
-
-        <ReprocessDialog
-          isOpen={showReprocessDialog}
-          onClose={() => setShowReprocessDialog(false)}
-          subtitleCount={subtitles.length}
-          currentModel={config.geminiModel || "gemini-2.5-flash"}
-          currentSecondaryLanguage={config.secondaryLanguage || ""}
-          onReprocess={handleReprocessWithOptions}
-          videoPath={videoPath}
-        />
-        
-        <ShiftTimingsDialog
-          isOpen={showShiftTimings}
-          onClose={() => setShowShiftTimings(false)}
-          subtitleCount={subtitles.length}
-          onShift={(offsetMs) => {
-            const shifted = subtitles.map(s => ({
-              ...s,
-              startTime: Math.max(0, s.startTime + offsetMs),
-              endTime: Math.max(0, s.endTime + offsetMs),
-            }));
-            setSubtitles(shifted);
-          }}
-        />
-        
-        <FindReplaceDialog
-          isOpen={showFindReplace}
-          onClose={() => setShowFindReplace(false)}
-          onFind={(query, options) => {
-            // TODO: Implement find logic
-            return null;
-          }}
-          onReplace={(query, replacement, options) => {
-            // Simple replace implementation
-            let count = 0;
-            const updated = subtitles.map(s => {
-              let modified = { ...s };
-              if (options.searchPrimary && s.text.includes(query)) {
-                modified.text = s.text.replace(query, replacement);
-                count++;
-              }
-              if (options.searchSecondary && s.secondaryText?.includes(query)) {
-                modified.secondaryText = s.secondaryText.replace(query, replacement);
-                count++;
-              }
-              return modified;
-            });
-            if (count > 0) setSubtitles(updated);
-            return count;
-          }}
-          onReplaceAll={(query, replacement, options) => {
-            let count = 0;
-            const regex = new RegExp(options.caseSensitive ? query : query, options.caseSensitive ? 'g' : 'gi');
-            const updated = subtitles.map(s => {
-              let modified = { ...s };
-              if (options.searchPrimary) {
-                const matches = s.text.match(regex);
-                if (matches) {
-                  count += matches.length;
-                  modified.text = s.text.replace(regex, replacement);
-                }
-              }
-              if (options.searchSecondary && s.secondaryText) {
-                const matches = s.secondaryText.match(regex);
-                if (matches) {
-                  count += matches.length;
-                  modified.secondaryText = s.secondaryText.replace(regex, replacement);
-                }
-              }
-              return modified;
-            });
-            if (count > 0) setSubtitles(updated);
-            return count;
-          }}
-          onFindNext={() => null}
-          onFindPrevious={() => null}
-        />
-        
-        <ProjectSettingsDialog
-            isOpen={showProjectSettings}
-            onClose={() => setShowProjectSettings(false)}
-            config={{
-                primaryLanguage: config.primaryLanguage,
-                secondaryLanguage: config.secondaryLanguage,
-                geminiFileUri: config.geminiFileUri,
-                geminiFileExpiration: config.geminiFileExpiration,
-                geminiModel: config.geminiModel || DEFAULT_GLOBAL_SETTINGS.defaultGeminiModel,
-                ffmpeg: config.ffmpeg,
-            }}
-            onUpdateConfig={handleUpdateConfig}
-            onReprocess={handleReprocessVideo}
-            onRetranslate={handleRetranslate}
-            onResetToOriginal={() => loadProject(projectState.current?.videoPath || "")}
-            canReset={!!projectState.current}
-            projectConfig={projectConfig}
-            onUpdateProjectConfig={(updates) => setProjectConfig(prev => ({ ...prev, ...updates }))}
         />
       </main>
     );

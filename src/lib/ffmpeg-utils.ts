@@ -14,6 +14,7 @@ export interface BurnOptions {
   preset?: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf?: number; // 0-51, 23 is default
   resolution?: string; // 'original' or 'WIDTHxHEIGHT'
+  codec?: string;
   sampleDuration?: number;
   onProgress?: (progress: number, details?: any) => void;
 }
@@ -247,7 +248,7 @@ export function burnSubtitles(
       none: 'libx264',
     };
 
-    const videoCodec = encoderMap[hwaccel] || 'libx264';
+    const videoCodec = options.codec || encoderMap[hwaccel] || 'libx264';
     args.push('-c:v', videoCodec);
 
     // Encoder-specific options
