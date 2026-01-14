@@ -205,57 +205,87 @@ export function DraftsSidebar({
                 `}
               />
               
-              {deleteConfirm === draft.id ? (
-                // Delete Confirmation State with animation
-                <div className="mb-2 p-3 bg-red-900/30 border border-red-500/40 rounded-lg animate-in fade-in zoom-in-95 duration-200 shadow-lg shadow-red-500/10">
-                   <div className="flex items-center justify-between">
-                     <span className="text-xs text-red-200 font-medium">Delete this project?</span>
-                     <div className="flex gap-2">
+              {/* 3D Flip Card Container */}
+              <div 
+                className={`
+                  relative mb-2 transition-all duration-300 ease-out
+                  ${deletingIds.includes(draft.id) ? 'opacity-0 scale-95 -translate-x-4 max-h-0 pointer-events-none' : ''}
+                `}
+                style={{ perspective: '1000px' }}
+              >
+                <div
+                  className="relative w-full transition-transform duration-500 ease-out"
+                  style={{ 
+                    transformStyle: 'preserve-3d',
+                    transform: deleteConfirm === draft.id ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                  }}
+                >
+                  {/* Front Face - Project Card */}
+                  <div
+                    className="w-full"
+                    style={{ backfaceVisibility: 'hidden' }}
+                    draggable={deleteConfirm !== draft.id}
+                    onDragStart={(e) => handleDragStart(e, draft.id, index)}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <ProjectCard
+                      draft={draft}
+                      isSelected={false} 
+                      isDragging={draggedId === draft.id}
+                      onClick={() => {
+                          if (deleteConfirm !== draft.id) {
+                            onLoadDraft(draft);
+                            if (!isDesktop) setIsOpen(false);
+                          }
+                      }}
+                      onDelete={(e) => handleDelete(e, draft.id)}
+                      onRename={(e) => {
+                        e.stopPropagation();
+                        setRenamingDraft(draft);
+                      }}
+                      dragHandleProps={{
+                        onMouseDown: () => { canDragRef.current = true; },
+                        onMouseUp: () => { canDragRef.current = false; },
+                        onMouseLeave: () => { if (!draggedId) canDragRef.current = false; }
+                      }}
+                      forceExpanded={isExpanded}
+                      animationDelay={index * 50}
+                    />
+                  </div>
+                  
+                  {/* Back Face - Delete Confirmation */}
+                  <div
+                    className="absolute inset-0 w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-red-900/90 to-red-950/95 border border-red-500/40 rounded-lg shadow-xl shadow-red-500/20"
+                    style={{ 
+                      backfaceVisibility: 'hidden',
+                      transform: 'rotateY(180deg)'
+                    }}
+                  >
+                    <div className="text-center">
+                      <div className="text-red-200 font-medium mb-3">
+                        Delete "{draft.name}"?
+                      </div>
+                      <p className="text-[11px] text-red-300/70 mb-4">
+                        This will permanently remove this project
+                      </p>
+                      <div className="flex justify-center gap-3">
                         <button 
                           onClick={(e) => handleDelete(e, draft.id)}
-                          className="px-3 py-1 text-[10px] font-medium bg-red-600 text-white rounded-md hover:bg-red-500 transition-all duration-150 hover:scale-105 shadow-sm"
+                          className="px-4 py-1.5 text-[11px] font-medium bg-red-600 text-white rounded-md hover:bg-red-500 transition-all duration-150 hover:scale-105 shadow-lg"
                         >
                           Delete
                         </button>
                         <button 
                           onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
-                          className="px-3 py-1 text-[10px] font-medium bg-gray-700 text-gray-300 rounded-md hover:bg-gray-600 transition-all duration-150 hover:scale-105"
+                          className="px-4 py-1.5 text-[11px] font-medium bg-gray-700/80 text-gray-200 rounded-md hover:bg-gray-600 transition-all duration-150 hover:scale-105"
                         >
                           Cancel
                         </button>
-                     </div>
-                   </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, draft.id, index)}
-                  onDragEnd={handleDragEnd}
-                  className={`transition-all duration-300 ease-out ${deletingIds.includes(draft.id) ? 'opacity-0 scale-95 -translate-x-4 max-h-0 mb-0 pointer-events-none' : 'max-h-[500px] mb-0'}`}
-                >
-                  <ProjectCard
-                    draft={draft}
-                    isSelected={false} 
-                    isDragging={draggedId === draft.id}
-                    onClick={() => {
-                        onLoadDraft(draft);
-                        if (!isDesktop) setIsOpen(false);
-                    }}
-                    onDelete={(e) => handleDelete(e, draft.id)}
-                    onRename={(e) => {
-                      e.stopPropagation();
-                      setRenamingDraft(draft);
-                    }}
-                    dragHandleProps={{
-                      onMouseDown: () => { canDragRef.current = true; },
-                      onMouseUp: () => { canDragRef.current = false; },
-                      onMouseLeave: () => { if (!draggedId) canDragRef.current = false; }
-                    }}
-                    forceExpanded={isExpanded}
-                    animationDelay={index * 50}
-                  />
-                </div>
-              )}
+              </div>
             </div>
           ))
         )}
