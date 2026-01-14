@@ -1196,51 +1196,51 @@ export default function Home() {
           </div>
           </div>
           )}
-        </div>
 
-        <QueueDrawer
-          items={queueItems}
-          isPaused={queuePaused}
-          onPauseToggle={toggleQueuePause}
-          onRemove={async (id: string, force?: boolean) => {
-            await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
-            // Immediate re-fetch fallback
-            const res = await fetch('/api/queue');
-            if (res.ok) {
-               const data = await res.json();
-               setQueueItems(data.items);
-            }
-          }}
-          onRetry={async (id: string) => {
-            await fetch('/api/queue', {
-              method: 'PUT',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'retry', id })
-            });
-            // Immediate re-fetch
-            const res = await fetch('/api/queue');
-            if (res.ok) {
-               const data = await res.json();
-               setQueueItems(data.items);
-            }
-          }}
-          onRefresh={async () => {
-             const res = await fetch('/api/queue');
-             if (res.ok) {
-                const data = await res.json();
-                setQueueItems(data.items);
-             }
-          }}
-          onDownload={(item: QueueItem) => {
-            if (item.result?.videoPath) {
-              window.open(`/api/export?id=${item.id}`, '_blank');
-            }
-          }}
-          width={queueWidth}
-          onWidthChange={handleQueueWidthChange}
-          isOpen={showQueue}
-          onClose={() => setShowQueue(false)}
-        />
+          <QueueDrawer
+            items={queueItems}
+            isPaused={queuePaused}
+            onPauseToggle={toggleQueuePause}
+            onRemove={async (id: string, force?: boolean) => {
+              await fetch(`/api/queue?id=${id}&force=${force}`, { method: 'DELETE' });
+              // Immediate re-fetch fallback
+              const res = await fetch('/api/queue');
+              if (res.ok) {
+                 const data = await res.json();
+                 setQueueItems(data.items);
+              }
+            }}
+            onRetry={async (id: string) => {
+              await fetch('/api/queue', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'retry', id })
+              });
+              // Immediate re-fetch
+              const res = await fetch('/api/queue');
+              if (res.ok) {
+                 const data = await res.json();
+                 setQueueItems(data.items);
+              }
+            }}
+            onRefresh={async () => {
+               const res = await fetch('/api/queue');
+               if (res.ok) {
+                  const data = await res.json();
+                  setQueueItems(data.items);
+               }
+            }}
+            onDownload={(item: QueueItem) => {
+              if (item.result?.videoPath) {
+                window.open(`/api/export?id=${item.id}`, '_blank');
+              }
+            }}
+            width={queueWidth}
+            onWidthChange={handleQueueWidthChange}
+            isOpen={showQueue}
+            onClose={() => setShowQueue(false)}
+          />
+        </div>
       </main>
     );
   }
