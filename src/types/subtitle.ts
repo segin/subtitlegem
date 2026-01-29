@@ -10,6 +10,9 @@ export interface SubtitleLine {
   primaryColor?: string;
   secondaryColor?: string;
   
+  // Multi-video support: tracks which clip this subtitle belongs to
+  clipId?: string;
+  
   // Per-line specific overrides (sparse)
   styleOverrides?: Partial<TrackStyle>;
 }

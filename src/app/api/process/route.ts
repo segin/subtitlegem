@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
              const stats = fs.statSync(filePath);
              const sizeMB = stats.size / (1024 * 1024);
              
-             if (sizeMB < 9.8 && !sampleDuration) {
+             if (sizeMB < 95 && !sampleDuration) {
                  // Inline
                  const fileBuffer = fs.readFileSync(filePath);
                  const base64Data = fileBuffer.toString('base64');
@@ -309,7 +309,7 @@ export async function POST(req: NextRequest) {
     let processPath = videoPath;
     const stagingDir = tempDir; 
     let useInlineData = false;
-    const INLINE_SIZE_LIMIT_MB = 9.8; 
+    const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 
     if (fileSizeInMB > 400) {
       console.log("File > 400MB, extracting audio...");

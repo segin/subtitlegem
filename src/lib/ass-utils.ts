@@ -45,7 +45,9 @@ function generateStyleLine(name: string, style: TrackStyle, playResX: number = R
     const refOutlineWidth = normalizeToPx(outlineWidth ?? 2.0, REFERENCE_HEIGHT);
     
     // Scale to target PlayRes
-    const assFontSize = Math.round(refFontSize * scaleY);
+    // USER REQUEST: Font size needs to be doubled from whatever the user input.
+    // "If it says 5%, act like the user put in 10% when doing the render."
+    const assFontSize = Math.round(refFontSize * scaleY * 2);
     const assMarginV = Math.round(refMarginV * scaleY);
     const assMarginH = Math.round(refMarginH * scaleX);
     // Clamp outline to prevent massive globs

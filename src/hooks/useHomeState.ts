@@ -244,6 +244,7 @@ export function useMultiVideoState() {
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
   const [isLibraryCollapsed, setIsLibraryCollapsed] = useState(false);
+  const [showSecondaryTracks, setShowSecondaryTracks] = useState(false); // Default hidden
 
   const isMultiVideoMode = videoClips.length > 0 || uploadMode === 'multi-video';
 
@@ -260,6 +261,7 @@ export function useMultiVideoState() {
     selectedClipId, setSelectedClipId,
     selectedImageId, setSelectedImageId,
     isLibraryCollapsed, setIsLibraryCollapsed,
+    showSecondaryTracks, setShowSecondaryTracks,
     isMultiVideoMode,
     timelineRef,
   };

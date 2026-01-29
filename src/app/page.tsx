@@ -14,6 +14,8 @@ import { GlobalSettingsDialog, TabId } from "@/components/GlobalSettingsDialog";
 import { AboutDialog } from "@/components/AboutDialog";
 import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
 import { VideoLibrary } from "@/components/VideoLibrary";
+import { AssetLibrary } from "@/components/AssetLibrary";
+import { TimelineToolbar } from "@/components/TimelineToolbar";
 import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
 import { ShiftTimingsDialog } from "@/components/ShiftTimingsDialog";
 import { FindReplaceDialog, FindOptions, FindResult } from "@/components/FindReplaceDialog";
@@ -82,6 +84,7 @@ export default function Home() {
     selectedClipId, setSelectedClipId,
     showVideoLibrary, setShowVideoLibrary,
     isLibraryCollapsed, setIsLibraryCollapsed,
+    showSecondaryTracks, setShowSecondaryTracks,
     imageAssets, setImageAssets,
     timelineImages, setTimelineImages,
     selectedImageId, setSelectedImageId,
@@ -106,6 +109,7 @@ export default function Home() {
   
   // Reprocess dialog state
   const [showReprocessDialog, setShowReprocessDialog] = useState(false);
+  const [isSplitMode, setIsSplitMode] = useState(false);
 
   // Check if we're in multi-video mode
   // (isMultiVideoMode is now provided by homeState.isMultiVideoMode)
@@ -131,16 +135,93 @@ export default function Home() {
       const res = await fetch(`/api/drafts?id=${draft.id}`);
       const data = await res.json();
       
-      console.log("[Draft] Loaded data:", { id: data.id, videoPath: data.videoPath });
+      console.log("[Draft] Loaded data:", { id: data.id, version: data.version, hasClips: !!data.clips?.length, videoPath: data.videoPath });
       
       if (data.id) {
-        resetHistory(data.subtitles || []); // Use resetHistory to clear undo stack
-        setVideoPath(data.videoPath || null);
-        const url = data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null;
-        console.log("[Draft] Setting video URL:", url);
-        setVideoUrl(url);
         setCurrentDraftId(data.id);
-        if (data.config) setConfig(data.config);
+        
+        // Handle V2 drafts (multi-video format)
+        if (data.version === 2 && data.clips && data.clips.length > 0) {
+          console.log("[Draft] Loading V2 draft with", data.clips.length, "clips");
+          
+          // Fetch metadata for clips with missing duration
+          const clipsWithDuration = await Promise.all(
+            data.clips.map(async (clip: any) => {
+              if (!clip.duration || clip.duration <= 0) {
+                try {
+                  const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(clip.filePath)}`);
+                  const info = await infoRes.json();
+                  console.log("[Draft] Fetched duration for clip:", clip.id, info.duration);
+                  return {
+                    ...clip,
+                    duration: info.duration || 0,
+                    width: info.width || clip.width || 0,
+                    height: info.height || clip.height || 0,
+                  };
+                } catch (err) {
+                  console.error("[Draft] Failed to fetch video info for clip:", clip.id, err);
+                  return clip;
+                }
+              }
+              return clip;
+            })
+          );
+          
+          // Set V2 state with corrected clips
+          setVideoClips(clipsWithDuration);
+          
+          // Fix timeline clips with duration 0 - use the video clip's full duration
+          const fixedTimelineClips = (data.timeline || []).map((tc: any) => {
+            if (tc.clipDuration <= 0) {
+              const videoClip = clipsWithDuration.find((c: any) => c.id === tc.videoClipId);
+              if (videoClip?.duration > 0) {
+                return { ...tc, clipDuration: videoClip.duration };
+              }
+            }
+            return tc;
+          });
+          setTimelineClips(fixedTimelineClips);
+          
+          if (data.projectConfig) setProjectConfig(data.projectConfig);
+          if (data.subtitleConfig) setConfig({ ...DEFAULT_CONFIG, ...data.subtitleConfig, ffmpeg: { ...DEFAULT_CONFIG.ffmpeg, ...(data.subtitleConfig.ffmpeg || {}) } });
+          
+          // Extract subtitles from all clips - store in SOURCE time with clipId
+          // Per SUBTITLE_TIMING.md: subtitles are stored in source time, display offset is calculated dynamically
+          const allSubtitles = clipsWithDuration.flatMap((clip: any) => {
+            const timelineClip = fixedTimelineClips.find((tc: any) => tc.videoClipId === clip.id);
+            
+            return (clip.subtitles || []).map((sub: any) => ({
+              ...sub,
+              // Store clipId for dynamic offset calculation during rendering
+              clipId: timelineClip?.id,
+              // Keep times in SOURCE-relative format
+              // Display position = clipTimelineStart + (sourceTime - sourceInPoint)
+            }));
+          });
+          resetHistory(allSubtitles);
+          
+          // Use first clip's path for the video player (backward compat)
+          const firstClip = clipsWithDuration[0];
+          const firstVideoPath = firstClip.filePath;
+          setVideoPath(firstVideoPath || null);
+          const url = firstVideoPath ? `/api/storage?path=${encodeURIComponent(firstVideoPath)}` : null;
+          console.log("[Draft] Setting V2 video URL from first clip:", url);
+          setVideoUrl(url);
+          
+          // Set duration from first clip
+          if (firstClip.duration > 0) {
+            setDuration(firstClip.duration);
+          }
+        } else {
+          // Handle V1 drafts (legacy single-video format)
+          console.log("[Draft] Loading V1 draft");
+          resetHistory(data.subtitles || []);
+          setVideoPath(data.videoPath || null);
+          const url = data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null;
+          console.log("[Draft] Setting V1 video URL:", url);
+          setVideoUrl(url);
+          if (data.config) setConfig(data.config);
+        }
       }
     } catch (err) {
       console.error("Failed to load draft:", err);
@@ -1267,6 +1348,8 @@ export default function Home() {
               document.getElementById('project-upload')?.click();
             }}
             onProjectSettings={() => setShowProjectSettings(true)}
+            onToggleSecondaryTracks={() => setShowSecondaryTracks(!showSecondaryTracks)}
+            isSecondaryTracksVisible={showSecondaryTracks}
             onReprocessVideo={() => setShowReprocessDialog(true)}
             onGlobalSettings={() => {
               setGlobalSettingsTab('styles');
@@ -1346,18 +1429,17 @@ export default function Home() {
       {/* Main Workspace - Always horizontal layout */}
       <div className="flex-1 flex flex-row overflow-hidden">
         
-        {/* VIDEO LIBRARY SIDEBAR - Multi-video mode */}
+        {/* ASSET LIBRARY SIDEBAR - Multi-video mode */}
         {showVideoLibrary && (
-          <VideoLibrary
-            clips={videoClips}
-            timelineClips={timelineClips}
-            onAddToTimeline={handleAddToTimeline}
-            onRemoveClip={handleRemoveClip}
-            onRelinkClip={handleRelinkClip}
-            onClipSelect={setSelectedClipId}
-            selectedClipId={selectedClipId}
-            isCollapsed={isLibraryCollapsed}
-            onToggleCollapse={() => setIsLibraryCollapsed(!isLibraryCollapsed)}
+          <AssetLibrary
+            videoClips={videoClips}
+            imageAssets={imageAssets}
+            onDragStart={() => {}} // Controlled internally by HTML5 drag
+            onDeleteAsset={(id, type) => {
+               if (type === 'video') handleRemoveClip(id);
+               // TODO: Handle image deletion
+            }}
+            className={isLibraryCollapsed ? 'w-10' : 'w-64'}
           />
         )}
         
@@ -1388,8 +1470,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Timeline Area - Smaller on mobile */}
-          <div className="h-40 lg:h-48 2xl:h-64 border-t border-[#333333] bg-[#252526] flex flex-col shrink-0">
+          {/* Timeline Area */}
+          <div className="h-48 lg:h-56 2xl:h-72 border-t border-[#333333] bg-[#252526] flex flex-col shrink-0">
              <div className="h-6 bg-[#2d2d2d] border-b border-[#333333] flex items-center justify-between px-2 select-none">
                 <div className="flex items-center space-x-2 text-[10px] font-bold text-[#888888] uppercase tracking-wider">
                    <MonitorPlay className="w-3 h-3" />
@@ -1399,7 +1481,37 @@ export default function Home() {
                   {new Date(currentTime * 1000).toISOString().substr(11, 8)} <span className="text-[#555555]">/</span> {new Date(duration * 1000).toISOString().substr(11, 8)}
                 </div>
              </div>
-             <div className="flex-1 relative overflow-hidden">
+             <div className="flex-1 relative overflow-hidden flex flex-col">
+                {/* Timeline Toolbar */}
+                <TimelineToolbar
+                  onSplitMode={() => setIsSplitMode(!isSplitMode)}
+                  isSplitMode={isSplitMode}
+                  onDeleteSelected={() => {
+                    if (selectedClipId) {
+                      setTimelineClips(timelineClips.filter(c => c.id !== selectedClipId));
+                      setSelectedClipId(null);
+                    } else if (selectedImageId) {
+                      setTimelineImages(timelineImages.filter(i => i.id !== selectedImageId));
+                      setSelectedImageId(null);
+                    }
+                  }}
+                  onDuplicateSelected={() => {
+                    if (selectedClipId) {
+                      const selected = timelineClips.find(c => c.id === selectedClipId);
+                      if (selected) {
+                        const newClip = { ...selected, id: uuidv4(), projectStartTime: selected.projectStartTime + selected.clipDuration };
+                        setTimelineClips([...timelineClips, newClip]);
+                      }
+                    } else if (selectedImageId) {
+                      const selected = timelineImages.find(i => i.id === selectedImageId);
+                      if (selected) {
+                        const newImg = { ...selected, id: uuidv4(), projectStartTime: selected.projectStartTime + selected.duration };
+                        setTimelineImages([...timelineImages, newImg]);
+                      }
+                    }
+                  }}
+                  hasSelection={selectedClipId !== null || selectedImageId !== null}
+                />
                 <SubtitleTimeline 
                   ref={timelineRef}
                   subtitles={subtitles} 
@@ -1433,11 +1545,11 @@ export default function Home() {
                         setTimelineClips([...timelineClips, newClip]);
                       }
                     } else {
-                      const img = timelineImages.find(i => i.id === id);
-                      if (img) {
-                        const newImg = { ...img, id: uuidv4(), projectStartTime: img.projectStartTime + img.duration };
-                        setTimelineImages([...timelineImages, newImg]);
-                      }
+                        const img = timelineImages.find(i => i.id === id);
+                        if (img) {
+                          const newImg = { ...img, id: uuidv4(), projectStartTime: img.projectStartTime + img.duration };
+                          setTimelineImages([...timelineImages, newImg]);
+                        }
                     }
                   }}
                   onSplitClip={(id, time) => {
@@ -1470,6 +1582,67 @@ export default function Home() {
                       setTimelineClips(timelineClips.filter(c => c.id !== id));
                     } else {
                       setTimelineImages(timelineImages.filter(i => i.id !== id));
+                    }
+                  }}
+                  showSecondaryTracks={showSecondaryTracks}
+                  isSplitMode={isSplitMode}
+                  onSplitAtPosition={(clipId, absoluteTime) => {
+                    const clip = timelineClips.find(c => c.id === clipId);
+                    if (!clip) return;
+                    
+                    // Calculate split point relative to clip start
+                    const relativeSplitTime = absoluteTime - clip.projectStartTime;
+                    
+                    // Ensure split is within clip bounds (not too close to edges)
+                    if (relativeSplitTime <= 0.1 || relativeSplitTime >= clip.clipDuration - 0.1) {
+                      return;
+                    }
+                    
+                    const firstPart: TimelineClip = {
+                      ...clip,
+                      clipDuration: relativeSplitTime
+                    };
+                    
+                    const secondPart: TimelineClip = {
+                      ...clip,
+                      id: uuidv4(),
+                      projectStartTime: absoluteTime,
+                      sourceInPoint: clip.sourceInPoint + relativeSplitTime,
+                      clipDuration: clip.clipDuration - relativeSplitTime
+                    };
+                    
+                    // Replace original with both parts
+                    const index = timelineClips.findIndex(c => c.id === clipId);
+                    const newClips = [...timelineClips];
+                    newClips.splice(index, 1, firstPart, secondPart);
+                    setTimelineClips(newClips);
+                    
+                    // Exit split mode
+                    setIsSplitMode(false);
+                  }}
+                  onAddClip={(assetId, type, time) => {
+                    if (type === 'video') {
+                      const clip = videoClips.find(c => c.id === assetId);
+                      if (!clip) return;
+                      const newClip: TimelineClip = {
+                        id: uuidv4(),
+                        videoClipId: assetId,
+                        projectStartTime: time,
+                        sourceInPoint: 0,
+                        clipDuration: clip.duration,
+                      };
+                      setTimelineClips(prev => [...prev, newClip]);
+                    } else if (type === 'image') {
+                      const asset = imageAssets.find(a => a.id === assetId);
+                      if (!asset) return;
+                      const newImage: TimelineImage = {
+                        id: uuidv4(),
+                        type: 'image',
+                        imageAssetId: assetId,
+                        projectStartTime: time,
+                        duration: 5, // Default duration 5s
+                      };
+                       setTimelineImages(prev => [...prev, newImage]);
                     }
                   }}
                 />

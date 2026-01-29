@@ -248,36 +248,36 @@ export function DraftsSidebar({
                         onMouseUp: () => { canDragRef.current = false; },
                         onMouseLeave: () => { if (!draggedId) canDragRef.current = false; }
                       }}
-                      forceExpanded={isExpanded}
+                      forceExpanded={isExpanded || deleteConfirm === draft.id}
                       animationDelay={index * 50}
                     />
                   </div>
                   
                   {/* Back Face - Delete Confirmation */}
                   <div
-                    className="absolute inset-0 w-full h-full flex items-center justify-center p-4 bg-gradient-to-br from-red-900/90 to-red-950/95 border border-red-500/40 rounded-lg shadow-xl shadow-red-500/20"
+                    className="absolute inset-0 w-full h-full flex items-center justify-center p-2 bg-gradient-to-br from-red-900/90 to-red-950/95 border border-red-500/40 rounded-lg shadow-xl shadow-red-500/20"
                     style={{ 
                       backfaceVisibility: 'hidden',
                       transform: 'rotateY(180deg)'
                     }}
                   >
-                    <div className="text-center">
-                      <div className="text-red-200 font-medium mb-3">
+                    <div className="text-center w-full">
+                      <div className="text-red-200 font-medium mb-1 truncate px-2">
                         Delete "{draft.name}"?
                       </div>
-                      <p className="text-[11px] text-red-300/70 mb-4">
-                        This will permanently remove this project
+                      <p className="text-[10px] text-red-300/70 mb-2 leading-tight">
+                        Cannot be undone
                       </p>
-                      <div className="flex justify-center gap-3">
+                      <div className="flex justify-center gap-2">
                         <button 
                           onClick={(e) => handleDelete(e, draft.id)}
-                          className="px-4 py-1.5 text-[11px] font-medium bg-red-600 text-white rounded-md hover:bg-red-500 transition-all duration-150 hover:scale-105 shadow-lg"
+                          className="px-3 py-1 text-[10px] font-medium bg-red-600 text-white rounded hover:bg-red-500 transition-all shadow-lg"
                         >
                           Delete
                         </button>
                         <button 
                           onClick={(e) => { e.stopPropagation(); setDeleteConfirm(null); }}
-                          className="px-4 py-1.5 text-[11px] font-medium bg-gray-700/80 text-gray-200 rounded-md hover:bg-gray-600 transition-all duration-150 hover:scale-105"
+                          className="px-3 py-1 text-[10px] font-medium bg-gray-700/80 text-gray-200 rounded hover:bg-gray-600 transition-all"
                         >
                           Cancel
                         </button>

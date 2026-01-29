@@ -47,6 +47,11 @@ interface TimelineProps {
   onDuplicateClip?: (id: string, type: 'video' | 'image') => void;
   onSplitClip?: (id: string, time: number) => void;
   onRemoveTimelineItem?: (id: string, type: 'video' | 'image') => void;
+  onAddClip?: (assetId: string, type: 'video' | 'image', time: number) => void;
+  showSecondaryTracks?: boolean;
+  // Split mode
+  isSplitMode?: boolean;
+  onSplitAtPosition?: (clipId: string, time: number) => void;
   // Read-Only mode (e.g. for previews)
   readOnly?: boolean;
 }
@@ -103,6 +108,10 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const onDuplicateClip = isLegacyProps(props) ? undefined : props.onDuplicateClip;
   const onSplitClip = isLegacyProps(props) ? undefined : props.onSplitClip;
   const onRemoveTimelineItem = isLegacyProps(props) ? undefined : props.onRemoveTimelineItem;
+  const onAddClip = isLegacyProps(props) ? undefined : props.onAddClip;
+  const showSecondaryTracks = isLegacyProps(props) ? false : props.showSecondaryTracks;
+  const isSplitMode = isLegacyProps(props) ? false : props.isSplitMode;
+  const onSplitAtPosition = isLegacyProps(props) ? undefined : props.onSplitAtPosition;
   
   const isMultiVideoMode = videoClips && timelineClips && timelineClips.length > 0;
 
@@ -110,7 +119,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [followPlayhead, setFollowPlayhead] = useState(true);
-  const [isV2Collapsed, setIsV2Collapsed] = useState(false);
+  // Removed internal isV2Collapsed state in favor of controlled showSecondaryTracks prop
   
   // Context Menu state
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -380,14 +389,16 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const RULER_HEIGHT = 24;
   const TRACK_LABEL_WIDTH = 64; 
   
-  const V2_ENABLED = isMultiVideoMode && !isV2Collapsed;
-  const VIDEO_TRACK_HEIGHT = 48;
-  const AUDIO_TRACK_HEIGHT = 48;
-  const SUBTITLE_TRACK_HEIGHT = 48;
+  // Determine if V2 tracks should be visible
+  const V2_ENABLED = isMultiVideoMode && showSecondaryTracks;
+  // Compact track heights for better fit
+  const VIDEO_TRACK_HEIGHT = 36;
+  const AUDIO_TRACK_HEIGHT = 32;
+  const SUBTITLE_TRACK_HEIGHT = 36;
   
   const TOTAL_TRACKS_HEIGHT = 
-    (V2_ENABLED ? VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + 16 : 0) + 
-    VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT + 24;
+    (V2_ENABLED ? VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT : 0) + 
+    VIDEO_TRACK_HEIGHT + AUDIO_TRACK_HEIGHT + SUBTITLE_TRACK_HEIGHT;
   
   // Zoom handlers
   const handleZoomIn = () => {
@@ -461,6 +472,36 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     return () => window.removeEventListener('click', handleClick);
   }, []);
 
+  // Handle drops from Asset Library
+  const handleGlobalDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!onAddClip) return;
+
+    // Check for our custom asset type
+    const assetData = e.dataTransfer.getData('application/subtitlegem-asset');
+    if (assetData) {
+      try {
+        const { id, type } = JSON.parse(assetData);
+        // Calculate drop time
+        const rect = containerRef.current?.querySelector('[data-timeline-bg]')?.getBoundingClientRect();
+        if (rect) {
+          const x = e.clientX - rect.left - TRACK_LABEL_WIDTH;
+          const time = Math.max(0, x / pixelsPerSecond);
+          // Snap if enabled
+          const snappedTime = getSnappedTime(time);
+          onAddClip(id, type, snappedTime);
+        }
+      } catch (err) {
+        console.error("Failed to parse dropped asset:", err);
+      }
+    }
+  };
+
+  const handleGlobalDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
   return (
     <div className="relative w-full h-full flex flex-col bg-[#1e1e1e]">
       {/* Timeline Controls Overlay */}
@@ -510,7 +551,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
         data-timeline-bg
         className="relative h-full min-w-full cursor-pointer" 
         style={{ 
-          width: `${Math.max(duration * pixelsPerSecond, 1000)}px`,
+          // Infinite timeline: Add 1 hour buffer beyond current duration
+          width: `${Math.max((duration + 3600) * pixelsPerSecond, 1000)}px`,
           minHeight: `${RULER_HEIGHT + TOTAL_TRACKS_HEIGHT}px`
         }}
         onMouseDown={(e) => {
@@ -520,6 +562,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
           seekFromEvent(e, rect);
           setIsScrubbing(true);
         }}
+        onDrop={handleGlobalDrop}
+        onDragOver={handleGlobalDragOver}
       >
         {/* Time Ruler */}
         <TimeRuler duration={duration} pixelsPerSecond={pixelsPerSecond} />
@@ -545,9 +589,6 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
               <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT }}>
                 <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex flex-col items-center justify-center z-10">
                   <span className="text-[8px] text-[#555555]">AUDIO 2</span>
-                  <button onClick={() => setIsV2Collapsed(true)} title="Collapse V2" className="mt-1 hover:text-white transition-colors">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                  </button>
                 </div>
                 <div className="ml-16 relative h-full">
                   {/* Future: Audio 2 content */}
@@ -555,7 +596,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
               </div>
 
               {/* Video 2 */}
-              <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT, marginTop: 4 }}>
+              <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT }}>
                 <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
                   <span className="text-[8px] text-[#555555]">VIDEO 2</span>
                 </div>
@@ -563,24 +604,11 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
                   {/* Future: Video 2 content (overlays) */}
                 </div>
               </div>
-              <div className="h-4" /> {/* Gap between V2 and V1 */}
             </>
           )}
 
-          {/* V2 Collapsed Indicator */}
-          {isMultiVideoMode && isV2Collapsed && (
-             <div className="h-6 relative border-b border-[#333333] bg-[#1a1a1b] flex items-center">
-                <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
-                   <button onClick={() => setIsV2Collapsed(false)} title="Expand V2" className="hover:text-white transition-colors">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                   </button>
-                </div>
-                <span className="ml-20 text-[9px] text-[#444444] uppercase tracking-widest font-bold">V2 Tracks Collapsed</span>
-             </div>
-          )}
-
           {/* Video 1 (Main) */}
-          <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT, marginTop: 4 }}>
+          <div className="relative" style={{ height: VIDEO_TRACK_HEIGHT }}>
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
               <span className="text-[10px] text-[#888888] font-medium">{isMultiVideoMode ? 'VIDEO 1' : 'VIDEO'}</span>
             </div>
@@ -601,6 +629,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
                     onDrop={() => handleClipDrop(clip.id)}
                     onClick={() => onClipSelect?.(clip.id)}
                     onContextMenu={(e) => handleContextMenu(e, clip.id, 'video')}
+                    isSplitMode={isSplitMode}
+                    onSplitAtPosition={onSplitAtPosition}
                   />
                 );
               })}
@@ -629,7 +659,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
           </div>
 
           {/* Audio 1 (Linked) */}
-          <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT, marginTop: 8 }}>
+          <div className="relative" style={{ height: AUDIO_TRACK_HEIGHT }}>
              <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
                <span className="text-[10px] text-[#888888] font-medium">{isMultiVideoMode ? 'AUDIO 1' : 'AUDIO'}</span>
              </div>
@@ -651,7 +681,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
           </div>
 
           {/* Subtitle Track */}
-          <div className="relative" style={{ height: SUBTITLE_TRACK_HEIGHT, marginTop: 8 }}>
+          <div className="relative" style={{ height: SUBTITLE_TRACK_HEIGHT }}>
             <div className="absolute left-0 top-0 bottom-0 w-16 bg-[#252526] border-r border-[#333333] flex items-center justify-center z-10">
               <span className="text-[10px] text-[#888888] font-medium">SUBS</span>
             </div>
@@ -661,7 +691,28 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
             >
               {subtitles.map((sub) => {
                 const preview = subtitlePreview[sub.id];
-                const displaySub = preview ? { ...sub, ...preview } : sub;
+                
+                // Calculate display position dynamically based on clip position
+                // Per SUBTITLE_TIMING.md: displayTime = clipTimelineStart + (sourceTime - sourceInPoint)
+                let displayStartTime = sub.startTime;
+                let displayEndTime = sub.endTime;
+                
+                if (sub.clipId && timelineClips) {
+                  const clip = timelineClips.find(c => c.id === sub.clipId);
+                  const previewClip = clip ? clipPreview[clip.id] : undefined;
+                  if (clip) {
+                    const clipStart = previewClip?.projectStartTime ?? clip.projectStartTime;
+                    const sourceInPoint = previewClip?.sourceInPoint ?? clip.sourceInPoint;
+                    // Apply offset: display = clipStart + (sourceTime - sourceInPoint)
+                    displayStartTime = clipStart + (sub.startTime - sourceInPoint);
+                    displayEndTime = clipStart + (sub.endTime - sourceInPoint);
+                  }
+                }
+                
+                const displaySub = preview 
+                  ? { ...sub, ...preview }
+                  : { ...sub, startTime: displayStartTime, endTime: displayEndTime };
+                  
                 return (
                   <SubtitleBubble 
                     key={sub.id} 
@@ -692,24 +743,71 @@ SubtitleTimeline.displayName = "SubtitleTimeline";
 
 function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerSecond: number }) {
   const TRACK_LABEL_WIDTH = 64; // w-16 = 4rem = 64px
+  
+  // Calculate optimal tick interval based on zoom level
+  // We want major ticks to be at least 80px apart for readability
+  const MIN_LABEL_SPACING = 80;
+  const secondsPerLabel = MIN_LABEL_SPACING / pixelsPerSecond;
+  
+  // Snap to nice intervals: 1s, 2s, 5s, 10s, 15s, 30s, 1m, 2m, 5m, 10m, 15m, 30m, 1h
+  const INTERVALS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600];
+  const majorInterval = INTERVALS.find(i => i >= secondsPerLabel) || INTERVALS[INTERVALS.length - 1];
+  
+  // Minor ticks: subdivide major interval
+  const minorDivisions = majorInterval <= 5 ? 5 : 
+                         majorInterval <= 30 ? 6 : 
+                         majorInterval <= 60 ? 4 : 
+                         majorInterval <= 300 ? 5 : 6;
+  const minorInterval = majorInterval / minorDivisions;
+  
+  // Format time based on duration
+  const formatTime = (seconds: number): string => {
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    
+    if (duration >= 3600) {
+      // Show hours if video is 1+ hour
+      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    } else {
+      // Just mm:ss
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+  };
+  
+  // Generate major ticks
+  const majorTicks: number[] = [];
+  for (let t = 0; t <= duration; t += majorInterval) {
+    majorTicks.push(t);
+  }
+  
+  // Generate minor ticks (excluding positions where major ticks exist)
+  const minorTicks: number[] = [];
+  for (let t = 0; t <= duration; t += minorInterval) {
+    if (!majorTicks.includes(t)) {
+      minorTicks.push(t);
+    }
+  }
+  
   return (
     <div className="relative h-6 bg-[#252526] border-b border-[#333333] flex items-end select-none z-20">
-      {Array.from({ length: Math.ceil(duration) + 1 }).map((_, i) => (
+      {/* Major ticks with labels */}
+      {majorTicks.map((t) => (
         <div 
-          key={i} 
+          key={`major-${t}`} 
           data-ruler-tick
-          className="absolute bottom-0 h-2 border-l border-[#555555] text-[9px] text-[#888888] pl-1 font-mono"
-          style={{ left: `${TRACK_LABEL_WIDTH + i * pixelsPerSecond}px` }}
+          className="absolute bottom-0 h-3 border-l border-[#666666] text-[9px] text-[#888888] pl-1 font-mono"
+          style={{ left: `${TRACK_LABEL_WIDTH + t * pixelsPerSecond}px` }}
         >
-          {i % 5 === 0 && <span>{new Date(i * 1000).toISOString().substr(14, 5)}</span>}
+          <span>{formatTime(t)}</span>
         </div>
       ))}
-      {/* Sub-ticks */}
-      {Array.from({ length: Math.ceil(duration * 2) + 1 }).map((_, i) => (
+      {/* Minor ticks (no labels) */}
+      {minorTicks.map((t) => (
         <div 
-          key={`sub-${i}`}
-          className="absolute bottom-0 h-1 border-l border-[#333333]"
-          style={{ left: `${TRACK_LABEL_WIDTH + i * (pixelsPerSecond / 2)}px` }}
+          key={`minor-${t}`}
+          className="absolute bottom-0 h-1.5 border-l border-[#444444]"
+          style={{ left: `${TRACK_LABEL_WIDTH + t * pixelsPerSecond}px` }}
         />
       ))}
     </div>
@@ -720,7 +818,7 @@ function TimeRuler({ duration, pixelsPerSecond }: { duration: number; pixelsPerS
 // Video Clip Block
 // ============================================================================
 
-function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onDrop, onClick, onContextMenu }: {
+function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, onDrop, onClick, onContextMenu, isSplitMode, onSplitAtPosition }: {
   clip: TimelineClip;
   videoClip: VideoClip;
   pixelsPerSecond: number;
@@ -729,16 +827,35 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
   onDrop: () => void;
   onClick: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
+  isSplitMode?: boolean;
+  onSplitAtPosition?: (clipId: string, time: number) => void;
 }) {
   const [isDragging, setIsDragging] = useState<'left' | 'right' | 'both' | null>(null);
   const [originalClip, setOriginalClip] = useState<TimelineClip | null>(null);
   const startX = useRef(0);
+  const blockRef = useRef<HTMLDivElement>(null);
 
   const handleMouseDown = (e: React.MouseEvent, side: 'left' | 'right' | 'both') => {
     e.stopPropagation();
     setIsDragging(side);
     setOriginalClip({ ...clip });
     startX.current = e.clientX;
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    // Split mode: calculate click position and trigger split
+    if (isSplitMode && onSplitAtPosition && blockRef.current) {
+      const rect = blockRef.current.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const relativeTime = clickX / pixelsPerSecond;
+      const absoluteTime = clip.projectStartTime + relativeTime;
+      onSplitAtPosition(clip.id, absoluteTime);
+    } else {
+      // Normal mode: select clip
+      onClick();
+    }
   };
 
   useEffect(() => {
@@ -769,6 +886,7 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
   return (
     <div 
       data-draggable
+      ref={blockRef}
       className={cn(
         "absolute top-1 bottom-1 cursor-move flex items-center px-2 overflow-hidden select-none group transition-colors rounded-sm",
         selected
@@ -776,16 +894,14 @@ function VideoClipBlock({ clip, videoClip, pixelsPerSecond, selected, onDrag, on
           : videoClip.missing 
             ? "bg-red-950/50 border border-red-800 text-red-200 hover:bg-red-900/50"
             : "bg-[#3d5c3d] border border-[#4a704a] text-[#cccccc] hover:bg-[#4a704a]",
-        isDragging && "ring-1 ring-white z-20"
+        isDragging && "ring-1 ring-white z-20",
+        isSplitMode && "cursor-crosshair"
       )}
       style={{ 
         left: `${clip.projectStartTime * pixelsPerSecond}px`, 
         width: `${Math.max(clip.clipDuration * pixelsPerSecond, 20)}px`,
       }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
+      onClick={handleClick}
       onMouseDown={(e) => handleMouseDown(e, 'both')}
       onContextMenu={onContextMenu}
     >

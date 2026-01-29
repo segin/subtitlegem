@@ -157,7 +157,7 @@ subtitlegem/
 **Technologies:** `@google/genai` SDK, Gemini 2.0 Flash  
 **Key Functions:**
 - `generateSubtitles()` - Full video transcription (Robust JSON parsing with markdown stripping)
-- `generateSubtitlesInline()` - Small file (<10MB) inline processing
+- `generateSubtitlesInline()` - File (<95MB) inline processing
 - `translateSubtitles()` - Re-translation (Enforced Structured Output Schema)
 - `PATCH /api/drafts` - Project renaming (Lightweight partial update)
 
@@ -343,7 +343,7 @@ User uploads video
     → /api/process receives file
     → File saved to {STAGING_DIR}/temp/
     → If >400MB: Extract audio only
-    → If <10MB: Send inline to Gemini
+    → If <95MB: Send inline to Gemini
     → Otherwise: Upload to Gemini Files API
     → Gemini returns JSON subtitles
     → Response sent to frontend

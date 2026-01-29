@@ -162,8 +162,8 @@ export async function generateSubtitles(
 }
 
 /**
- * Generate subtitles using inline data (for files < 9.8MB)
- * Avoids Files API overhead for small files
+ * Generate subtitles using inline data (for files < 95MB)
+ * Avoids Files API overhead for smaller files (Gemini supports up to 100MB inline)
  */
 export async function generateSubtitlesInline(
   base64Data: string,

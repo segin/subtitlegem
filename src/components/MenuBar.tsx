@@ -66,6 +66,8 @@ interface MenuBarProps {
   // Toggle states for checkmarks
   isTimelineVisible?: boolean;
   isSubtitleListVisible?: boolean;
+  onToggleSecondaryTracks?: () => void;
+  isSecondaryTracksVisible?: boolean;
   isVideoLibraryVisible?: boolean;
 }
 
@@ -126,7 +128,8 @@ export function MenuBar({
   isVideoLibraryVisible,
   onCut, onCopy, onPaste, onMerge, onSplit,
   hasSelection = false, hasClipboard = false, canMerge = false, canSplit = false,
-  recentDrafts = [], onLoadDraft, onAbout
+  recentDrafts = [], onLoadDraft, onAbout,
+  onToggleSecondaryTracks, isSecondaryTracksVisible
 }: MenuBarProps) {
   
   // Track which menu is open (for cross-menu navigation)
@@ -236,18 +239,19 @@ export function MenuBar({
 
   // ========== VIEW MENU ==========
   const viewItems = useMemo<MenuItem[]>(() => [
-    { id: "video-assets", label: "Video Assets", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen, checked: isVideoLibraryVisible },
+    { id: "video-assets", label: "Asset Library", icon: <FileVideo className="w-4 h-4" />, onClick: onToggleVideoLibrary, disabled: isUploadScreen, checked: isVideoLibraryVisible },
     { id: "video-props", label: "Video Properties...", icon: <FileVideo className="w-4 h-4" />, onClick: onVideoProperties, disabled: isUploadScreen },
     { divider: true },
     { id: "toggle-timeline", label: "Toggle Timeline", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleTimeline, disabled: isUploadScreen, checked: isTimelineVisible },
     { id: "toggle-subtitle-list", label: "Toggle Subtitle List", icon: <PanelLeft className="w-4 h-4" />, onClick: onToggleSubtitleList, disabled: isUploadScreen, checked: isSubtitleListVisible },
+    { id: "toggle-secondary-tracks", label: "Show Secondary Tracks (V2)", icon: <PanelBottom className="w-4 h-4" />, onClick: onToggleSecondaryTracks, disabled: isUploadScreen, checked: isSecondaryTracksVisible },
     { divider: true },
     { id: "zoom-in", label: "Zoom In", icon: <ZoomIn className="w-4 h-4" />, shortcut: "Ctrl++", onClick: onZoomIn, disabled: isUploadScreen },
     { id: "zoom-out", label: "Zoom Out", icon: <ZoomOut className="w-4 h-4" />, shortcut: "Ctrl+-", onClick: onZoomOut, disabled: isUploadScreen },
     { divider: true },
     { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, onClick: onThemeSettings, disabled: isUploadScreen },
     { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
-  ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible]);
+  ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onToggleSecondaryTracks, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible, isSecondaryTracksVisible]);
 
   // ========== FILTER FOR UPLOAD SCREEN ==========
   const filterForUploadScreen = useCallback((items: MenuItem[]): MenuItem[] => {
