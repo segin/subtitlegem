@@ -34,9 +34,9 @@ describe('ffmpeg-concat (fuzzing)', () => {
         fc.array(fc.record({
              // We need to generate clips that reference IDs from inputsArbitrary
              // but here we generate standard valid-looking inputs
-             projectStartTime: fc.float({ min: 0, max: 1000, noNaN: true }),
-             sourceInPoint: fc.float({ min: 0, max: 100, noNaN: true }),
-             clipDuration: fc.float({ min: 0.1, max: 100, noNaN: true })
+             projectStartTime: fc.double({ min: 0, max: 1000, noNaN: true }),
+             sourceInPoint: fc.double({ min: 0, max: 100, noNaN: true }),
+             clipDuration: fc.double({ min: 0.1, max: 100, noNaN: true })
         }), { minLength: 1, maxLength: 20 }),
         (config, inputs, rawClips) => {
             // Fixup clips to reference valid input IDs

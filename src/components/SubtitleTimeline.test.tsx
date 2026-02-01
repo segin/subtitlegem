@@ -54,9 +54,9 @@ describe('SubtitleTimeline', () => {
       // Should show SUBS track
       expect(screen.getByText('SUBS')).toBeInTheDocument();
       
-      // Should NOT show VIDEO or AUDIO tracks
-      expect(screen.queryByText('VIDEO')).not.toBeInTheDocument();
-      expect(screen.queryByText('AUDIO')).not.toBeInTheDocument();
+      // Should show VIDEO and AUDIO tracks (now always visible to maintain layout stability)
+      expect(screen.getByText('VIDEO')).toBeInTheDocument();
+      expect(screen.getByText('AUDIO')).toBeInTheDocument();
     });
 
     it('handles interaction with subtitles', () => {
@@ -79,8 +79,9 @@ describe('SubtitleTimeline', () => {
     it('renders all three tracks (Video, Audio, Subs)', () => {
       render(<SubtitleTimeline {...multiTrackProps} />);
   
-      const videoLabel = screen.getByText('VIDEO');
-      const audioLabel = screen.getByText('AUDIO');
+      // In multi-video mode, labels are numbered
+      const videoLabel = screen.getByText('VIDEO 1');
+      const audioLabel = screen.getByText('AUDIO 1');
       const subsLabel = screen.getByText('SUBS');
 
       expect(videoLabel).toBeInTheDocument();

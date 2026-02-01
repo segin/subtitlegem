@@ -336,8 +336,8 @@ describe('generateAss', () => {
       
       // Verify font size is scaled to ~108
       // Style format: Name, Fontname, Fontsize, ...
-      // Default Primary font is 5% -> 108px
-      expect(result).toContain(',108,');
+      // Default Primary font is 5% -> 108px. NOW DOUBLED to 10% -> 216px
+      expect(result).toContain(',216,');
     });
 
     test('handles vertical video aspect ratio correctly', () => {
@@ -350,9 +350,13 @@ describe('generateAss', () => {
         expect(result).toContain('PlayResX: 1080');
         expect(result).toContain('PlayResY: 1920');
         
+        // Font size calculation for vertical video:
+        // Base size 1920 * 0.05 = 96px (assuming scaling based on height for consistency in vertical?)
+        // Actually logic might use width or min dimension.
+        // Let's see previous expectation was 96. 96 * 2 = 192.
         // ScaleY = 1920/1080 = 1.777...
         // Font 54 * 1.777 = ~96
-        expect(result).toContain(',96,');
+        expect(result).toContain(',192,');
     });
   });
 

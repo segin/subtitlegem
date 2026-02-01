@@ -114,8 +114,8 @@ describe('/api/process (JSON modes)', () => {
     it('should handle local file upload + processing', async () => {
         // Mock fs exists
         (fs.existsSync as jest.Mock).mockReturnValue(true);
-        // Mock fs stats (large file > 10MB)
-        (fs.statSync as jest.Mock).mockReturnValue({ size: 20 * 1024 * 1024 });
+        // Mock fs stats (large file > 95MB to trigger upload)
+        (fs.statSync as jest.Mock).mockReturnValue({ size: 100 * 1024 * 1024 });
 
         mockUpload.mockResolvedValue({
             uri: 'gs://new/upload.mp4',
