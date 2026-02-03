@@ -308,7 +308,7 @@ export function migrateDraftToV2(id: string): DraftV2 | null {
     timestamp: draft.updatedAt.getTime(),
     videoPath: v1.videoPath || null,
     subtitles: v1.subtitles || [],
-    config: v1.config || { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original' } },
+    config: v1.config || { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original', codec: 'libx264' } },
   };
   
   const v2State = migrateToMultiVideo(v1State);

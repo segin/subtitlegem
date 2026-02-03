@@ -330,10 +330,8 @@ export function isPathSafe(filePath: string | null | undefined): boolean {
   const stagingDir = getStagingDir();
   const resolvedPath = path.resolve(filePath);
   const resolvedStagingDir = path.resolve(stagingDir);
-  const projectRoot = path.resolve(process.cwd());
   
-  // Check if path is within staging directory or project root
+  // Check if path is within staging directory (STRICT: Project root access denied)
   return resolvedPath.startsWith(resolvedStagingDir + path.sep) || 
-         resolvedPath === resolvedStagingDir ||
-         resolvedPath.startsWith(projectRoot + path.sep);
+         resolvedPath === resolvedStagingDir;
 }

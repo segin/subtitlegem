@@ -10,32 +10,37 @@ import {
 } from './error-utils';
 
 describe('error-utils', () => {
-  const originalEnv = process.env.NODE_ENV;
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    jest.resetModules();
+    process.env = { ...originalEnv };
+  });
 
   afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
+    process.env = originalEnv;
   });
 
   describe('isProduction', () => {
     it('should return true when NODE_ENV is production', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       expect(isProduction()).toBe(true);
     });
 
     it('should return false for development', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       expect(isProduction()).toBe(false);
     });
 
     it('should return false for test', () => {
-      process.env.NODE_ENV = 'test';
+      (process.env as any).NODE_ENV = 'test';
       expect(isProduction()).toBe(false);
     });
   });
 
   describe('createSafeErrorResponse', () => {
     it('should return full details in development', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       const error = new Error('Database connection failed at /var/lib/mysql');
       const response = createSafeErrorResponse(error, 'Failed to process request');
       
@@ -44,7 +49,7 @@ describe('error-utils', () => {
     });
 
     it('should hide details in production', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       const error = new Error('SQL syntax error near SELECT * FROM users');
       const response = createSafeErrorResponse(error, 'Database error');
       
@@ -53,7 +58,7 @@ describe('error-utils', () => {
     });
 
     it('should handle non-Error objects', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       const response = createSafeErrorResponse('string error', 'Error occurred');
       
       expect(response.error).toBe('Error occurred');
@@ -100,7 +105,7 @@ describe('error-utils', () => {
     });
 
     it('should return safe error for failed handlers', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       const result = await withSafeErrorHandling(
         async () => { throw new Error('Internal secret leaked'); },
         'Request failed'

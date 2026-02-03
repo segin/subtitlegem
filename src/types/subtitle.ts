@@ -48,6 +48,7 @@ export interface FFmpegConfig {
   preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
   resolution: string; // 'original' or 'WIDTHxHEIGHT'
+  codec: 'libx264' | 'libx265' | 'libvpx-vp9' | 'prores_ks';
 }
 
 export interface SubtitleConfig {
@@ -76,6 +77,7 @@ export const DEFAULT_CONFIG: SubtitleConfig = {
     preset: 'veryfast',
     crf: 23,
     resolution: 'original',
+    codec: 'libx264',
   }
 };
 
