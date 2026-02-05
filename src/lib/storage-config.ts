@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { statfs } from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import checkDiskSpace from 'check-disk-space';
@@ -21,6 +22,32 @@ const DEFAULT_CONFIG: StorageConfig = {
   autoCleanup: true,
   maxStorageUsageGB: 50,
 };
+
+/**
+ * Helper to get available space in GB with fallback strategy
+ */
+async function getAvailableSpaceGB(dirPath: string): Promise<number> {
+  try {
+    // Strategy 1: Native Node.js statfs (most efficient, available in Node 18.15+)
+    // bavail: available blocks for unprivileged users
+    // bsize: optimal transfer block size
+    const stats = await statfs(dirPath);
+    // Use BigInt for safety with large disks
+    const freeBytes = BigInt(stats.bavail) * BigInt(stats.bsize);
+    return Number(freeBytes) / (1024 ** 3);
+  } catch (statError) {
+    // Strategy 2: Fallback to check-disk-space library (cross-platform CLI wrapper)
+    try {
+      const space = await checkDiskSpace(dirPath);
+      return space.free / (1024 ** 3);
+    } catch (checkError: any) {
+      console.warn('[Storage] Could not check disk space:', checkError.message);
+      // Return 0 to indicate unknown space, rather than a misleading hardcoded value.
+      // This allows the consumer to decide how to handle the lack of information.
+      return 0;
+    }
+  }
+}
 
 /**
  * Validate that a directory exists and is writable
@@ -61,18 +88,8 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
       };
     }
 
-    // Get available space using check-disk-space library
-    let availableSpaceGB = 0;
-    
-    try {
-      const space = await checkDiskSpace(dirPath);
-      // free space in bytes, convert to GB
-      availableSpaceGB = space.free / (1024 ** 3);
-    } catch (spaceError: any) {
-      // If check-disk-space fails, fall back to a default estimate and log the issue
-      console.warn('[Storage] Could not check disk space:', spaceError.message);
-      availableSpaceGB = 50; // Conservative default
-    }
+    // Get available space using robust checking
+    const availableSpaceGB = await getAvailableSpaceGB(dirPath);
 
     return {
       exists: true,
