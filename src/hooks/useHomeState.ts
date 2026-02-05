@@ -12,7 +12,7 @@ import {
   ProjectConfig,
   SubtitleLine,
 } from '@/types/subtitle';
-import { QueueItem } from '@/lib/queue-manager';
+import { QueueItem } from '@/types/queue';
 import { VideoProperties } from '@/components/VideoPropertiesDialog';
 import { UploadMode } from '@/components/VideoUpload';
 import { TabId } from '@/components/GlobalSettingsDialog';
