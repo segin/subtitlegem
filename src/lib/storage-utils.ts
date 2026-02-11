@@ -45,3 +45,35 @@ export function getDirectorySize(dirPath: string, fileSystem: IFileSystem = real
 
   return totalSize;
 }
+
+/**
+ * Calculate the total size of a directory recursively (Asynchronous)
+ * @param dirPath Absolute path to directory
+ * @returns Total size in bytes
+ */
+export async function getDirectorySizeAsync(dirPath: string): Promise<number> {
+  let totalSize = 0;
+
+  try {
+    const stats = await fs.promises.stat(dirPath);
+
+    if (stats.isFile()) {
+      return stats.size;
+    }
+
+    if (stats.isDirectory()) {
+      const files = await fs.promises.readdir(dirPath);
+
+      const sizes = await Promise.all(
+        files.map(file => getDirectorySizeAsync(path.join(dirPath, file)))
+      );
+
+      totalSize = sizes.reduce((acc, size) => acc + size, 0);
+    }
+  } catch (error) {
+    // If path doesn't exist or other error, return 0
+    return 0;
+  }
+
+  return totalSize;
+}

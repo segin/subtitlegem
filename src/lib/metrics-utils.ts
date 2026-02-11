@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Draft, DraftV1, DraftV2 } from "@/lib/draft-store";
 import { getStagingDir } from "@/lib/storage-config";
-import { getDirectorySize } from "@/lib/storage-utils";
+import { getDirectorySizeAsync } from "@/lib/storage-utils";
 
 export interface DraftMetrics {
   sourceSize: number;
@@ -34,11 +34,11 @@ export function getMetadataPath(draftId: string): string {
 }
 
 /**
- * Compute aggregate metrics for a draft
+ * Compute aggregate metrics for a draft (Asynchronous)
  * @param draft V1 or V2 draft object
  * @param stagingDir (Optional) Injection for testing. Defaults to live config.
  */
-export function computeMetrics(draft: Draft, stagingDir?: string): DraftMetrics {
+export async function computeMetrics(draft: Draft, stagingDir?: string): Promise<DraftMetrics> {
   const rootDir = stagingDir || getStagingDir();
   
   let sourceSize = 0;
@@ -64,9 +64,9 @@ export function computeMetrics(draft: Draft, stagingDir?: string): DraftMetrics 
     if (v1.videoPath) {
       sourceCount = 1;
       try {
-        if (fs.existsSync(v1.videoPath)) {
-          sourceSize = fs.statSync(v1.videoPath).size;
-        }
+        // Use fs.promises.stat which is safer than exists + stat
+        const stats = await fs.promises.stat(v1.videoPath);
+        sourceSize = stats.size;
       } catch {}
     }
     if (v1.subtitles) {
@@ -78,15 +78,16 @@ export function computeMetrics(draft: Draft, stagingDir?: string): DraftMetrics 
   // Expected: STAGING_DIR/exports/{draftId}
   const exportsDir = path.join(rootDir, 'exports', draft.id);
   
-  if (fs.existsSync(exportsDir)) {
-    try {
-        renderedSize = getDirectorySize(exportsDir);
-        // Count files in exports (excluding hidden/.files)
-        const files = fs.readdirSync(exportsDir).filter(f => !f.startsWith('.'));
-        renderCount = files.length;
-    } catch (e) {
-        // Warning suppressed for logic purity, but could log?
+  try {
+    const stats = await fs.promises.stat(exportsDir);
+    if (stats.isDirectory()) {
+      renderedSize = await getDirectorySizeAsync(exportsDir);
+      // Count files in exports (excluding hidden/.files)
+      const files = await fs.promises.readdir(exportsDir);
+      renderCount = files.filter(f => !f.startsWith('.')).length;
     }
+  } catch (e) {
+    // Path doesn't exist or is not a directory
   }
 
   // lifetimeRenderCount must be provided by caller from stored metadata, 
