@@ -298,7 +298,7 @@ interface ProjectMetadata {
 | **Authentication** | None (designed for single-user/trusted network) |
 | **Authorization** | None |
 | **API Key Storage** | `.env` file (`GOOGLE_GENERATIVE_AI_API_KEY`) |
-| **File Access** | Strict path validation using `isPathSafe` utility (Staging/Project Root) |
+| **File Access** | Strict path validation using `isPathSafe` utility (Staging only) |
 | **Input Validation** | Zod schemas in `/api/process`, `/api/cleanup`, `/api/export`, `/api/queue` |
 | **Command Safety** | All external calls (FFmpeg/FFprobe) use `spawn` with array arguments to prevent injection. |
 

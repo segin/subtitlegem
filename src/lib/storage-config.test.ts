@@ -124,9 +124,9 @@ describe('isPathSafe', () => {
     expect(isPathSafe(validPath)).toBe(true);
   });
 
-  it('should allow valid paths in project root', () => {
+  it('should block paths in project root', () => {
     const validPath = path.join(projectRoot, 'src', 'app', 'page.tsx');
-    expect(isPathSafe(validPath)).toBe(true);
+    expect(isPathSafe(validPath)).toBe(false);
   });
 
   it('should block paths with directory traversal (..)', () => {
