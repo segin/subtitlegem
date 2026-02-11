@@ -1,0 +1,6 @@
+src/lib/draft-store.ts(311,5): error TS2322: Type 'SubtitleConfig | { ffmpeg: { hwaccel: "none"; preset: "veryfast"; crf: number; resolution: string; }; }' is not assignable to type 'SubtitleConfig'.
+  Type '{ ffmpeg: { hwaccel: "none"; preset: "veryfast"; crf: number; resolution: string; }; }' is not assignable to type 'SubtitleConfig'.
+    Types of property 'ffmpeg' are incompatible.
+      Property 'codec' is missing in type '{ hwaccel: "none"; preset: "veryfast"; crf: number; resolution: string; }' but required in type 'FFmpegConfig'.
+src/lib/metrics-utils.test.ts(56,27): error TS2741: Property 'codec' is missing in type '{ hwaccel: "none"; preset: "veryfast"; crf: number; resolution: string; }' but required in type 'FFmpegConfig'.
+src/types/subtitle.test.ts(20,7): error TS2741: Property 'codec' is missing in type '{ hwaccel: "none"; preset: "fast"; crf: number; resolution: string; }' but required in type 'FFmpegConfig'.

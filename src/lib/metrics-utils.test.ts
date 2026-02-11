@@ -57,7 +57,7 @@ describe('metrics-utils', () => {
         ],
         timeline: [],
         projectConfig: { width: 1280, height: 720, fps: 30, scalingMode: 'fit' },
-        subtitleConfig: { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original' } },
+        subtitleConfig: { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original', codec: 'libx264' } },
         createdAt: new Date(),
         updatedAt: new Date(),
       };

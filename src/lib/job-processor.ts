@@ -1,4 +1,4 @@
-import { QueueItem } from './queue-manager';
+import { QueueItem } from '@/types/queue';
 import { burnSubtitles } from './ffmpeg-utils';
 import path from 'path';
 import fs from 'fs';

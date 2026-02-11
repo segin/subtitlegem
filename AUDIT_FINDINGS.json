@@ -1,0 +1,57 @@
+[
+  {
+    "id": "SEC-001",
+    "severity": "Critical",
+    "title": "Path Traversal / Arbitrary File Read via isPathSafe",
+    "description": "The `isPathSafe` utility explicitly allowed access to the project root directory. API endpoints (e.g., `/api/process`, `/api/drafts`) using this check could be manipulated to read or process arbitrary files in the project root (including source code and potential secrets), violating the security policy defined in AGENTS.md.",
+    "file": "src/lib/storage-config.ts",
+    "line": "330",
+    "remediation": "Modified `isPathSafe` to strictly allow only paths within the `stagingDir`. Removed `projectRoot` from the allowed prefix list.",
+    "status": "Fixed"
+  },
+  {
+    "id": "SEC-002",
+    "severity": "High",
+    "title": "Vulnerable Dependency (Next.js)",
+    "description": "Next.js version 16.1.1 contains known high-severity vulnerabilities (GHSA-h25m-26qc-wcjf) related to HTTP request deserialization and DoS.",
+    "file": "package.json",
+    "remediation": "Upgraded `next` dependency to version `16.1.6`.",
+    "status": "Fixed"
+  },
+  {
+    "id": "SEC-003",
+    "severity": "High",
+    "title": "Arbitrary File Write / Upload to Gemini via Reprocess API",
+    "description": "The `/api/process` endpoint allows specifying a local `filePath` for reprocessing. Combined with SEC-001, this could allow an attacker to upload arbitrary local files (e.g., source code) to Google Gemini or process them inline, leading to data exfiltration.",
+    "file": "src/app/api/process/route.ts",
+    "remediation": "Fixed by SEC-001 (restricting path access).",
+    "status": "Fixed"
+  },
+  {
+    "id": "SEC-004",
+    "severity": "Medium",
+    "title": "Missing CI/CD Security Gates",
+    "description": "The `.github/workflows/ci.yml` pipeline runs tests and linting but lacks specific security checks such as SCA (`npm audit`), Secret Scanning, or blocking SAST.",
+    "file": ".github/workflows/ci.yml",
+    "remediation": "Update CI workflow to include `npm audit` and a secret scanner.",
+    "status": "Open"
+  },
+  {
+    "id": "COR-001",
+    "severity": "Medium",
+    "title": "TypeScript Compilation Failures",
+    "description": "The codebase contained several TypeScript errors preventing a clean build, including missing properties in interfaces (`FFmpegConfig`) and invalid assignments to read-only properties (`NODE_ENV`).",
+    "file": "src/components/ExportControls.tsx",
+    "remediation": "Fixed type definitions, updated mock objects, and corrected test logic.",
+    "status": "Fixed"
+  },
+  {
+    "id": "COR-002",
+    "severity": "Low",
+    "title": "Linting Violations",
+    "description": "Over 400 ESLint violations were detected, primarily `no-explicit-any` and `no-unused-vars`. While not immediate functional bugs, they indicate technical debt.",
+    "file": "src/",
+    "remediation": "Run `npm run lint --fix` and schedule refactoring to remove `any` types.",
+    "status": "Open"
+  }
+]

@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import { QueueItem } from "@/lib/queue-manager";
-import { Pencil, Trash2, Loader2, CheckCircle, XCircle, Clock, Download, AlertTriangle, RotateCcw } from "lucide-react";
+import { QueueItem } from "@/types/queue";
+import { Pencil, Trash2, Loader2, CheckCircle, XCircle, Clock, Download, AlertTriangle } from "lucide-react";
 
 interface QueueSidebarProps {
   items: QueueItem[];
@@ -17,21 +17,6 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  const formatDuration = (ms: number | null) => {
-    if (!ms) return '--:--';
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
   };
 
   const getStatusIcon = (status: QueueItem['status'], failureReason?: QueueItem['failureReason']) => {
@@ -73,9 +58,11 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
   const completedItems = items.filter(i => i.status === 'completed');
 
   const handleDownload = async (item: QueueItem) => {
-    if (!item.result) return;
-    
-    alert('Download feature coming soon! Job ID: ' + item.id);
+    if (item.result?.videoPath) {
+      window.open(`/api/export?id=${item.id}`, '_blank');
+    } else {
+        alert('Download not available');
+    }
   };
 
   const handleCloseout = async (id: string) => {
@@ -86,13 +73,18 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
     try {
       const res = await fetch(`/api/queue?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) {
-        console.error('Failed to cleanup files:', await res.text());
+        const errText = await res.text();
+        console.error('Failed to cleanup files:', errText);
+        alert('Failed to delete job: ' + errText);
+        return;
       }
+
+      // Only remove from UI if server cleanup was successful
+      await onRemove(id);
     } catch (error) {
       console.error('Failed to cleanup files:', error);
+      alert('Error deleting job');
     }
-    
-    await onRemove(id);
   };
 
   return (
@@ -270,6 +262,7 @@ export function QueueSidebar({ items, onEdit, onRemove }: QueueSidebarProps) {
                       onClick={() => handleCloseout(item.id)}
                       className="px-3 py-1.5 text-xs font-medium bg-[#2d2d2d] hover:bg-red-950/30 text-[#888888] hover:text-red-400 rounded-sm transition-colors border border-[#333333]"
                       title="Delete all job data"
+                      aria-label="Delete job data"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
