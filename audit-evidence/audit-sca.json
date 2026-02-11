@@ -1,0 +1,122 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "diff": {
+      "name": "diff",
+      "severity": "low",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1112704,
+          "name": "diff",
+          "dependency": "diff",
+          "title": "jsdiff has a Denial of Service vulnerability in parsePatch and applyPatch",
+          "url": "https://github.com/advisories/GHSA-73rr-hh4g-fpgx",
+          "severity": "low",
+          "cwe": [
+            "CWE-400",
+            "CWE-1333"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=4.0.0 <4.0.4"
+        }
+      ],
+      "effects": [],
+      "range": "4.0.0 - 4.0.3",
+      "nodes": [
+        "node_modules/diff"
+      ],
+      "fixAvailable": true
+    },
+    "next": {
+      "name": "next",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1112592,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js self-hosted applications vulnerable to DoS via Image Optimizer remotePatterns configuration",
+          "url": "https://github.com/advisories/GHSA-9g9p-9gw9-jx7f",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400",
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=15.6.0-canary.0 <16.1.5"
+        },
+        {
+          "source": 1112637,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js has Unbounded Memory Consumption via PPR Resume Endpoint ",
+          "url": "https://github.com/advisories/GHSA-5f7q-jpqc-wp7h",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-400",
+            "CWE-409",
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 5.9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=16.0.0-beta.0 <16.1.5"
+        },
+        {
+          "source": 1112645,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js HTTP request deserialization can lead to DoS when using insecure React Server Components",
+          "url": "https://github.com/advisories/GHSA-h25m-26qc-wcjf",
+          "severity": "high",
+          "cwe": [
+            "CWE-400",
+            "CWE-502"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=16.1.0-canary.0 <16.1.5"
+        }
+      ],
+      "effects": [],
+      "range": "15.6.0-canary.0 - 16.1.4",
+      "nodes": [
+        "node_modules/next"
+      ],
+      "fixAvailable": {
+        "name": "next",
+        "version": "16.1.6",
+        "isSemVerMajor": false
+      }
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 1,
+      "moderate": 0,
+      "high": 1,
+      "critical": 0,
+      "total": 2
+    },
+    "dependencies": {
+      "prod": 126,
+      "dev": 679,
+      "optional": 85,
+      "peer": 9,
+      "peerOptional": 0,
+      "total": 841
+    }
+  }
+}

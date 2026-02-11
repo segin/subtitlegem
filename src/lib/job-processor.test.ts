@@ -1,5 +1,5 @@
 import { processJob } from './job-processor';
-import { QueueItem } from './queue-manager';
+import { QueueItem } from '@/types/queue';
 import fs from 'fs';
 import { burnSubtitles } from './ffmpeg-utils';
 import * as ffmpegConcat from './ffmpeg-concat';

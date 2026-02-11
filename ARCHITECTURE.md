@@ -45,7 +45,7 @@ subtitlegem/
 │   │   ├── QueueDrawer.tsx     # Export queue overlay
 │   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
 │   │   ├── SubtitleList.tsx    # Editable subtitle lines
-│   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable)
+│   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable) with viewport-based virtualization
 │   │   ├── TrackStyleEditor.tsx # Font/color/margin controls
 │   │   ├── VideoPreview.tsx    # Video player with overlays
 │   │   ├── VideoUpload.tsx     # Drag-drop file uploader
@@ -269,25 +269,29 @@ interface ProjectMetadata {
 **CI/CD:** None (manual deployment)  
 **Monitoring:** Console logging only
 
-### Production Deployment
+### Deployment Options
 
+#### 1. Local / PM2 (Bare Metal)
 1. **Build the application**:
    ```bash
    npm run build
    ```
-
 2. **Start the server**:
    ```bash
    # Runs on port 3050, accessible from all network interfaces
    npm run start -- -p 3050 -H 0.0.0.0
    ```
-
-3. **Process Management (Recommended)**:
-   Use PM2 to keep the service running in the background.
+3. **Process Management**: Use PM2 to keep the service running in the background.
    ```bash
-   npm install -g pm2
    pm2 start npm --name "subtitlegem" -- start -- -p 3050
    ```
+
+#### 2. Docker (Recommended)
+The application includes a production-ready `Dockerfile` and `docker-compose.yml`.
+```bash
+docker-compose up --build
+```
+This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes.
 
 ---
 
@@ -385,7 +389,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-01-13 |
+| **Date of Last Update** | 2026-02-11 |
 
 ---
 

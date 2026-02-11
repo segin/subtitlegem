@@ -7,7 +7,7 @@ import { DraftV1, DraftV2 } from './draft-store';
 
 jest.mock('fs');
 jest.mock('./storage-utils', () => ({
-  getDirectorySize: jest.fn(() => 1024), // Mocked rendered size
+  getDirectorySizeAsync: jest.fn(() => Promise.resolve(1024)), // Mocked rendered size
 }));
 
 const mockedFs = fs as jest.Mocked<typeof fs>;
@@ -18,7 +18,7 @@ describe('metrics-utils', () => {
   });
 
   describe('Unit Tests', () => {
-    it('should compute metrics for a valid V1 draft', () => {
+    it('should compute metrics for a valid V1 draft', async () => {
       const draft: DraftV1 = {
         id: 'test-v1',
         name: 'Test V1',
@@ -29,11 +29,16 @@ describe('metrics-utils', () => {
         updatedAt: new Date(),
       };
 
-      mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.statSync.mockReturnValue({ size: 5000 } as any);
-      mockedFs.readdirSync.mockReturnValue([]);
+      (mockedFs.promises as any) = {
+        stat: jest.fn().mockImplementation((path: string) => {
+          if (path === '/path/to/video.mp4') return Promise.resolve({ size: 5000, isDirectory: () => false });
+          if (path === '/staging/exports/test-v1') return Promise.resolve({ isDirectory: () => true });
+          return Promise.reject(new Error('Not found'));
+        }),
+        readdir: jest.fn().mockResolvedValue([])
+      };
 
-      const metrics = computeMetrics(draft, '/staging');
+      const metrics = await computeMetrics(draft, '/staging');
 
       expect(metrics.sourceCount).toBe(1);
       expect(metrics.sourceSize).toBe(5000);
@@ -42,7 +47,7 @@ describe('metrics-utils', () => {
       expect(metrics.renderedSize).toBe(1024); // From mock
     });
 
-    it('should compute metrics for a valid V2 draft', () => {
+    it('should compute metrics for a valid V2 draft', async () => {
       const draft: DraftV2 = {
         id: 'test-v2',
         name: 'Test V2',
@@ -53,15 +58,20 @@ describe('metrics-utils', () => {
         ],
         timeline: [],
         projectConfig: { width: 1280, height: 720, fps: 30, scalingMode: 'fit' },
-        subtitleConfig: { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original' } },
+        subtitleConfig: { ffmpeg: { hwaccel: 'none', preset: 'veryfast', crf: 23, resolution: 'original', codec: 'libx264' } },
         createdAt: new Date(),
         updatedAt: new Date(),
       };
 
-      mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.readdirSync.mockReturnValue(['output1.mp4'] as any);
+      (mockedFs.promises as any) = {
+        stat: jest.fn().mockImplementation((path: string) => {
+          if (path.includes('exports')) return Promise.resolve({ isDirectory: () => true });
+          return Promise.reject(new Error('Not found'));
+        }),
+        readdir: jest.fn().mockResolvedValue(['output1.mp4'])
+      };
 
-      const metrics = computeMetrics(draft, '/staging');
+      const metrics = await computeMetrics(draft, '/staging');
 
       expect(metrics.sourceCount).toBe(2);
       expect(metrics.sourceSize).toBe(3000);
@@ -71,9 +81,9 @@ describe('metrics-utils', () => {
   });
 
   describe('Property Tests', () => {
-    it('should always return non-negative metrics for any V2 draft structure', () => {
-      fc.assert(
-        fc.property(
+    it('should always return non-negative metrics for any V2 draft structure', async () => {
+      await fc.assert(
+        fc.asyncProperty(
           fc.record({
             id: fc.uuid(),
             name: fc.string(),
@@ -82,9 +92,9 @@ describe('metrics-utils', () => {
               fileSize: fc.nat(),
             })),
           }),
-          (draftData) => {
+          async (draftData) => {
             const draft = draftData as unknown as DraftV2;
-            const metrics = computeMetrics(draft, '/staging');
+            const metrics = await computeMetrics(draft, '/staging');
             
             expect(metrics.sourceCount).toBeGreaterThanOrEqual(0);
             expect(metrics.sourceSize).toBeGreaterThanOrEqual(0);
@@ -96,18 +106,18 @@ describe('metrics-utils', () => {
       );
     });
 
-    it('should have sourceSize equal to sum of clip fileSizes for V2', () => {
-      fc.assert(
-        fc.property(
+    it('should have sourceSize equal to sum of clip fileSizes for V2', async () => {
+      await fc.assert(
+        fc.asyncProperty(
           fc.array(fc.nat(1000000)),
-          (sizes) => {
+          async (sizes) => {
             const draft = {
               id: 'prop-v2',
               version: 2,
               clips: sizes.map((s, i) => ({ id: `c${i}`, fileSize: s })),
             } as unknown as DraftV2;
 
-            const metrics = computeMetrics(draft, '/staging');
+            const metrics = await computeMetrics(draft, '/staging');
             const expectedSize = sizes.reduce((a, b) => a + b, 0);
             
             expect(metrics.sourceSize).toBe(expectedSize);
@@ -119,26 +129,33 @@ describe('metrics-utils', () => {
   });
 
   describe('Fuzzing & Edge Cases', () => {
-    it('should handle draft with missing clips (undefined)', () => {
+    it('should handle draft with missing clips (undefined)', async () => {
       const draft = { id: 'fuzz-1', version: 2 } as any;
-      const metrics = computeMetrics(draft, '/staging');
+      const metrics = await computeMetrics(draft, '/staging');
       expect(metrics.sourceCount).toBe(0);
       expect(metrics.sourceSize).toBe(0);
     });
 
-    it('should handle V1 with non-existent video path', () => {
+    it('should handle V1 with non-existent video path', async () => {
       const draft = { id: 'fuzz-2', version: 1, videoPath: '/missing' } as any;
-      mockedFs.existsSync.mockReturnValue(false);
-      const metrics = computeMetrics(draft, '/staging');
+      (mockedFs.promises as any) = {
+        stat: jest.fn().mockRejectedValue(new Error('ENOENT')),
+      };
+      const metrics = await computeMetrics(draft, '/staging');
       expect(metrics.sourceSize).toBe(0);
     });
 
-    it('should not crash when readdirSync fails', () => {
+    it('should not crash when readdirSync fails', async () => {
       const draft = { id: 'fuzz-3', version: 1 } as any;
-      mockedFs.existsSync.mockReturnValue(true);
-      mockedFs.readdirSync.mockImplementation(() => { throw new Error('Permission denied'); });
+      (mockedFs.promises as any) = {
+        stat: jest.fn().mockImplementation((path: string) => {
+          if (path.includes('exports')) return Promise.resolve({ isDirectory: () => true });
+          return Promise.reject(new Error('Not found'));
+        }),
+        readdir: jest.fn().mockRejectedValue(new Error('Permission denied'))
+      };
       
-      expect(() => computeMetrics(draft, '/staging')).not.toThrow();
+      await expect(computeMetrics(draft, '/staging')).resolves.not.toThrow();
     });
   });
 });

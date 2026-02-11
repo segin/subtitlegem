@@ -145,7 +145,8 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   // Debounced update for visible range
   const updateVisibleRange = useCallback(() => {
     if (!containerRef.current) return;
-    const { scrollLeft, clientWidth } = containerRef.current;
+    const { scrollLeft, clientWidth: rawClientWidth } = containerRef.current;
+    const clientWidth = rawClientWidth || 1000; // Fallback for 0-width viewports (e.g. in tests)
     
     // Buffer: render 1 screen width extra on each side
     const buffer = clientWidth; 

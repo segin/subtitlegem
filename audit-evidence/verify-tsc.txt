@@ -1,0 +1,16 @@
+src/components/ExportControls.tsx(41,32): error TS2345: Argument of type 'FFmpegConfig' is not assignable to parameter of type 'ExportConfig'.
+  Types of property 'codec' are incompatible.
+    Type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks" | undefined' is not assignable to type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks"'.
+      Type 'undefined' is not assignable to type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks"'.
+src/components/ExportControls.tsx(93,9): error TS2322: Type 'FFmpegConfig' is not assignable to type 'ExportConfig'.
+  Types of property 'codec' are incompatible.
+    Type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks" | undefined' is not assignable to type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks"'.
+      Type 'undefined' is not assignable to type '"libx264" | "libx265" | "libvpx-vp9" | "prores_ks"'.
+src/lib/error-utils.test.ts(26,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(31,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(36,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(43,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(52,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(61,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(108,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/ffmpeg-concat.test.ts(153,11): error TS2739: Type '{ clips: { id: string; filePath: string; originalFilename: string; duration: number; width: number; height: number; fps: number; subtitles: never[]; }[]; timeline: { id: string; videoClipId: string; projectStartTime: number; sourceInPoint: number; clipDuration: number; }[]; timelineImages: never[]; imageAssets: neve...' is missing the following properties from type 'MultiVideoProjectState': version, timestamp, subtitleConfig

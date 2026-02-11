@@ -37,13 +37,11 @@ export async function GET(req: NextRequest) {
       // Perform integrity check on load (Existing Logic)
       if ('version' in draft && draft.version === 2) {
          const v2 = draft as DraftV2;
-         const clips = v2.clips.map(clip => {
+         const clips = await Promise.all(v2.clips.map(async (clip) => {
            let measuredSize: number | null = null;
            try {
-             if (fs.existsSync(clip.filePath)) {
-                const stats = fs.statSync(clip.filePath);
-                measuredSize = stats.size;
-             }
+             const stats = await fs.promises.stat(clip.filePath);
+             measuredSize = stats.size;
            } catch (e) { }
 
            const status = checkClipIntegrity(clip, measuredSize);
@@ -55,7 +53,7 @@ export async function GET(req: NextRequest) {
            }
            
            return { ...clip, missing: false };
-         });
+         }));
          (draft as any).clips = clips; // Cast to update readonly/typed property if needed
       } 
       
@@ -66,19 +64,18 @@ export async function GET(req: NextRequest) {
   }
   
   // List all drafts with hydrated metrics
-  const drafts = listDrafts().map(draft => {
+  const drafts = await Promise.all(listDrafts().map(async (draft) => {
     try {
       const metaPath = getMetadataPath(draft.id);
       let metadata: ProjectMetadata = {};
       
       // Load cached metadata
-      if (fs.existsSync(metaPath)) {
-        try {
-          metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
-        } catch { /* corrupted metadata */ }
-      }
+      try {
+        const metaStr = await fs.promises.readFile(metaPath, 'utf-8');
+        metadata = JSON.parse(metaStr);
+      } catch { /* missing or corrupted metadata */ }
       
-      const metrics = computeMetrics(draft);
+      const metrics = await computeMetrics(draft);
 
       // Merge cached subtitle count if available (assuming POST updated it)
       if (metadata.metrics && metadata.metrics.subtitleCount > 0 && metrics.subtitleCount === 0) {
@@ -98,7 +95,7 @@ export async function GET(req: NextRequest) {
       };
       
       try {
-        fs.writeFileSync(metaPath, JSON.stringify(newMetadata, null, 2));
+        await fs.promises.writeFile(metaPath, JSON.stringify(newMetadata, null, 2));
       } catch {}
 
       return {
@@ -110,7 +107,7 @@ export async function GET(req: NextRequest) {
       console.warn(`[DraftAPI] Failed to populate metrics for ${draft.id}`, e);
       return draft;
     }
-  });
+  }));
   
   return NextResponse.json({ drafts });
 }
@@ -172,7 +169,7 @@ export async function POST(req: NextRequest) {
     // Invalidate/Update metadata on save
     try {
          const metaPath = getMetadataPath(draft.id);
-         const metrics = computeMetrics(draft); // Recalc new metrics
+         const metrics = await computeMetrics(draft); // Recalc new metrics
          
          // Fix subtitle count using incoming body (as V2 draft object might not have it populated)
          const incomingSubtitles = subtitles || subtitleConfig?.subtitles || config?.subtitles;
@@ -181,9 +178,10 @@ export async function POST(req: NextRequest) {
          }
 
          let currentMeta: ProjectMetadata = {};
-         if (fs.existsSync(metaPath)) {
-             currentMeta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
-         }
+         try {
+             const metaStr = await fs.promises.readFile(metaPath, 'utf8');
+             currentMeta = JSON.parse(metaStr);
+         } catch { /* missing or corrupted */ }
          
          const newMeta = {
              ...currentMeta,
@@ -191,7 +189,7 @@ export async function POST(req: NextRequest) {
              lastUpdated: Date.now()
          };
          
-         fs.writeFileSync(metaPath, JSON.stringify(newMeta, null, 2));
+         await fs.promises.writeFile(metaPath, JSON.stringify(newMeta, null, 2));
 
          // Background: Generate Summary if missing
          const finalSubtitles = subtitles || (draft.version === 1 ? draft.subtitles : []); // V2 might need more complex extraction if not in body
