@@ -141,7 +141,8 @@ export class QueueManager extends EventEmitter {
     
     this.queue.set(queueItem.id, queueItem);
     this.persistItem(queueItem); // Persist to SQLite
-    this.emit('update'); // Emit update event
+    this.emit('itemAdded', queueItem); // Emit specific event
+    this.emit('update'); // Emit general update event
     
     if (this.config.autoStart && !this.paused) {
       this.processNext();
@@ -179,6 +180,7 @@ export class QueueManager extends EventEmitter {
     if (item) {
       Object.assign(item, updates);
       this.persistItem(item); // Persist to SQLite
+      this.emit('itemUpdated', item);
       this.emit('update');
     }
   }
@@ -226,6 +228,7 @@ export class QueueManager extends EventEmitter {
     if (removed && item) {
       queueDb.deleteItem(id); // Remove from SQLite
       this.cleanupFiles(item); // Clean up physical files
+      this.emit('itemRemoved', id);
       this.emit('update');
     }
     
@@ -269,6 +272,8 @@ export class QueueManager extends EventEmitter {
       error: undefined,
       completedAt: undefined,
     });
+    
+    queueDb.incrementRetryCount(id); // Track retry in DB
     
     if (!this.paused) {
       this.processNext();
@@ -371,6 +376,7 @@ export class QueueManager extends EventEmitter {
   pause(): void {
     this.paused = true;
     queueDb.setPaused(true); // Persist pause state to SQLite
+    this.emit('paused');
     this.emit('update');
   }
 
@@ -378,7 +384,11 @@ export class QueueManager extends EventEmitter {
    * Resume queue processing
    */
   resume(): void {
-    this.start();
+    this.paused = false;
+    queueDb.setPaused(false); // Persist pause state to SQLite
+    this.processNext();
+    this.emit('resumed');
+    this.emit('update');
   }
 
   /**
@@ -551,6 +561,8 @@ export class QueueManager extends EventEmitter {
       completedAt: undefined,
       startedAt: undefined,
     });
+    
+    queueDb.incrementRetryCount(id); // Track retry in DB
     
     if (prioritize) {
       const earliestTime = Math.min(

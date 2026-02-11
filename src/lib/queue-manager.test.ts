@@ -55,8 +55,9 @@ import * as queueDb from './queue-db';
 describe('queueManager', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
-    // Clear all items from the singleton
+    // Clear all items and listeners from the singleton for test isolation
     queueManager.clearAll();
+    queueManager.removeAllListeners();
   });
 
   // ============================================================================
@@ -80,7 +81,7 @@ describe('queueManager', () => {
     // Note: Event emission tests are brittle with singleton pattern
     // because listeners may persist between tests. The core event 
     // functionality is tested via integration tests in the app.
-    it.skip('should emit itemAdded event (skipped: singleton has persistent listeners)', () => {
+    it('should emit itemAdded event', () => {
       const listener = jest.fn();
       queueManager.on('itemAdded', listener);
 
@@ -153,7 +154,7 @@ describe('queueManager', () => {
       expect(updated?.progress).toBe(50);
     });
 
-    it.skip('should emit itemUpdated event (skipped: singleton has persistent listeners)', () => {
+    it('should emit itemUpdated event', () => {
       // Add item first
       const item = queueManager.addItem({
         file: { name: 'test.mp4', size: 1000 },
@@ -195,7 +196,7 @@ describe('queueManager', () => {
       expect(result).toBe(false);
     });
 
-    it.skip('should emit itemRemoved event (skipped: singleton has persistent listeners)', () => {
+    it('should emit itemRemoved event', () => {
       // Add item first
       const item = queueManager.addItem({
         file: { name: 'test.mp4', size: 1000 },
@@ -221,7 +222,9 @@ describe('queueManager', () => {
   describe('retryItem', () => {
     // Note: Retry tests are brittle because the singleton's autoStart
     // may cause status transitions before assertions can be made.
-    it.skip('should reset failed item to pending (skipped: autoStart causes status change)', () => {
+    it('should reset failed item to pending', () => {
+      // Pause queue to prevent auto-restart from moving item out of pending
+      queueManager.pause();
       const item = queueManager.addItem({
         file: { name: 'test.mp4', size: 1000 },
         model: 'test',
@@ -236,7 +239,9 @@ describe('queueManager', () => {
       expect(retried?.error).toBeUndefined();
     });
 
-    it.skip('should increment retry count (skipped: autoStart causes status change)', () => {
+    it('should increment retry count', () => {
+      // Pause queue to prevent auto-restart
+      queueManager.pause();
       const item = queueManager.addItem({
         file: { name: 'test.mp4', size: 1000 },
         model: 'test',
@@ -299,7 +304,7 @@ describe('queueManager', () => {
       expect(queueDb.setPaused).toHaveBeenCalledWith(false);
     });
 
-    it.skip('should emit paused/resumed events (skipped: singleton state persistence)', () => {
+    it('should emit paused/resumed events', () => {
       const pauseListener = jest.fn();
       const resumeListener = jest.fn();
       queueManager.on('paused', pauseListener);
