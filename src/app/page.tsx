@@ -34,7 +34,7 @@ import {
   RawSubtitleItem,
   DraftItem,
 } from "@/types/subtitle";
-import { QueueItem } from "@/lib/queue-manager";
+import { QueueItem } from "@/types/queue";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { formatTimestamp } from "@/lib/time-utils";
 import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";

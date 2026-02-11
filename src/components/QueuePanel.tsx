@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { QueueItem } from "@/lib/queue-manager";
+import { QueueItem } from "@/types/queue";
 
 interface QueuePanelProps {
   items: QueueItem[];

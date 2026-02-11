@@ -8,7 +8,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { getStagingDir, ensureStagingStructure } from './storage-config';
-import { QueueItem, QueueItemStatus } from './queue-manager';
+import { QueueItem, QueueItemStatus } from '@/types/queue';
 
 let db: Database.Database | null = null;
 

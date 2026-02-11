@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { SubtitleLine, SubtitleConfig, FFmpegConfig as ExportConfig } from "@/types/subtitle";
-import { QueueItem } from "@/lib/queue-manager";
+import { QueueItem } from "@/types/queue";
 import { Download, Play, Loader2 } from "lucide-react";
 import { FFmpegConfigPanel, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
 import { estimateH264Size, formatBytes } from "@/lib/video-estimate-utils";

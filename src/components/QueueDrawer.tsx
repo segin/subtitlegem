@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { QueueItem } from "@/lib/queue-manager";
+import { QueueItem } from "@/types/queue";
 import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle, Eye } from "lucide-react";
 
 interface QueueDrawerProps {

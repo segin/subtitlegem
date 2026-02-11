@@ -1,5 +1,5 @@
 import { saveItem, loadAllItems, updateStatus, getItem } from './queue-db';
-import { QueueItem } from './queue-manager';
+import { QueueItem } from '@/types/queue';
 import Database from 'better-sqlite3';
 
 // Mock better-sqlite3 with the pattern that allows access to spies
