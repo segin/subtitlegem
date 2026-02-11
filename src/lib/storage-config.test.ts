@@ -146,7 +146,9 @@ describe('isPathSafe', () => {
   });
 
   it('should block paths that are almost valid but escape via resolution', () => {
-    const trickyPath = path.join(stagingDir, '..', 'secret.txt');
+    // Try to escape to root (outside project root)
+    // stagingDir is usually projectRoot/storage, so ../.. goes to parent of projectRoot
+    const trickyPath = path.join(stagingDir, '..', '..', 'secret.txt');
     expect(isPathSafe(trickyPath)).toBe(false);
   });
 });
