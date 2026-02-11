@@ -151,7 +151,19 @@ describe('ffmpeg-concat', () => {
 
   describe('exportMultiVideo', () => {
     const project: MultiVideoProjectState = {
-        clips: [{ id: 'v1', filePath: '/path/to/video1.mp4', originalFilename: 'v1.mp4', duration: 100, width: 1920, height: 1080, fps: 30 }],
+        version: 2,
+        timestamp: Date.now(),
+        subtitleConfig: {} as any,
+        clips: [{
+          id: 'v1',
+          filePath: '/path/to/video1.mp4',
+          originalFilename: 'v1.mp4',
+          duration: 100,
+          width: 1920,
+          height: 1080,
+          fps: 30,
+          subtitles: []
+        }],
         timeline: [{ id: 'c1', videoClipId: 'v1', projectStartTime: 0, sourceInPoint: 0, clipDuration: 10 }],
         timelineImages: [],
         imageAssets: [],

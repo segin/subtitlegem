@@ -1,0 +1,42 @@
+{
+  "files": 172,
+  "loc": {
+    "YAML": 37,
+    "Other": 377,
+    "Markdown": 926,
+    "JSON": 12183,
+    "JavaScript": 148,
+    "TypeScript": 15430,
+    "CSS": 76,
+    "TypeScript React": 13489
+  },
+  "languages": {
+    "YAML": 1,
+    "Other": 11,
+    "Markdown": 6,
+    "JSON": 4,
+    "JavaScript": 4,
+    "TypeScript": 105,
+    "CSS": 1,
+    "TypeScript React": 40
+  },
+  "artifacts": [
+    ".gitignore",
+    "AGENTS.md",
+    "ARCHITECTURE.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "LICENSE",
+    "README.md",
+    "audit-metrics.json",
+    "eslint.config.mjs",
+    "jest.config.js",
+    "jest.setup.js",
+    "next.config.ts",
+    "nginx.conf.example",
+    "package-lock.json",
+    "package.json",
+    "postcss.config.mjs",
+    "tsconfig.json"
+  ]
+}
