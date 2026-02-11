@@ -1,0 +1,21 @@
+services:
+  subtitlegem:
+    build: .
+    image: subtitlegem:latest
+    container_name: subtitlegem
+    ports:
+      - "3050:3050"
+    volumes:
+      # Persistent storage for uploads, database, and exports
+      - subtitlegem_storage:/app/storage
+      # Mount .env if you prefer file-based env vars, or pass them below
+      # - ./.env:/app/.env
+    environment:
+      - NODE_ENV=production
+      - STAGING_DIR=/app/storage
+      # Pass your API key here or in an .env file
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: unless-stopped
+
+volumes:
+  subtitlegem_storage:

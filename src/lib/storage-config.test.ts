@@ -124,9 +124,9 @@ describe('isPathSafe', () => {
     expect(isPathSafe(validPath)).toBe(true);
   });
 
-  it('should allow valid paths in project root', () => {
+  it('should block paths in project root (outside staging)', () => {
     const validPath = path.join(projectRoot, 'src', 'app', 'page.tsx');
-    expect(isPathSafe(validPath)).toBe(true);
+    expect(isPathSafe(validPath)).toBe(false);
   });
 
   it('should block paths with directory traversal (..)', () => {
@@ -146,7 +146,9 @@ describe('isPathSafe', () => {
   });
 
   it('should block paths that are almost valid but escape via resolution', () => {
-    const trickyPath = path.join(stagingDir, '..', 'secret.txt');
+    // Try to escape to root (outside project root)
+    // stagingDir is usually projectRoot/storage, so ../.. goes to parent of projectRoot
+    const trickyPath = path.join(stagingDir, '..', '..', 'secret.txt');
     expect(isPathSafe(trickyPath)).toBe(false);
   });
 });

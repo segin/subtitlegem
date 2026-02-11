@@ -11,6 +11,8 @@ import {
   DEFAULT_PROJECT_CONFIG,
   ProjectConfig,
   SubtitleLine,
+  DraftItem,
+  RawSubtitleItem,
 } from '@/types/subtitle';
 import { QueueItem } from '@/types/queue';
 import { VideoProperties } from '@/components/VideoPropertiesDialog';
@@ -20,29 +22,6 @@ import { useSubtitleHistory } from './useSubtitleHistory';
 import { getProjectDuration } from '@/lib/timeline-utils';
 import { TimelineRef } from '@/components/SubtitleTimeline';
 
-export interface DraftItem {
-  id: string;
-  name: string;
-  videoPath?: string;
-  createdAt: string;
-  updatedAt: string;
-  cache_summary?: string;
-  metrics?: {
-    sourceSize: number;
-    renderedSize: number;
-    sourceCount: number;
-    subtitleCount: number;
-    renderCount: number;
-    lifetimeRenderCount: number;
-  };
-}
-
-export interface RawSubtitleItem {
-  startTime: string;
-  endTime: string;
-  text: string;
-  secondaryText?: string;
-}
 
 /**
  * Dialog state management - groups all show* booleans for dialogs

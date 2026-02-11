@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Settings, RefreshCw, Cpu, Film, Volume2, HardDrive } from "lucide-react";
+import { Settings, RefreshCw, Cpu, Film } from "lucide-react";
+import { FFmpegConfig as ExportConfig } from "@/types/subtitle";
 
 interface FFmpegEncoder {
   name: string;
@@ -25,14 +26,6 @@ interface FFmpegCapabilities {
   probedAt: number;
 }
 
-export interface ExportConfig {
-  hwaccel: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
-  preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
-  crf: number;
-  resolution: string;
-  codec: 'libx264' | 'libx265' | 'libvpx-vp9' | 'prores_ks';
-}
-
 interface FFmpegConfigPanelProps {
   config: ExportConfig;
   onChange: (config: ExportConfig) => void;
@@ -53,13 +46,6 @@ const RESOLUTIONS = [
   { value: '1920x1080', label: '1080p (1920×1080)' },
   { value: '1280x720', label: '720p (1280×720)' },
   { value: '854x480', label: '480p (854×480)' },
-];
-
-const CRF_PRESETS = [
-  { value: 18, label: 'High Quality' },
-  { value: 23, label: 'Balanced' },
-  { value: 28, label: 'Smaller Size' },
-  { value: 35, label: 'Minimum Size' },
 ];
 
 export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) {

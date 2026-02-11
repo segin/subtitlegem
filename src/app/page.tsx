@@ -30,13 +30,16 @@ import {
   ImageAsset,
   DEFAULT_PROJECT_CONFIG,
   ProjectConfig,
+  DraftData,
+  RawSubtitleItem,
+  DraftItem,
 } from "@/types/subtitle";
 import { QueueItem } from "@/types/queue";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { formatTimestamp } from "@/lib/time-utils";
 import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
-import { useHomeState, RawSubtitleItem, DraftItem } from "@/hooks/useHomeState";
+import { useHomeState } from "@/hooks/useHomeState";
 import { getProjectDuration } from "@/lib/timeline-utils";
 import { checkClipIntegrity, canRelinkClip } from "@/lib/integrity-utils";
 import { v4 as uuidv4 } from "uuid";
@@ -133,7 +136,7 @@ export default function Home() {
     try {
       console.log("[Draft] Loading draft:", draft.id);
       const res = await fetch(`/api/drafts?id=${draft.id}`);
-      const data = await res.json();
+      const data: DraftData = await res.json();
       
       console.log("[Draft] Loaded data:", { id: data.id, version: data.version, hasClips: !!data.clips?.length, videoPath: data.videoPath });
       
@@ -146,7 +149,7 @@ export default function Home() {
           
           // Fetch metadata for clips with missing duration
           const clipsWithDuration = await Promise.all(
-            data.clips.map(async (clip: any) => {
+            data.clips.map(async (clip: VideoClip) => {
               if (!clip.duration || clip.duration <= 0) {
                 try {
                   const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(clip.filePath)}`);
@@ -171,10 +174,10 @@ export default function Home() {
           setVideoClips(clipsWithDuration);
           
           // Fix timeline clips with duration 0 - use the video clip's full duration
-          const fixedTimelineClips = (data.timeline || []).map((tc: any) => {
+          const fixedTimelineClips: TimelineClip[] = (data.timeline || []).map((tc: TimelineClip) => {
             if (tc.clipDuration <= 0) {
-              const videoClip = clipsWithDuration.find((c: any) => c.id === tc.videoClipId);
-              if (videoClip?.duration > 0) {
+              const videoClip = clipsWithDuration.find((c: VideoClip) => c.id === tc.videoClipId);
+              if (videoClip && videoClip.duration > 0) {
                 return { ...tc, clipDuration: videoClip.duration };
               }
             }
@@ -187,10 +190,10 @@ export default function Home() {
           
           // Extract subtitles from all clips - store in SOURCE time with clipId
           // Per SUBTITLE_TIMING.md: subtitles are stored in source time, display offset is calculated dynamically
-          const allSubtitles = clipsWithDuration.flatMap((clip: any) => {
-            const timelineClip = fixedTimelineClips.find((tc: any) => tc.videoClipId === clip.id);
+          const allSubtitles: SubtitleLine[] = clipsWithDuration.flatMap((clip: VideoClip) => {
+            const timelineClip = fixedTimelineClips.find((tc: TimelineClip) => tc.videoClipId === clip.id);
             
-            return (clip.subtitles || []).map((sub: any) => ({
+            return (clip.subtitles || []).map((sub: SubtitleLine) => ({
               ...sub,
               // Store clipId for dynamic offset calculation during rendering
               clipId: timelineClip?.id,

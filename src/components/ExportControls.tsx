@@ -1,10 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, FFmpegConfig as ExportConfig } from "@/types/subtitle";
 import { QueueItem } from "@/types/queue";
 import { Download, Play, Loader2 } from "lucide-react";
-import { FFmpegConfigPanel, ExportConfig, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
+import { FFmpegConfigPanel, DEFAULT_CONFIG } from "./FFmpegConfigPanel";
 import { estimateH264Size, formatBytes } from "@/lib/video-estimate-utils";
 
 interface ExportControlsProps {

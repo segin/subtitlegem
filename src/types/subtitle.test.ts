@@ -21,7 +21,8 @@ describe('subtitle types utils', () => {
          hwaccel: 'none',
          preset: 'fast',
          crf: 23,
-         resolution: 'original'
+         resolution: 'original',
+         codec: 'libx264'
       }
     }
   };

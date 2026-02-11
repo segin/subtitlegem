@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
 import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
 import { cacheModelResult, checkModelAvailability } from "@/lib/model-cache";
+import { RawSubtitleItem, ProcessResponse } from "@/types/subtitle";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -27,7 +28,7 @@ export interface FileProgress {
 }
 
 interface VideoUploadProps {
-  onUploadComplete: (subtitles: any[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => void;
+  onUploadComplete: (subtitles: RawSubtitleItem[], videoUrl: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => void;
   pendingProjectFile?: File | null;
   // Multi-video support
   uploadMode?: UploadMode;
@@ -120,10 +121,10 @@ export function VideoUpload({
         success,
         message: success ? 'Model OK!' : 'Model validation failed'
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setTestResult({
         success: false,
-        message: err.message || 'Test failed'
+        message: err instanceof Error ? err.message : 'Test failed'
       });
     } finally {
       setTesting(false);
@@ -146,8 +147,8 @@ export function VideoUpload({
         ...prev,
         [selectedInModal]: { success }
       }));
-    } catch (err: any) {
-      const errorMsg = err.message || 'Test failed';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Test failed';
       setModalTestResult({
         success: false,
         message: errorMsg
@@ -321,7 +322,7 @@ export function VideoUpload({
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {
-          const data = JSON.parse(xhr.responseText);
+          const data: ProcessResponse = JSON.parse(xhr.responseText);
           if (data.error) setError(data.error);
           else {
             // If a pending project file exists, parse and use its subtitles

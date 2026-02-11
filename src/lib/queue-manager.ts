@@ -1,6 +1,6 @@
 import { SubtitleLine } from '@/types/subtitle';
 import { QueueItem, QueueItemStatus, QueueConfig, QueueStats } from '@/types/queue';
-export { QueueItem, QueueItemStatus, QueueConfig, QueueStats };
+export type { QueueItem, QueueItemStatus, QueueConfig, QueueStats };
 import { v4 as uuidv4 } from 'uuid';
 import * as queueDb from './queue-db';
 import path from 'path';

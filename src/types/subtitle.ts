@@ -48,6 +48,7 @@ export interface FFmpegConfig {
   preset: 'ultrafast' | 'superfast' | 'veryfast' | 'faster' | 'fast' | 'medium' | 'slow' | 'slower' | 'veryslow';
   crf: number;
   resolution: string; // 'original' or 'WIDTHxHEIGHT'
+  codec: 'libx264' | 'libx265' | 'libvpx-vp9' | 'prores_ks';
 }
 
 export interface SubtitleConfig {
@@ -76,6 +77,7 @@ export const DEFAULT_CONFIG: SubtitleConfig = {
     preset: 'veryfast',
     crf: 23,
     resolution: 'original',
+    codec: 'libx264',
   }
 };
 
@@ -103,6 +105,40 @@ export interface ProjectState {
 // ============================================================================
 // Multi-Video Project Types (V2)
 // ============================================================================
+
+export interface DraftItem {
+  id: string;
+  name: string;
+  videoPath?: string;
+  createdAt: string;
+  updatedAt: string;
+  cache_summary?: string;
+  metrics?: {
+    sourceSize: number;
+    renderedSize: number;
+    sourceCount: number;
+    subtitleCount: number;
+    renderCount: number;
+    lifetimeRenderCount: number;
+  };
+}
+
+export interface RawSubtitleItem {
+  startTime: string;
+  endTime: string;
+  text: string;
+  secondaryText?: string;
+}
+
+export interface ProcessResponse {
+  subtitles: RawSubtitleItem[];
+  videoPath: string;
+  detectedLanguage?: string;
+  originalFilename?: string;
+  fileSize?: number;
+  error?: string;
+  geminiFileUri?: string;
+}
 
 /**
  * A video clip in the project library.
@@ -136,6 +172,16 @@ export interface VideoClip {
   
   /** Per-clip subtitle config overrides (merged with project config) */
   subtitleConfig?: Partial<SubtitleConfig>;
+}
+
+/**
+ * Interface for draft loading response (V1/V2)
+ */
+export interface DraftData extends Partial<MultiVideoProjectState> {
+  id?: string;
+  subtitles?: SubtitleLine[];
+  videoPath?: string | null;
+  config?: SubtitleConfig;
 }
 
 /**

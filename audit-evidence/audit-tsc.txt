@@ -1,0 +1,12 @@
+src/components/ExportControls.tsx(41,32): error TS2345: Argument of type 'FFmpegConfig' is not assignable to parameter of type 'ExportConfig'.
+  Property 'codec' is missing in type 'FFmpegConfig' but required in type 'ExportConfig'.
+src/components/ExportControls.tsx(93,9): error TS2741: Property 'codec' is missing in type 'FFmpegConfig' but required in type 'ExportConfig'.
+src/lib/error-utils.test.ts(16,17): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(21,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(26,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(31,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(38,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(47,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(56,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/error-utils.test.ts(103,19): error TS2540: Cannot assign to 'NODE_ENV' because it is a read-only property.
+src/lib/ffmpeg-concat.test.ts(154,17): error TS2741: Property 'subtitles' is missing in type '{ id: string; filePath: string; originalFilename: string; duration: number; width: number; height: number; fps: number; }' but required in type 'VideoClip'.
