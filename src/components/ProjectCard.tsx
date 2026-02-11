@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { HardDrive, Film, FileText, Clapperboard, CheckCircle2, Trash2, GripVertical, Pencil } from 'lucide-react';
-import { DraftItem } from '@/hooks/useHomeState';
+import { DraftItem } from '@/types/subtitle';
 import { formatBytes } from '@/lib/format-utils';
 
 interface ProjectCardProps {

@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { FolderOpen, X, Menu, Maximize2, Minimize2 } from "lucide-react";
 import { ProjectCard } from "./ProjectCard";
 import { RenameProjectModal } from "./RenameProjectModal";
-import { DraftItem } from "@/hooks/useHomeState";
+import { DraftItem } from "@/types/subtitle";
 
 // Using DraftItem from hook for consistency
 interface DraftsSidebarProps {

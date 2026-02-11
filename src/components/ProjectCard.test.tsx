@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ProjectCard } from './ProjectCard';
-import { DraftItem } from '@/hooks/useHomeState';
+import { DraftItem } from '@/types/subtitle';
 import '@testing-library/jest-dom';
 
 const mockDraft: DraftItem = {
