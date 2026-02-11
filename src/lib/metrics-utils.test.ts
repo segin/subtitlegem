@@ -32,6 +32,7 @@ describe('metrics-utils', () => {
       (mockedFs.promises as any) = {
         stat: jest.fn().mockImplementation((path: string) => {
           if (path === '/path/to/video.mp4') return Promise.resolve({ size: 5000, isDirectory: () => false });
+          if (path === '/staging/exports/test-v1') return Promise.resolve({ isDirectory: () => true });
           return Promise.reject(new Error('Not found'));
         }),
         readdir: jest.fn().mockResolvedValue([])
