@@ -139,6 +139,49 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   } | null>(null);
   const [snappingEnabled, setSnappingEnabled] = useState(true);
 
+  // Virtualization State
+  const [visibleTimeRange, setVisibleTimeRange] = useState({ start: 0, end: 60 });
+  
+  // Debounced update for visible range
+  const updateVisibleRange = useCallback(() => {
+    if (!containerRef.current) return;
+    const { scrollLeft, clientWidth } = containerRef.current;
+    
+    // Buffer: render 1 screen width extra on each side
+    const buffer = clientWidth; 
+    
+    const startPixel = Math.max(0, scrollLeft - buffer);
+    const endPixel = scrollLeft + clientWidth + buffer;
+    
+    // Subtract/Add labels margin if precise, but loose buffer is fine
+    const start = startPixel / pixelsPerSecond;
+    const end = endPixel / pixelsPerSecond;
+    
+    setVisibleTimeRange({ start, end });
+  }, [pixelsPerSecond]);
+
+  // Update visibility on zoom or mount
+  useEffect(() => {
+    updateVisibleRange();
+    // Also listen to window resize
+    const handleResize = () => updateVisibleRange();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [updateVisibleRange]);
+
+  // Optimization: Filter subtitles to only those in view
+  const visibleSubtitles = React.useMemo(() => {
+    // Determine the active window
+    const { start, end } = visibleTimeRange;
+    
+    // For small datasets (<1000), filter is instant.
+    // For larger (>5000), this prevents DOM bloat.
+    return subtitles.filter(s => {
+       // Check overlap: start < rangeEnd AND end > rangeStart
+       return s.startTime < end && s.endTime > start;
+    });
+  }, [subtitles, visibleTimeRange]);
+
   // Preview states for dragging (optimistic updates)
   // Maps ID -> New State properties
   const [subtitlePreview, setSubtitlePreview] = useState<Record<string, { startTime: number, endTime: number }>>({});
@@ -542,6 +585,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
 
       <div 
         ref={containerRef} 
+        onScroll={updateVisibleRange}
         className={cn(
           "flex-1 w-full bg-[#1e1e1e] overflow-x-auto overflow-y-hidden relative custom-scrollbar select-none",
           isTransitioning && !isScrubbing && "timeline-transitioning"
@@ -689,7 +733,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
               className="ml-16 relative h-full px-0"
               onClick={() => onSelect("", false, false)}
             >
-              {subtitles.map((sub) => {
+              {visibleSubtitles.map((sub) => {
                 const preview = subtitlePreview[sub.id];
                 
                 // Calculate display position dynamically based on clip position
