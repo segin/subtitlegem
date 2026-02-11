@@ -4,6 +4,7 @@ describe('Gemini Integration', () => {
     let mockUpload: jest.Mock;
     let mockGetFile: jest.Mock;
     let generateSubtitles: any;
+    let generateSubtitlesInline: any;
     let translateSubtitles: any;
 
     beforeEach(async () => {
@@ -34,6 +35,7 @@ describe('Gemini Integration', () => {
 
         const gemini = await import('./gemini');
         generateSubtitles = gemini.generateSubtitles;
+        generateSubtitlesInline = gemini.generateSubtitlesInline;
         translateSubtitles = gemini.translateSubtitles;
     });
 
@@ -81,6 +83,41 @@ describe('Gemini Integration', () => {
                 detectedLanguage: "en",
                 subtitles: []
             });
+        });
+    });
+
+    describe('generateSubtitlesInline', () => {
+        it('handles inline data correctly', async () => {
+            const cleanJson = '{"detectedLanguage": "en", "subtitles": []}';
+
+            mockGenerateContent.mockResolvedValueOnce({
+                text: cleanJson
+            });
+
+            const result = await generateSubtitlesInline('base64data', 'video/mp4');
+
+            expect(result).toEqual({
+                detectedLanguage: "en",
+                subtitles: []
+            });
+
+            // Verify it was called with inlineData
+            expect(mockGenerateContent).toHaveBeenCalledWith(expect.objectContaining({
+                contents: [
+                    {
+                        role: "user",
+                        parts: [
+                            {
+                                inlineData: {
+                                    mimeType: 'video/mp4',
+                                    data: 'base64data',
+                                },
+                            },
+                            expect.any(Object),
+                        ],
+                    },
+                ],
+            }));
         });
     });
 

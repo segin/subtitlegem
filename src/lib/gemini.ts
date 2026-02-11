@@ -89,9 +89,11 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   return file;
 }
 
-export async function generateSubtitles(
-  fileUri: string,
-  mimeType: string,
+/**
+ * Internal helper for shared subtitle generation logic
+ */
+async function performSubtitleGeneration(
+  mediaPart: any,
   secondaryLanguage?: string,
   attempt = 1,
   modelName: string = "gemini-2.5-flash"
@@ -116,12 +118,7 @@ export async function generateSubtitles(
         {
           role: "user",
           parts: [
-            {
-              fileData: {
-                mimeType: mimeType,
-                fileUri: fileUri,
-              },
-            },
+            mediaPart,
             { text: prompt },
           ],
         },
@@ -135,7 +132,6 @@ export async function generateSubtitles(
     const text = response.text!;
     return JSON.parse(cleanJsonOutput(text));
   } catch (error: unknown) {
-    // Basic rate limit check - type guard needed if we want to be strict about 'status'
     const status = (error as any)?.status;
     
     if (status === 429 && attempt < 3) {
@@ -149,9 +145,8 @@ export async function generateSubtitles(
       await new Promise((resolve) =>
         setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
       );
-      return generateSubtitles(
-        fileUri,
-        mimeType,
+      return performSubtitleGeneration(
+        mediaPart,
         secondaryLanguage,
         attempt + 1,
         modelName
@@ -159,6 +154,26 @@ export async function generateSubtitles(
     }
     throw error;
   }
+}
+
+export async function generateSubtitles(
+  fileUri: string,
+  mimeType: string,
+  secondaryLanguage?: string,
+  attempt = 1,
+  modelName: string = "gemini-2.5-flash"
+) {
+  return performSubtitleGeneration(
+    {
+      fileData: {
+        mimeType,
+        fileUri,
+      },
+    },
+    secondaryLanguage,
+    attempt,
+    modelName
+  );
 }
 
 /**
@@ -172,68 +187,17 @@ export async function generateSubtitlesInline(
   attempt = 1,
   modelName: string = "gemini-2.5-flash"
 ) {
-  const prompt = `
-    Analyze the audio in this video.
-    1. Detect the primary spoken language.
-    2. Generate subtitles in that detected primary language.
-    ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field. If the detected primary language is already ${secondaryLanguage}, simply copy the primary text into 'secondaryText'.` : ""}
-    
-    CRITICAL TIMESTAMP RULES:
-    1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
-    2. ALWAYS include the Hour part, even if it is 00. Example: "00:01:30,500" is CORRECT.
-    3. Use a comma (,) for milliseconds.
-    4. Ensure timings are synchronized with the audio speech.
-  `;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: modelName,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              inlineData: {
-                mimeType: mimeType,
-                data: base64Data,
-              },
-            },
-            { text: prompt },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: subtitleSchema as any,
-      },
-    });
-
-    const text = response.text!;
-    return JSON.parse(cleanJsonOutput(text));
-  } catch (error: unknown) {
-    const status = (error as any)?.status;
-    
-    if (status === 429 && attempt < 3) {
-      const msg = (error instanceof Error) ? error.message : String(error);
-      const delayMatch = msg.match(/retry in ([\d.]+)s/);
-      const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
-
-      console.log(
-        `Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`
-      );
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
-      );
-      return generateSubtitlesInline(
-        base64Data,
+  return performSubtitleGeneration(
+    {
+      inlineData: {
         mimeType,
-        secondaryLanguage,
-        attempt + 1,
-        modelName
-      );
-    }
-    throw error;
-  }
+        data: base64Data,
+      },
+    },
+    secondaryLanguage,
+    attempt,
+    modelName
+  );
 }
 
 export async function translateSubtitles(
