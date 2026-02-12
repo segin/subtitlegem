@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import fs from 'fs';
 import { getStorageConfig } from '@/lib/storage-config';
+import { getDirectorySize } from '@/lib/storage-utils';
 import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
@@ -74,10 +75,12 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    const currentSize = getDirectorySize(targetDir);
+
     return NextResponse.json({ 
         success: true, 
         deletedCount, 
-        currentSize: 0, // TODO: calculate new size if needed
+        currentSize,
         errors: errors.length > 0 ? errors : undefined 
     });
 

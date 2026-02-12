@@ -19,6 +19,10 @@ jest.mock('@/lib/storage-config', () => ({
   })),
 }));
 
+jest.mock('@/lib/storage-utils', () => ({
+  getDirectorySize: jest.fn(() => 1024),
+}));
+
 describe('/api/cleanup', () => {
   const mockExistsSync = fs.existsSync as jest.Mock;
   const mockReaddirSync = fs.readdirSync as jest.Mock;
@@ -88,6 +92,7 @@ describe('/api/cleanup', () => {
       expect(res.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.deletedCount).toBe(2);
+      expect(data.currentSize).toBe(1024);
       expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     });
 
@@ -161,6 +166,7 @@ describe('/api/cleanup', () => {
 
       expect(res.status).toBe(200);
       expect(data.deletedCount).toBe(1);
+      expect(data.currentSize).toBe(1024);
       expect(mockUnlinkSync).toHaveBeenCalledTimes(1);
     });
   });
