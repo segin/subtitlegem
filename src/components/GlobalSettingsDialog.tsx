@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
-import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette } from "lucide-react";
+import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette, Lock, LogOut } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
 
@@ -18,7 +18,7 @@ interface GlobalSettingsDialogProps {
   initialTab?: TabId;
 }
 
-export type TabId = 'styles' | 'languages' | 'encoding' | 'ai' | 'appearance';
+export type TabId = 'styles' | 'languages' | 'encoding' | 'ai' | 'appearance' | 'security';
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'styles', label: 'Styles', icon: <Type className="w-3.5 h-3.5" /> },
@@ -26,6 +26,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'languages', label: 'Languages', icon: <Languages className="w-3.5 h-3.5" /> },
   { id: 'encoding', label: 'Encoding', icon: <Cpu className="w-3.5 h-3.5" /> },
   { id: 'ai', label: 'AI Model', icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { id: 'security', label: 'Security', icon: <Lock className="w-3.5 h-3.5" /> },
 ];
 
 const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow'];
@@ -44,13 +45,64 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
   const [saving, setSaving] = useState(false);
   const [models, setModels] = useState<string[]>([]);
 
+  // Auth State
+  const [authEnabled, setAuthEnabled] = useState(false);
+  const [password, setPassword] = useState("");
+  const [loginStatus, setLoginStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+
   useEffect(() => {
     if (isOpen) {
       loadSettings();
       loadModels();
+      checkAuthStatus();
       if (initialTab) setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
+
+  const checkAuthStatus = async () => {
+    try {
+      const res = await fetch('/api/login');
+      if (res.ok) {
+        const data = await res.json();
+        setAuthEnabled(data.authEnabled);
+      }
+    } catch (err) {
+      console.error('Failed to check auth status:', err);
+    }
+  };
+
+  const handleLogin = async () => {
+    setLoginStatus('loading');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        setLoginStatus('success');
+        setPassword("");
+        // Reload settings if login was successful to ensure we have data
+        loadSettings();
+      } else {
+        setLoginStatus('error');
+      }
+    } catch (err) {
+      setLoginStatus('error');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/login', { method: 'DELETE' });
+      setPassword("");
+      setLoginStatus('idle');
+      // After logout, settings might fail to load (expected)
+      loadSettings();
+    } catch (err) {
+      console.error('Failed to logout:', err);
+    }
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -539,6 +591,73 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                         No fallbacks configured. Primary settings will be used.
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'security' && (
+                <div className="space-y-4">
+                  <div className="bg-[#1e1e1e] border border-[#333333] p-4 rounded-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Lock className="w-4 h-4 text-[#007acc]" />
+                      <h4 className="text-sm font-medium text-[#e1e1e1]">Access Control</h4>
+                    </div>
+
+                    {!authEnabled ? (
+                      <div className="bg-blue-900/20 border border-blue-800/50 p-3 rounded-sm">
+                        <p className="text-xs text-blue-300">
+                          Authentication is currently disabled. To enable it, set the <code>API_PASSWORD</code> environment variable in your <code>.env</code> file.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-[10px] uppercase text-[#888888] font-bold mb-1 block">API Password</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="password"
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              placeholder="Enter API Password"
+                              className="flex-1 bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-sm px-3 py-1.5 rounded-sm outline-none focus:border-[#007acc]"
+                              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                            />
+                            <button
+                              onClick={handleLogin}
+                              disabled={loginStatus === 'loading' || !password}
+                              className="px-4 py-1.5 bg-[#0e639c] text-white text-xs rounded-sm hover:bg-[#1177bb] disabled:opacity-50 transition-colors"
+                            >
+                              {loginStatus === 'loading' ? 'Verifying...' : 'Login'}
+                            </button>
+                          </div>
+                          {loginStatus === 'error' && (
+                            <p className="text-[10px] text-red-400 mt-1">Invalid password. Please try again.</p>
+                          )}
+                          {loginStatus === 'success' && (
+                            <p className="text-[10px] text-green-400 mt-1">Logged in successfully!</p>
+                          )}
+                        </div>
+
+                        <div className="pt-4 border-t border-[#333333]">
+                          <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <LogOut className="w-3.5 h-3.5" />
+                            Log Out / Clear Session
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-[#1e1e1e] border border-[#333333] p-4 rounded-sm">
+                    <h5 className="text-[10px] uppercase text-[#888888] font-bold mb-2">Security Information</h5>
+                    <ul className="text-[10px] text-[#666666] space-y-1.5 list-disc pl-4">
+                      <li>When enabled, all API endpoints and settings require authentication.</li>
+                      <li>Authentication is managed via a secure, HTTP-only cookie.</li>
+                      <li>You can also use the <code>Authorization: Bearer &lt;password&gt;</code> header for programmatic access.</li>
+                    </ul>
                   </div>
                 </div>
               )}
