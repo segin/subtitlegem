@@ -11,8 +11,18 @@ export function getRangeSelectionIds(
 ): string[] {
   if (!anchorId || !targetId) return [];
   
-  const anchorIndex = subtitles.findIndex(s => s.id === anchorId);
-  const targetIndex = subtitles.findIndex(s => s.id === targetId);
+  let anchorIndex = -1;
+  let targetIndex = -1;
+
+  // Single-pass O(N) lookup for both indices
+  for (let i = 0; i < subtitles.length; i++) {
+    const id = subtitles[i].id;
+    if (anchorIndex === -1 && id === anchorId) anchorIndex = i;
+    if (targetIndex === -1 && id === targetId) targetIndex = i;
+
+    // Break early if both are found
+    if (anchorIndex !== -1 && targetIndex !== -1) break;
+  }
   
   if (anchorIndex === -1 || targetIndex === -1) return [];
 
