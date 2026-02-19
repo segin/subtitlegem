@@ -13,11 +13,28 @@ export type UploadMode =
   | 'batch'            // Multiple videos → separate projects (Mode 2)
   | 'advanced';        // Advanced: custom assignment (Mode 3)
 
-export interface StagedProject {
+export interface UploadProject {
   id: string;
   name: string;
   files: File[];
+}
+
+export interface StagedProject extends UploadProject {
   isDragging: boolean;
+}
+
+/**
+ * Interface for clips after they have been processed by the API
+ */
+export interface UploadedClip {
+  id: string;
+  originalFilename: string;
+  filePath: string;
+  geminiFileUri?: string;
+  subtitles: RawSubtitleItem[];
+  duration?: number;
+  width?: number;
+  height?: number;
 }
 
 // Upload progress tracking
@@ -963,7 +980,7 @@ export function VideoUpload({
               try {
                 // 2. Process each project sequentially (could be parallelized)
                 for (const project of projectsToProcess) {
-                  const uploadedClips = [];
+                  const uploadedClips: UploadedClip[] = [];
 
                   // Process files in project
                   for (const file of project.files) {
@@ -973,7 +990,7 @@ export function VideoUpload({
                       });
 
                       // Wrapped XHR Promise for Upload
-                      const result = await new Promise<any>((resolve, reject) => {
+                      const result = await new Promise<ProcessResponse>((resolve, reject) => {
                           const xhr = new XMLHttpRequest();
                           const key = `${project.id}-${file.name}`;
                           
@@ -1296,14 +1313,14 @@ export function VideoUpload({
                   : files.map((f, i) => ({ id: `batch-${i}`, name: f.name, files: [f] }));
 
                 // 2. Prepare Upload Queue
-                const uploadQueue: { file: File; project: any; key: string }[] = [];
+                const uploadQueue: { file: File; project: UploadProject; key: string }[] = [];
                 projectsToCreate.forEach(p => {
                   p.files.forEach(f => {
                     uploadQueue.push({ file: f, project: p, key: `${p.id}-${f.name}` });
                   });
                 });
 
-                const projectResults: Record<string, any[]> = {};
+                const projectResults: Record<string, UploadedClip[]> = {};
                 let nextToUpload = 0;
                 let activeUploads = 0;
                 let completedCount = 0;
