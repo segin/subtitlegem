@@ -7,11 +7,7 @@ const nextConfig: NextConfig = {
   // basePath: '/subtitlegem',
   
   experimental: {
-    serverActions: {
-      allowedOrigins: ["*"],
-    },
     // @ts-ignore
-
   },
 };
 
