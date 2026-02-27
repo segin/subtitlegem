@@ -99,6 +99,16 @@ export interface DraftV2 {
 // Union type for drafts
 export type Draft = DraftV1 | DraftV2;
 
+// Lightweight summary for listing drafts
+export interface DraftSummary {
+  id: string;
+  name: string;
+  version: number;
+  videoPath?: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 interface DraftRow {
   id: string;
   name: string;
@@ -283,11 +293,26 @@ function rowToDraft(row: DraftRow): Draft {
 }
 
 /**
- * List all drafts, most recent first
+ * Convert database row to a lightweight DraftSummary
  */
-export function listDrafts(): Draft[] {
-  const rows = db.prepare("SELECT * FROM drafts ORDER BY updated_at DESC").all() as DraftRow[];
-  return rows.map(rowToDraft);
+function rowToDraftSummary(row: DraftRow): DraftSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    version: row.version || 1,
+    videoPath: row.video_path || undefined,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+/**
+ * List all drafts as summaries, most recent first.
+ * Optimized to avoid parsing large JSON blobs.
+ */
+export function listDrafts(): DraftSummary[] {
+  const rows = db.prepare("SELECT id, name, version, video_path, created_at, updated_at FROM drafts ORDER BY updated_at DESC").all() as DraftRow[];
+  return rows.map(rowToDraftSummary);
 }
 
 /**
