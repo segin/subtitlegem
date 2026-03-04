@@ -95,6 +95,21 @@ export function VideoUpload({
   const dragCounterRef = useRef(0);
   const uploadHistoryRef = useRef<{ timestamp: number; loaded: number }[]>([]);
 
+  const activeXhrsRef = useRef<XMLHttpRequest[]>([]);
+
+  const cancelUpload = useCallback(() => {
+    activeXhrsRef.current.forEach(xhr => {
+      try { xhr.abort(); } catch (e) {}
+    });
+    activeXhrsRef.current = [];
+    setLoading(false);
+    setIsUploading(false);
+    setProgress(0);
+    setUploadedBytes(0);
+    setUploadSpeed(0);
+    setError("Upload cancelled by user");
+  }, []);
+
   // Fetch available models from API
   const fetchModels = async () => {
     setLoadingModels(true);
@@ -208,6 +223,7 @@ export function VideoUpload({
       setFile(selectedFile);
       setError(null);
       setProgress(0);
+      setTotalBytes(selectedFile.size);
     } else {
       setError(result.error || 'Invalid video file');
     }
@@ -307,6 +323,7 @@ export function VideoUpload({
     });
 
     const xhr = new XMLHttpRequest();
+    activeXhrsRef.current.push(xhr);
     startTimeRef.current = Date.now();
 
     xhr.upload.addEventListener("progress", (event) => {
@@ -372,11 +389,13 @@ export function VideoUpload({
       } else {
          setError(`Upload failed: ${xhr.statusText}`);
       }
+      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
       setLoading(false);
     });
 
     xhr.addEventListener("error", () => {
       setError("Network error");
+      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
       setLoading(false);
     });
 
@@ -911,11 +930,20 @@ export function VideoUpload({
           {/* Job-Level Progress Bar & Speed */}
           {isUploading && (
             <div className="mb-4 space-y-1">
-              <div className="flex justify-between text-[10px] text-[#888888]">
+              <div className="flex justify-between items-center text-[10px] text-[#888888]">
                 <span>Total Progress</span>
-                <div className="flex gap-2">
-                  <span>{formatBytes(uploadSpeed)}/s</span>
-                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2 font-mono">
+                    <span>{formatBytes(uploadSpeed)}/s</span>
+                    <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                  </div>
+                  <button
+                    onClick={cancelUpload}
+                    type="button"
+                    className="px-2 py-0.5 bg-[#333333] hover:bg-[#454545] text-[#cccccc] rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
               <div className="h-1.5 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
@@ -975,6 +1003,7 @@ export function VideoUpload({
                       // Wrapped XHR Promise for Upload
                       const result = await new Promise<any>((resolve, reject) => {
                           const xhr = new XMLHttpRequest();
+                          activeXhrsRef.current.push(xhr);
                           const key = `${project.id}-${file.name}`;
                           
                           xhr.upload.onprogress = (e) => {
@@ -1007,6 +1036,7 @@ export function VideoUpload({
                           };
 
                           xhr.onload = () => {
+                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                               if (xhr.status >= 200 && xhr.status < 300) {
                                   setFileProgressMap(prev => ({
                                       ...prev,
@@ -1018,7 +1048,10 @@ export function VideoUpload({
                               }
                           };
 
-                          xhr.onerror = () => reject(new Error('Network error'));
+                          xhr.onerror = () => {
+                             activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+                             reject(new Error('Network error'));
+                          };
                           xhr.open('POST', '/api/process');
                           xhr.send(formData);
                       });
@@ -1244,11 +1277,20 @@ export function VideoUpload({
           {/* Job-Level Progress Bar & Speed (Multi/Batch) */}
           {isUploading && (uploadMode === 'multi-video' || uploadMode === 'batch') && (
             <div className="mb-4 space-y-1">
-              <div className="flex justify-between text-[10px] text-[#888888]">
+              <div className="flex justify-between items-center text-[10px] text-[#888888]">
                 <span>Total Progress</span>
-                <div className="flex gap-2">
-                  <span>{formatBytes(uploadSpeed)}/s</span>
-                  <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-2 font-mono">
+                    <span>{formatBytes(uploadSpeed)}/s</span>
+                    <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                  </div>
+                  <button
+                    onClick={cancelUpload}
+                    type="button"
+                    className="px-2 py-0.5 bg-[#333333] hover:bg-[#454545] text-[#cccccc] rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
               <div className="h-1.5 bg-[#1e1e1e] rounded-full overflow-hidden border border-[#333333]">
@@ -1324,6 +1366,7 @@ export function VideoUpload({
                     const item = uploadQueue[index];
                     const formData = prepareUploadFormData(item.file, { secondaryLanguage, model });
                     const xhr = new XMLHttpRequest();
+                    activeXhrsRef.current.push(xhr);
                     let pipelined = false;
 
                     xhr.upload.onprogress = (e) => {
@@ -1353,6 +1396,7 @@ export function VideoUpload({
                     };
 
                     xhr.onload = async () => {
+                      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                       try {
                         if (xhr.status >= 200 && xhr.status < 300) {
                           const data = JSON.parse(xhr.responseText);
@@ -1415,7 +1459,10 @@ export function VideoUpload({
                       }
                     };
 
-                    xhr.onerror = () => reject(new Error('Network error'));
+                    xhr.onerror = () => {
+                      activeXhrsRef.current = activeXhrsRef.current.filter(x => x !== xhr);
+                      reject(new Error('Network error'));
+                    };
                     xhr.open('POST', '/api/process');
                     xhr.send(formData);
                   };
@@ -1499,9 +1546,17 @@ export function VideoUpload({
                 <div className="w-full bg-[#333333] h-1 rounded-full overflow-hidden">
                   <div className="bg-[#007acc] h-1 transition-all duration-200" style={{ width: `${progress}%` }} />
                 </div>
-                <div className="flex justify-between text-[10px] text-[#666666] font-mono">
-                  <span>{formatBytes(uploadedBytes)}</span>
-                  <span>{formatBytes(uploadSpeed)}/s</span>
+                <div className="flex justify-between items-center mt-2">
+                  <div className="flex gap-2 text-[10px] text-[#666666] font-mono">
+                    <span>{formatBytes(uploadedBytes)} / {formatBytes(totalBytes)}</span>
+                    <span className="hidden sm:inline">({formatBytes(uploadSpeed)}/s)</span>
+                  </div>
+                  <button
+                    onClick={cancelUpload}
+                    className="px-2 py-1 bg-[#333333] hover:bg-[#454545] text-[#cccccc] text-[10px] rounded transition-colors"
+                  >
+                    Cancel
+                  </button>
                 </div>
              </div>
            ) : (
