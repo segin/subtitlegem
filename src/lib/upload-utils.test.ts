@@ -12,19 +12,6 @@ describe('upload-utils', () => {
       expect(validateVideoFile(file)).toEqual({ valid: true });
     });
 
-    test('returns error for file too large', () => {
-      // Create a mock file with size > 2GB
-      const largeFile = {
-        name: 'large.mp4',
-        size: 3 * 1024 * 1024 * 1024,
-        type: 'video/mp4',
-      } as File;
-      
-      const result = validateVideoFile(largeFile);
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('too large');
-    });
-
     test('returns error for unsupported format', () => {
       const file = new File(['text'], 'test.txt', { type: 'text/plain' });
       const result = validateVideoFile(file);

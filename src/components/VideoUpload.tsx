@@ -414,12 +414,12 @@ export function VideoUpload({
                 disabled={loading}
                 className="flex-1 bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none rounded-sm"
               >
-                <option value="gemini-3-flash-preview">Gemini 3 Flash (Preview)</option>
-                <option value="gemini-3-pro-preview">Gemini 3 Pro (Preview)</option>
+                <option value="gemini-flash-latest">Gemini Flash (Latest)</option>
+                <option value="gemini-pro-latest">Gemini Pro (Latest)</option>
                 <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
                 <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 {/* Show current model if it's not in the main list */}
-                {!['gemini-3-flash-preview','gemini-3-pro-preview','gemini-2.5-flash','gemini-2.5-pro'].includes(model) && (
+                {!['gemini-flash-latest','gemini-pro-latest','gemini-2.5-flash','gemini-2.5-pro'].includes(model) && (
                   <option value={model}>{model}</option>
                 )}
                 <option value="...">... (Choose other model)</option>

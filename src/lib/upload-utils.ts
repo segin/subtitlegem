@@ -7,8 +7,7 @@ export interface FileValidationResult {
   error?: string;
 }
 
-// Maximum file size: 2GB
-const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024;
+// No hard file size limit; videos > 400MB will have their audio extracted.
 
 // Allowed video MIME types
 const ALLOWED_VIDEO_TYPES = [
@@ -29,9 +28,6 @@ export function validateVideoFile(file: File): FileValidationResult {
     return { valid: false, error: 'No file provided' };
   }
 
-  if (file.size > MAX_FILE_SIZE) {
-    return { valid: false, error: `File too large. Maximum size is 2GB.` };
-  }
 
   if (!ALLOWED_VIDEO_TYPES.includes(file.type) && !file.name.match(/\.(mp4|webm|mov|avi|mkv|mpeg|ogv)$/i)) {
     return { valid: false, error: 'Unsupported video format' };

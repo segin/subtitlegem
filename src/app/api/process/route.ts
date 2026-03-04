@@ -110,34 +110,87 @@ export async function POST(req: NextRequest) {
 
              // Check if we can do inline
              const stats = fs.statSync(filePath);
-             const sizeMB = stats.size / (1024 * 1024);
+             const fileSizeInMB = stats.size / (1024 * 1024);
+             let processPath = filePath;
+             let useInlineData = false;
+             const INLINE_SIZE_LIMIT_MB = 95;
              
-             if (sizeMB < 95 && !sampleDuration) {
-                 // Inline
-                 const fileBuffer = fs.readFileSync(filePath);
-                 const base64Data = fileBuffer.toString('base64');
-                 console.log(`Reprocessing inline (${sizeMB.toFixed(2)} MB)`);
-                 
-                 const result = await processWithFallback(
-                   'generate',
-                   { 
-                       base64Data, 
-                       mimeType: targetMime, 
-                       secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
-                       isInline: true,
-                       promptHints
-                   },
-                   settings.aiFallbackChain
-                 );
-                 return NextResponse.json({ ...result, clipId });
+             if (fileSizeInMB > 400 && !sampleDuration) {
+                 console.log("File > 400MB, extracting audio for reprocess...");
+                 try {
+                     const codec = await getAudioCodec(filePath);
+                     console.log(`Detected audio codec: ${codec}`);
+
+                     let ext = "m4a";
+                     let newMime = "audio/mp4";
+
+                     switch (codec) {
+                         case "aac": ext = "m4a"; newMime = "audio/mp4"; break;
+                         case "mp3": ext = "mp3"; newMime = "audio/mpeg"; break;
+                         case "opus": ext = "ogg"; newMime = "audio/ogg"; break;
+                         case "vorbis": ext = "ogg"; newMime = "audio/ogg"; break;
+                         case "flac": ext = "flac"; newMime = "audio/flac"; break;
+                         default: ext = "m4a"; newMime = "audio/mp4";
+                     }
+
+                     const stagingDir = config.stagingDir;
+                     const tempDir = path.join(stagingDir, 'temp');
+                     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+                     const audioPath = path.join(tempDir, `${path.basename(filePath, path.extname(filePath))}_audio_${Date.now()}.${ext}`);
+                     
+                     await extractAudio(filePath, audioPath);
+                     console.log('Audio extraction complete');
+                     
+                     processPath = audioPath;
+                     targetMime = newMime;
+                     
+                     const audioStats = fs.statSync(audioPath);
+                     const audioSizeInMB = audioStats.size / (1024 * 1024);
+                     useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
+                     
+                 } catch (audioErr) {
+                     console.error('Audio extraction failed, using original file:', audioErr);
+                     useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
+                 }
+             } else {
+                 useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
+             }
+             
+             if (useInlineData && !sampleDuration) {
+                  // Inline
+                  const fileBuffer = fs.readFileSync(processPath);
+                  const base64Data = fileBuffer.toString('base64');
+                  console.log(`Reprocessing inline`);
+                  
+                  const result = await processWithFallback(
+                    'generate',
+                    { 
+                        base64Data, 
+                        mimeType: targetMime, 
+                        secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+                        isInline: true,
+                        promptHints
+                    },
+                    settings.aiFallbackChain
+                  );
+                  
+                  if (processPath !== filePath && fs.existsSync(processPath)) {
+                      fs.unlinkSync(processPath); // cleanup extracted audio
+                  }
+                  
+                  return NextResponse.json({ ...result, clipId });
              } else {
                  // Upload to Gemini
                  // NOTE: We only upload here if NOT doing sampleDuration. 
                  // If doing usage sampleDuration, we handle it below.
                  if (!sampleDuration) {
-                    console.log(`Uploading local file to Gemini (${sizeMB.toFixed(2)} MB)...`);
-                    newGeminiFile = await uploadToGemini(filePath, targetMime);
+                    console.log(`Uploading local file to Gemini...`);
+                    newGeminiFile = await uploadToGemini(processPath, targetMime);
                     targetUri = newGeminiFile.uri;
+                    
+                    if (processPath !== filePath && fs.existsSync(processPath)) {
+                        fs.unlinkSync(processPath); // cleanup extracted audio
+                    }
                  }
              }
          }
