@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 import { getStorageConfig } from '@/lib/storage-config';
 import { getDirectorySize } from '@/lib/storage-utils';
 import { z } from 'zod';
@@ -28,7 +28,9 @@ export async function POST(req: NextRequest) {
     if (target === 'drafts') targetDir = path.join(config.stagingDir, 'drafts'); 
     if (target === 'video') targetDir = path.join(config.stagingDir, 'videos');
 
-    if (!fs.existsSync(targetDir)) {
+    try {
+        await fsPromises.access(targetDir);
+    } catch {
          return NextResponse.json({ deletedCount: 0, message: "Directory does not exist" });
     }
 
@@ -42,31 +44,32 @@ export async function POST(req: NextRequest) {
             const safeName = path.basename(fileId); 
             const filePath = path.join(targetDir, safeName);
             
-            if (fs.existsSync(filePath)) {
+            try {
+                await fsPromises.access(filePath);
                 try {
-                    fs.unlinkSync(filePath);
+                    await fsPromises.unlink(filePath);
                     deletedCount++;
-                    // Also try to cleanup related files (e.g. .json sidecars for videos?)
-                    // For now keeping it simple.
                 } catch (e: any) {
                     errors.push(`Failed to delete ${safeName}: ${e.message}`);
                 }
+            } catch {
+                // File does not exist, ignore
             }
         }
     }
 
     // Bulk cleanup (older than X)
     if (olderThanHours !== undefined) {
-        const files = fs.readdirSync(targetDir);
+        const files = await fsPromises.readdir(targetDir);
         const now = Date.now();
         const maxAgeMs = olderThanHours * 60 * 60 * 1000;
 
         for (const file of files) {
             const filePath = path.join(targetDir, file);
             try {
-                const stats = fs.statSync(filePath);
+                const stats = await fsPromises.stat(filePath);
                 if (now - stats.mtimeMs > maxAgeMs) {
-                    fs.unlinkSync(filePath);
+                    await fsPromises.unlink(filePath);
                     deletedCount++;
                 }
             } catch (e: any) {
