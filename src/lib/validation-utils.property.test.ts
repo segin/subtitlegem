@@ -28,9 +28,8 @@ describe('validation-utils properties', () => {
     fc.assert(
       fc.property(fc.array(fc.record({
         text: fc.string({maxLength: 100}),
-        // Fix: fc.option returns T | null, but we need T | undefined. 
-        // Mapping null to undefined explicitly.
-        secondaryText: fc.option(fc.string({maxLength: 100})).map(s => s === null ? undefined : s)
+        // Using { nil: undefined } to ensure secondaryText is T | undefined
+        secondaryText: fc.option(fc.string({maxLength: 100}), { nil: undefined })
       }), { maxLength: 50 }), (subs) => {
         expect(() => validateSubtitleTextSize(subs)).not.toThrow();
       })
