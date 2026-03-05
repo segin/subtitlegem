@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
 import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
 import { cacheModelResult, checkModelAvailability } from "@/lib/model-cache";
 import { RawSubtitleItem, ProcessResponse } from "@/types/subtitle";
