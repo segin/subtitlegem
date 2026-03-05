@@ -149,6 +149,27 @@ describe('/api/process (JSON modes)', () => {
         );
         expect(data.geminiFileUri).toBe('gs://new/upload.mp4');
     });
+
+    it('should block unsafe filePath even with sampleDuration', async () => {
+      const { isPathSafe } = require('@/lib/storage-config');
+      (isPathSafe as jest.Mock).mockReturnValue(false);
+
+      const req = new NextRequest('http://localhost/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'reprocess',
+          filePath: '/etc/passwd',
+          sampleDuration: 10
+        }),
+      });
+
+      const res = await POST(req);
+      const data = await res.json();
+
+      expect(res.status).toBe(403);
+      expect(data.error).toBe('Unauthorized path');
+    });
   });
 
   describe('Translate Mode', () => {
