@@ -4,7 +4,7 @@ import { uploadToGemini, generateSubtitles, generateSubtitlesInline, translateSu
 import { extractAudio, getAudioCodec, createSampleClip } from "@/lib/ffmpeg-utils"; // Added createSampleClip
 import fs from "fs";
 import path from "path";
-import { getStorageConfig } from "@/lib/storage-config";
+import { getStorageConfig, isPathSafe } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
@@ -85,6 +85,14 @@ export async function POST(req: NextRequest) {
          const { uploadToGemini } = await import("@/lib/gemini");
          const settings = getGlobalSettings();
          const config = getStorageConfig();
+
+         // Security check: strict path validation for local files
+         if (filePath) {
+             if (!isPathSafe(filePath)) {
+                 console.warn(`[Process] Blocked unauthorized path access: ${filePath}`);
+                 return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+             }
+         }
          
          let targetUri = fileUri;
          let targetMime = "video/mp4"; // Default assumption, or derive from path
@@ -94,13 +102,6 @@ export async function POST(req: NextRequest) {
          if (!targetUri && filePath) {
              console.log(`Reprocessing from local file: ${filePath}`);
              
-             // Security check: strict path validation
-             const { isPathSafe } = await import("@/lib/storage-config");
-             if (!isPathSafe(filePath)) {
-                 console.warn(`[Process] Blocked unauthorized path access: ${filePath}`);
-                 return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
-             }
-
              const resolvedPath = path.resolve(filePath);
              if (!fs.existsSync(resolvedPath)) {
                  return NextResponse.json({ error: "Local file not found" }, { status: 404 });
@@ -164,6 +165,10 @@ export async function POST(req: NextRequest) {
              
              if (useInlineData && !sampleDuration) {
                   // Inline
+                  if (!isPathSafe(processPath)) {
+                      console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
+                      return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+                  }
                   const fileBuffer = fs.readFileSync(processPath);
                   const base64Data = fileBuffer.toString('base64');
                   console.log(`Reprocessing inline`);
@@ -421,6 +426,10 @@ export async function POST(req: NextRequest) {
     if (useInlineData) {
       console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
       
+      if (!isPathSafe(processPath)) {
+          console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
+          return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
+      }
       const fileBuffer = fs.readFileSync(processPath);
       const base64Data = fileBuffer.toString('base64');
       
