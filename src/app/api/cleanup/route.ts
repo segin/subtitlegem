@@ -28,10 +28,8 @@ export async function POST(req: NextRequest) {
     if (target === 'drafts') targetDir = path.join(config.stagingDir, 'drafts'); 
     if (target === 'video') targetDir = path.join(config.stagingDir, 'videos');
 
-    try {
-        await fs.promises.access(targetDir);
-    } catch {
-        return NextResponse.json({ deletedCount: 0, message: "Directory does not exist" });
+    if (!fs.existsSync(targetDir)) {
+         return NextResponse.json({ deletedCount: 0, message: "Directory does not exist" });
     }
 
     let deletedCount = 0;
@@ -39,50 +37,42 @@ export async function POST(req: NextRequest) {
 
     // Specific file deletion
     if (fileIds && fileIds.length > 0) {
-        const results = await Promise.all(fileIds.map(async (fileId) => {
+        for (const fileId of fileIds) {
             // Basic sanitization
             const safeName = path.basename(fileId); 
             const filePath = path.join(targetDir, safeName);
             
-            try {
-                await fs.promises.unlink(filePath);
-                return { success: true };
-            } catch (e: any) {
-                if (e.code === 'ENOENT') return { success: false };
-                return { success: false, error: `Failed to delete ${safeName}: ${e.message}` };
-            }
-        }));
-
-        for (const res of results) {
-            if (res.success) {
-                deletedCount++;
-            } else if (res.error) {
-                errors.push(res.error);
+            if (fs.existsSync(filePath)) {
+                try {
+                    fs.unlinkSync(filePath);
+                    deletedCount++;
+                    // Also try to cleanup related files (e.g. .json sidecars for videos?)
+                    // For now keeping it simple.
+                } catch (e: any) {
+                    errors.push(`Failed to delete ${safeName}: ${e.message}`);
+                }
             }
         }
     }
 
     // Bulk cleanup (older than X)
     if (olderThanHours !== undefined) {
-        const files = await fs.promises.readdir(targetDir);
+        const files = fs.readdirSync(targetDir);
         const now = Date.now();
         const maxAgeMs = olderThanHours * 60 * 60 * 1000;
 
-        const results = await Promise.all(files.map(async (file) => {
+        for (const file of files) {
             const filePath = path.join(targetDir, file);
             try {
-                const stats = await fs.promises.stat(filePath);
+                const stats = fs.statSync(filePath);
                 if (now - stats.mtimeMs > maxAgeMs) {
-                    await fs.promises.unlink(filePath);
-                    return 1;
+                    fs.unlinkSync(filePath);
+                    deletedCount++;
                 }
             } catch (e: any) {
                 // Ignore errors during iteration (race conditions etc)
             }
-            return 0;
-        }));
-
-        deletedCount += results.reduce((acc, val) => acc + val, 0);
+        }
     }
 
     const currentSize = getDirectorySize(targetDir);
