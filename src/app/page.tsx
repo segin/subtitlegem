@@ -880,12 +880,9 @@ export default function Home() {
     }
     if (shiftKey && lastSelectedIdRef.current) {
       // Range selection
-      const lastIndex = subtitles.findIndex(s => s.id === lastSelectedIdRef.current);
-      const currentIndex = subtitles.findIndex(s => s.id === id);
+      const rangeIds = getRangeSelectionIds(subtitles, lastSelectedIdRef.current, id);
       
-      if (lastIndex !== -1 && currentIndex !== -1) {
-        const rangeIds = getRangeSelectionIds(subtitles, lastSelectedIdRef.current, id);
-        
+      if (rangeIds.length > 0) {
         if (ctrlKey) {
           // Add range to existing selection
           setSelectedSubtitleIds(prev => Array.from(new Set([...prev, ...rangeIds])));
