@@ -287,6 +287,16 @@ export default function Home() {
     setTimelineClips(prev => prev.filter(c => c.videoClipId !== clipId));
   };
 
+  const handleRemoveImage = (assetId: string) => {
+    const isUsed = timelineImages.some(i => i.imageAssetId === assetId);
+    if (isUsed && !confirm('This image is used on the timeline. Removing it will also remove it from the timeline. Continue?')) {
+      return;
+    }
+
+    setImageAssets(prev => prev.filter(a => a.id !== assetId));
+    setTimelineImages(prev => prev.filter(i => i.imageAssetId !== assetId));
+  };
+
   const handleRelinkClip = async (clipId: string, file: File) => {
     const clip = videoClips.find(c => c.id === clipId);
     if (!clip) return;
@@ -1425,7 +1435,7 @@ export default function Home() {
             onDragStart={() => {}} // Controlled internally by HTML5 drag
             onDeleteAsset={(id, type) => {
                if (type === 'video') handleRemoveClip(id);
-               // TODO: Handle image deletion
+               if (type === 'image') handleRemoveImage(id);
             }}
             className={isLibraryCollapsed ? 'w-10' : 'w-64'}
           />
