@@ -3,14 +3,16 @@
  */
 import { POST } from './route';
 import { NextRequest } from 'next/server';
-import fs from 'fs';
+import { promises as fsPromises } from 'fs';
 
 // Mock dependencies
 jest.mock('fs', () => ({
-  existsSync: jest.fn(),
-  readdirSync: jest.fn(),
-  statSync: jest.fn(),
-  unlinkSync: jest.fn(),
+  promises: {
+    access: jest.fn(),
+    readdir: jest.fn(),
+    stat: jest.fn(),
+    unlink: jest.fn(),
+  },
 }));
 
 jest.mock('@/lib/storage-config', () => ({
@@ -24,14 +26,14 @@ jest.mock('@/lib/storage-utils', () => ({
 }));
 
 describe('/api/cleanup', () => {
-  const mockExistsSync = fs.existsSync as jest.Mock;
-  const mockReaddirSync = fs.readdirSync as jest.Mock;
-  const mockStatSync = fs.statSync as jest.Mock;
-  const mockUnlinkSync = fs.unlinkSync as jest.Mock;
+  const mockAccess = fsPromises.access as jest.Mock;
+  const mockReaddir = fsPromises.readdir as jest.Mock;
+  const mockStat = fsPromises.stat as jest.Mock;
+  const mockUnlink = fsPromises.unlink as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExistsSync.mockReturnValue(true);
+    mockAccess.mockResolvedValue(undefined);
   });
 
   describe('Validation', () => {
@@ -75,7 +77,7 @@ describe('/api/cleanup', () => {
 
   describe('Specific File Deletion', () => {
     it('should delete specified files and return count', async () => {
-      mockExistsSync.mockReturnValue(true);
+      mockAccess.mockResolvedValue(undefined);
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -93,13 +95,13 @@ describe('/api/cleanup', () => {
       expect(data.success).toBe(true);
       expect(data.deletedCount).toBe(2);
       expect(data.currentSize).toBe(1024);
-      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
+      expect(mockUnlink).toHaveBeenCalledTimes(2);
     });
 
     it('should handle missing files gracefully', async () => {
-      mockExistsSync.mockReturnValueOnce(true) // directory exists
-        .mockReturnValueOnce(false) // file1 missing
-        .mockReturnValueOnce(true); // file2 exists
+      mockAccess.mockResolvedValueOnce(undefined) // directory exists
+        .mockRejectedValueOnce(new Error('ENOENT')) // file1 missing
+        .mockResolvedValueOnce(undefined); // file2 exists
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -118,10 +120,8 @@ describe('/api/cleanup', () => {
     });
 
     it('should capture errors during deletion', async () => {
-      mockExistsSync.mockReturnValue(true);
-      mockUnlinkSync.mockImplementationOnce(() => {
-        throw new Error('Permission denied');
-      });
+      mockAccess.mockResolvedValue(undefined);
+      mockUnlink.mockRejectedValueOnce(new Error('Permission denied'));
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -147,10 +147,10 @@ describe('/api/cleanup', () => {
       const twoHoursAgo = now - (2 * 60 * 60 * 1000);
       const thirtyMinutesAgo = now - (30 * 60 * 1000);
 
-      mockReaddirSync.mockReturnValue(['old.mp4', 'recent.mp4']);
-      mockStatSync
-        .mockReturnValueOnce({ mtimeMs: twoHoursAgo }) // old.mp4
-        .mockReturnValueOnce({ mtimeMs: thirtyMinutesAgo }); // recent.mp4
+      mockReaddir.mockResolvedValue(['old.mp4', 'recent.mp4']);
+      mockStat
+        .mockResolvedValueOnce({ mtimeMs: twoHoursAgo }) // old.mp4
+        .mockResolvedValueOnce({ mtimeMs: thirtyMinutesAgo }); // recent.mp4
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -167,13 +167,13 @@ describe('/api/cleanup', () => {
       expect(res.status).toBe(200);
       expect(data.deletedCount).toBe(1);
       expect(data.currentSize).toBe(1024);
-      expect(mockUnlinkSync).toHaveBeenCalledTimes(1);
+      expect(mockUnlink).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Edge Cases', () => {
     it('should return 0 deleted when directory does not exist', async () => {
-      mockExistsSync.mockReturnValue(false);
+      mockAccess.mockRejectedValue(new Error('ENOENT'));
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -190,7 +190,7 @@ describe('/api/cleanup', () => {
     });
 
     it('should sanitize file names to prevent path traversal', async () => {
-      mockExistsSync.mockReturnValue(true);
+      mockAccess.mockResolvedValue(undefined);
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',
@@ -204,10 +204,10 @@ describe('/api/cleanup', () => {
       const res = await POST(req);
 
       // Should use basename only, so won't find the file
-      expect(mockUnlinkSync).toHaveBeenCalledWith(
+      expect(mockUnlink).toHaveBeenCalledWith(
         expect.stringContaining('passwd')
       );
-      expect(mockUnlinkSync).not.toHaveBeenCalledWith(
+      expect(mockUnlink).not.toHaveBeenCalledWith(
         expect.stringContaining('../')
       );
     });
