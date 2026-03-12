@@ -42,6 +42,8 @@ export interface FileProgress {
   loaded: number;
   total: number;
   status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error';
+  stage?: string;
+  percent?: number;
 }
 
 interface VideoUploadProps {
@@ -73,6 +75,7 @@ export function VideoUpload({
   const [multiVideoProjectName, setMultiVideoProjectName] = useState("New Project");
   
   const [progress, setProgress] = useState(0);
+  const [serverStage, setServerStage] = useState<string | null>(null);
   const [uploadedBytes, setUploadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
   const [uploadSpeed, setUploadSpeed] = useState(0);
@@ -353,68 +356,73 @@ export function VideoUpload({
       }
     });
 
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data: ProcessResponse = JSON.parse(xhr.responseText);
-          if (data.error) setError(data.error);
-          else {
-            // If a pending project file exists, parse and use its subtitles
-            if (pendingProjectFile) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                try {
-                  const projectData = JSON.parse(e.target?.result as string);
-                  onUploadComplete(
-                    projectData.subtitles || data.subtitles,
-                    URL.createObjectURL(file),
-                    secondaryLanguage,
-                    data.videoPath,
-                    data.detectedLanguage,
-                    data.originalFilename,
-                    data.fileSize
-                  );
-                } catch {
-                  // Fall back to generated subtitles
-                  onUploadComplete(
-                    data.subtitles,
-                    URL.createObjectURL(file),
-                    secondaryLanguage,
-                    data.videoPath,
-                    data.detectedLanguage,
-                    data.originalFilename,
-                    data.fileSize
-                  );
-                }
-              };
-              reader.readAsText(pendingProjectFile);
-            } else {
-              onUploadComplete(
-                data.subtitles, 
-                URL.createObjectURL(file), 
-                secondaryLanguage, 
-                data.videoPath,
-                data.detectedLanguage,
-                data.originalFilename,
-                data.fileSize
-              );
-            }
-          }
-        } catch (e) { setError("Failed to parse response"); }
-      } else if (xhr.status === 429) {
-        setError("Rate limit exceeded. Please wait.");
-      } else {
-         setError(`Upload failed: ${xhr.statusText}`);
-      }
-      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-      setLoading(false);
-    });
-
     xhr.addEventListener("error", () => {
       setError("Network error");
       activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
       setLoading(false);
     });
+
+    let lastIndex = 0;
+    xhr.onreadystatechange = () => {
+      if (xhr.readyState === 3 || xhr.readyState === 4) {
+        // Read new chunks
+        const newText = xhr.responseText.substring(lastIndex);
+        const lines = newText.split('\n');
+        
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const part = JSON.parse(line);
+            if (part.type === "progress") {
+               // Update UI with server progress
+               setServerStage(part.stage);
+               if (part.stage === "extracting_audio") {
+                 setError(null); 
+                 setProgress(part.percent ?? 0);
+               } else if (part.stage === "uploading_to_gemini") {
+                 setProgress(part.percent ?? 100);
+               } else if (part.stage === "gemini_processing") {
+                 setProgress(part.percent ?? 100);
+               } else if (part.stage === "generating_subtitles") {
+                 setProgress(100);
+               }
+            } else if (part.type === "complete") {
+              setServerStage(null);
+              const data = part.data;
+              // Handle completion
+              if (pendingProjectFile) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  try {
+                    const projectData = JSON.parse(e.target?.result as string);
+                    onUploadComplete(
+                      projectData.subtitles || data.subtitles,
+                      URL.createObjectURL(file),
+                      secondaryLanguage,
+                      data.videoPath,
+                      data.detectedLanguage,
+                      data.originalFilename,
+                      data.fileSize
+                    );
+                  } catch {
+                    onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
+                  }
+                };
+                reader.readAsText(pendingProjectFile);
+              } else {
+                 onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
+              }
+            } else if (part.type === "error") {
+              setError(part.message);
+              setLoading(false);
+            }
+          } catch (e) {
+            // Partial JSON, wait for next chunk
+          }
+        }
+        lastIndex = xhr.responseText.length;
+      }
+    };
 
     xhr.open("POST", "/api/process");
     xhr.send(formData);
@@ -891,7 +899,10 @@ export function VideoUpload({
                             {isUploading && (() => {
                                 const key = `${project.id}-${f.name}`;
                                 const prog = fileProgressMap[key];
-                                const percent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                                const uploadPercent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                                const barWidth = prog && prog.status === 'processing' 
+                                  ? `${prog.percent ?? 100}%` 
+                                  : (prog && (prog.status === 'complete' ? '100%' : `${uploadPercent}%`));
                                 
                                 if (prog && prog.status !== 'pending' && prog.status !== 'error') {
                                   return (
@@ -902,7 +913,7 @@ export function VideoUpload({
                                             ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-[length:200%_100%] animate-gradient-x w-full' 
                                             : 'bg-blue-500'
                                         }`}
-                                        style={{ width: prog.status === 'processing' || prog.status === 'complete' ? '100%' : `${percent}%` }}
+                                        style={{ width: barWidth }}
                                       />
                                     </div>
                                   );
@@ -913,6 +924,48 @@ export function VideoUpload({
                             <GripVertical className="w-3 h-3 text-[#444444]" />
                             <FileVideo className="w-4 h-4 text-[#007acc] shrink-0" />
                             <span className="flex-1 text-xs text-[#cccccc] truncate">{f.name}</span>
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
+                              
+                              {/* Processing Indicator */}
+                              {isUploading && (() => {
+                                const key = `${project.id}-${f.name}`;
+                                const prog = fileProgressMap[key];
+                                if (prog?.status === 'uploading') {
+                                  return <span className="text-[9px] text-[#007acc] font-mono">{Math.round((prog.loaded / prog.total) * 100)}%</span>;
+                                }
+                                if (prog?.status === 'processing') {
+                                  return (
+                                    <div className="flex items-center gap-1.5 ml-1">
+                                      {prog.stage && (
+                                        <span className="text-[9px] text-[#888888] animate-pulse">
+                                          {prog.stage === 'extracting_audio' ? 'Extracting...' : 
+                                           prog.stage === 'uploading_to_gemini' ? 'Uploading...' :
+                                           prog.stage === 'gemini_processing' ? 'Processing...' : 
+                                           'Subtitles...'}
+                                        </span>
+                                      )}
+                                      {prog.percent !== undefined && (
+                                        <span className="text-[9px] font-mono text-[#007acc]">
+                                          {prog.percent}%
+                                        </span>
+                                      )}
+                                      <div className="flex items-center gap-0.5">
+                                        <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                        <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                        <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce" />
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                if (prog?.status === 'complete') {
+                                  return <Check className="w-3 h-3 text-[#4caf50]" />;
+                                }
+                                return null;
+                              })()}
+                            </div>
+
                             {fileIndex === 0 && (
                               <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
                             )}
@@ -1052,17 +1105,33 @@ export function VideoUpload({
                               }
                           };
 
-                          xhr.onload = () => {
-                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                              if (xhr.status >= 200 && xhr.status < 300) {
-                                  setFileProgressMap(prev => ({
+                          let batchLastIndex = 0;
+                          xhr.onreadystatechange = () => {
+                            if (xhr.readyState === 3 || xhr.readyState === 4) {
+                              const newText = xhr.responseText.substring(batchLastIndex);
+                              const lines = newText.split('\n');
+                              for (const line of lines) {
+                                if (!line.trim()) continue;
+                                try {
+                                  const part = JSON.parse(line);
+                                  if (part.type === "progress") {
+                                    setFileProgressMap(prev => ({
                                       ...prev,
-                                      [key]: { ...prev[key], status: 'complete', loaded: prev[key].total }
-                                  }));
-                                  resolve(JSON.parse(xhr.responseText));
-                              } else {
-                                  reject(new Error(xhr.responseText || 'Upload failed'));
+                                      [key]: { ...prev[key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[key].total }
+                                    }));
+                                  } else if (part.type === "complete") {
+                                    setFileProgressMap(prev => ({
+                                      ...prev,
+                                      [key]: { ...prev[key], status: 'complete', stage: undefined, percent: undefined }
+                                    }));
+                                    resolve(part.data);
+                                  } else if (part.type === "error") {
+                                    reject(new Error(part.message));
+                                  }
+                                } catch (e) { }
                               }
+                              batchLastIndex = xhr.responseText.length;
+                            }
                           };
 
                           xhr.onerror = () => {
@@ -1226,7 +1295,10 @@ export function VideoUpload({
                           const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
                           const key = `${projectId}-${f.name}`;
                           const prog = fileProgressMap[key];
-                          const percent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                          const uploadPercent = prog && prog.total > 0 ? (prog.loaded / prog.total) * 100 : 0;
+                          const barWidth = prog && prog.status === 'processing'
+                            ? `${prog.percent ?? 100}%`
+                            : (prog && (prog.status === 'complete' ? '100%' : `${uploadPercent}%`));
                           
                           if (prog && prog.status !== 'pending' && prog.status !== 'error') {
                             return (
@@ -1237,7 +1309,7 @@ export function VideoUpload({
                                       ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-[length:200%_100%] animate-gradient-x w-full' 
                                       : 'bg-blue-500'
                                   }`}
-                                  style={{ width: prog.status === 'processing' || prog.status === 'complete' ? '100%' : `${percent}%` }}
+                                  style={{ width: barWidth }}
                                 />
                               </div>
                             );
@@ -1253,23 +1325,46 @@ export function VideoUpload({
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] text-[#555555]">{formatBytes(f.size)}</span>
                         
-                        {/* Processing Indicator */}
-                        {isUploading && (() => {
-                          const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
-                          const key = `${projectId}-${f.name}`;
-                          const status = fileProgressMap[key]?.status;
-                          if (status === 'processing') {
-                            return (
-                              <div className="flex items-center gap-0.5 ml-1">
-                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce" />
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
+                              {/* Processing Indicator */}
+                              {isUploading && (() => {
+                                 const projectId = uploadMode === 'multi-video' ? 'multi-video' : `batch-${idx}`;
+                                 const key = `${projectId}-${f.name}`;
+                                 const prog = fileProgressMap[key];
+
+                                 if (prog?.status === 'uploading') {
+                                   return <span className="text-[9px] text-[#007acc] font-mono">{Math.round((prog.loaded / prog.total) * 100)}%</span>;
+                                 }
+
+                                 if (prog?.status === 'processing') {
+                                   return (
+                                     <div className="flex items-center gap-1.5 ml-1">
+                                       {prog.stage && (
+                                         <span className="text-[9px] text-[#888888] animate-pulse">
+                                           {prog.stage === 'extracting_audio' ? 'Extracting...' : 
+                                            prog.stage === 'uploading_to_gemini' ? 'Uploading...' :
+                                            prog.stage === 'gemini_processing' ? 'Processing...' : 
+                                            'Subtitles...'}
+                                         </span>
+                                       )}
+                                       {prog.percent !== undefined && (
+                                         <span className="text-[9px] font-mono text-[#007acc]">
+                                           {prog.percent}%
+                                         </span>
+                                       )}
+                                       <div className="flex items-center gap-0.5">
+                                         <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.3s]" />
+                                         <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce [animation-delay:-0.15s]" />
+                                         <div className="w-1 h-1 bg-[#007acc] rounded-full animate-bounce" />
+                                       </div>
+                                     </div>
+                                   );
+                                 }
+                                 if (prog?.status === 'complete') {
+                                   return <Check className="w-3 h-3 text-[#4caf50]" />;
+                                 }
+                                 return null;
+                               })()}
+                            </div>
 
                       {!isProjectFile && uploadMode === 'multi-video' && idx === 0 && !hasProjectFile && (
                         <span className="px-1.5 py-0.5 bg-[#264f78] text-[#7ec8ff] text-[8px] rounded">primary</span>
@@ -1412,67 +1507,77 @@ export function VideoUpload({
                       }
                     };
 
-                    xhr.onload = async () => {
-                      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                      try {
-                        if (xhr.status >= 200 && xhr.status < 300) {
-                          const data = JSON.parse(xhr.responseText);
-                          if (!projectResults[item.project.id]) projectResults[item.project.id] = [];
-                          
-                          if (data.videoPath) {
-                            projectResults[item.project.id].push({
-                              id: generateClipId(),
-                              originalFilename: item.file.name,
-                              filePath: data.videoPath,
-                              geminiFileUri: data.geminiFileUri,
-                              subtitles: data.subtitles || []
-                            });
+                    let batchLastIndex = 0;
+                    xhr.onreadystatechange = async () => {
+                      if (xhr.readyState === 3 || xhr.readyState === 4) {
+                        const newText = xhr.responseText.substring(batchLastIndex);
+                        const lines = newText.split('\n');
+                        for (const line of lines) {
+                          if (!line.trim()) continue;
+                          try {
+                            const part = JSON.parse(line);
+                            if (part.type === "progress") {
+                              setFileProgressMap(prev => ({
+                                ...prev,
+                                [item.key]: { ...prev[item.key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[item.key].total }
+                              }));
+                            } else if (part.type === "complete") {
+                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+                              const data = part.data;
+                              if (!projectResults[item.project.id]) projectResults[item.project.id] = [];
+                              
+                              if (data.videoPath) {
+                                projectResults[item.project.id].push({
+                                  id: generateClipId(),
+                                  originalFilename: item.file.name,
+                                  filePath: data.videoPath,
+                                  geminiFileUri: data.geminiFileUri,
+                                  subtitles: data.subtitles || []
+                                });
+                              }
+
+                              setFileProgressMap(prev => ({
+                                ...prev,
+                                [item.key]: { ...prev[item.key], status: 'complete', stage: undefined, percent: undefined }
+                              }));
+
+                              // If all files for THIS project are done, create draft
+                              if (projectResults[item.project.id].length === item.project.files.length) {
+                                 await fetch('/api/drafts', {
+                                   method: 'POST',
+                                   headers: { 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({
+                                     name: item.project.name,
+                                     version: 2,
+                                     clips: projectResults[item.project.id].map(c => ({ ...c, subtitles: [] })),
+                                     timeline: projectResults[item.project.id].map((c, i) => ({
+                                       id: `timeline-${c.id}`,
+                                       videoClipId: c.id,
+                                       projectStartTime: i * 10,
+                                       sourceInPoint: 0,
+                                       clipDuration: 0
+                                     })),
+                                     subtitleConfig: { primaryLanguage: 'English' }
+                                   })
+                                 });
+                              }
+
+                              completedCount++;
+                              activeUploads--;
+                              if (nextToUpload < uploadQueue.length && activeUploads === 0) {
+                                 startUpload(nextToUpload);
+                              }
+                              checkCompletion();
+                              resolve();
+                            } else if (part.type === "error") {
+                               activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+                               reject(new Error(part.message));
+                            }
+                          } catch (e) {
+                            // Partial JSON
                           }
-
-                          setFileProgressMap(prev => ({
-                            ...prev,
-                            [item.key]: { ...prev[item.key], status: 'complete' }
-                          }));
-
-                          // If all files for THIS project are done, create draft
-                          const projectFilesDone = item.project.files.every((f: File) => 
-                            uploadQueue.find(q => q.key === `${item.project.id}-${f.name}`)?.key === item.key || // current
-                            fileProgressMap[`${item.project.id}-${f.name}`]?.status === 'complete'
-                          );
-
-                          // Note: Simplified logic, usually we'd track actual project completion
-                          if (projectResults[item.project.id].length === item.project.files.length) {
-                             await fetch('/api/drafts', {
-                               method: 'POST',
-                               headers: { 'Content-Type': 'application/json' },
-                               body: JSON.stringify({
-                                 name: item.project.name,
-                                 version: 2,
-                                 clips: projectResults[item.project.id].map(c => ({ ...c, subtitles: [] })),
-                                 timeline: projectResults[item.project.id].map((c, i) => ({
-                                   id: `timeline-${c.id}`,
-                                   videoClipId: c.id,
-                                   projectStartTime: i * 10,
-                                   sourceInPoint: 0,
-                                   clipDuration: 0
-                                 })),
-                                 subtitleConfig: { primaryLanguage: 'English' }
-                               })
-                             });
-                          }
-
-                          completedCount++;
-                          activeUploads--;
-                          if (nextToUpload < uploadQueue.length && activeUploads === 0) {
-                             // Fallback if pipelining didn't trigger
-                             startUpload(nextToUpload);
-                          }
-                          checkCompletion();
-                        } else {
-                          throw new Error(`Upload failed for ${item.file.name}`);
                         }
-                      } catch (err: any) {
-                        reject(err);
+                        batchLastIndex = xhr.responseText.length;
                       }
                     };
 
@@ -1556,12 +1661,31 @@ export function VideoUpload({
                 <div className="flex justify-between items-center text-xs">
                   <span className="flex items-center gap-2 text-[#cccccc]">
                      <Loader2 className="w-3 h-3 animate-spin text-[#007acc]" />
-                     {progress < 100 ? "Uploading..." : "Analyzing..."}
+                      {progress < 100 ? (serverStage ? "Processing..." : "Uploading...") : "Analyzing..."}
                   </span>
-                  <span className="font-mono text-[#007acc]">{progress}%</span>
+                  <div className="flex items-center gap-2">
+                    {serverStage && (
+                      <span className="text-[10px] text-[#888888] animate-pulse">
+                        {serverStage === 'extracting_audio' ? 'Extracting Audio...' : 
+                         serverStage === 'uploading_to_gemini' ? 'Uploading to Gemini...' :
+                         serverStage === 'gemini_processing' ? 'Gemini Processing...' : 
+                         'Generating Subtitles...'}
+                      </span>
+                    )}
+                    {(!serverStage || serverStage === 'extracting_audio') ? (
+                      <span className="font-mono text-[#007acc]">{progress}%</span>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="w-full bg-[#333333] h-1 rounded-full overflow-hidden">
-                  <div className="bg-[#007acc] h-1 transition-all duration-200" style={{ width: `${progress}%` }} />
+                  <div 
+                    className={`h-1 transition-all duration-200 ${
+                      (serverStage === 'uploading_to_gemini' || serverStage === 'gemini_processing' || serverStage === 'generating_subtitles') 
+                        ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 bg-[length:200%_100%] animate-gradient-x w-full' 
+                        : 'bg-[#007acc]'
+                    }`} 
+                    style={{ width: (serverStage === 'uploading_to_gemini' || serverStage === 'gemini_processing' || serverStage === 'generating_subtitles') ? '100%' : `${progress}%` }} 
+                  />
                 </div>
                 <div className="flex justify-between items-center mt-2">
                   <div className="flex gap-2 text-[10px] text-[#666666] font-mono">

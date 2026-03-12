@@ -370,121 +370,158 @@ export async function POST(req: NextRequest) {
     const fileSizeInMB = stats.size / (1024 * 1024);
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
 
-    let processPath = videoPath;
     const stagingDir = tempDir; 
-    let useInlineData = false;
     const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 
-    if (fileSizeInMB > 400) {
-      console.log("File > 400MB, extracting audio...");
-      try {
-        const codec = await getAudioCodec(videoPath);
-        console.log(`Detected audio codec: ${codec}`);
+    // Use streaming response for progress feedback
+    const stream = new ReadableStream({
+      async start(controller) {
+        let processPath = videoPath;
+        let useInlineData = false;
+        const encoder = new TextEncoder();
+        const sendProgress = (stage: string, percent?: number) => {
+          controller.enqueue(encoder.encode(JSON.stringify({ type: "progress", stage, percent }) + "\n"));
+        };
 
-        let ext = "m4a";
-        let newMime = "audio/mp4";
+        try {
+          if (fileSizeInMB > 400) {
+            sendProgress("extracting_audio", 0);
+            try {
+              const codec = await getAudioCodec(videoPath);
+              console.log(`Detected audio codec: ${codec}`);
 
-        switch (codec) {
-          case "aac": ext = "m4a"; newMime = "audio/mp4"; break;
-          case "mp3": ext = "mp3"; newMime = "audio/mpeg"; break;
-          case "opus": ext = "ogg"; newMime = "audio/ogg"; break;
-          case "vorbis": ext = "ogg"; newMime = "audio/ogg"; break;
-          case "flac": ext = "flac"; newMime = "audio/flac"; break;
-          default: ext = "m4a"; newMime = "audio/mp4";
+              let ext = "m4a";
+              let newMime = "audio/mp4";
+
+              switch (codec) {
+                case "aac": ext = "m4a"; newMime = "audio/mp4"; break;
+                case "mp3": ext = "mp3"; newMime = "audio/mpeg"; break;
+                case "opus": ext = "ogg"; newMime = "audio/ogg"; break;
+                case "vorbis": ext = "ogg"; newMime = "audio/ogg"; break;
+                case "flac": ext = "flac"; newMime = "audio/flac"; break;
+                default: ext = "m4a"; newMime = "audio/mp4";
+              }
+
+              const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.${ext}`);
+              
+              await extractAudio(videoPath, audioPath, (p) => sendProgress("extracting_audio", Math.round(p)));
+              console.log('Audio extraction complete');
+              
+              processPath = audioPath;
+              mimeType = newMime;
+              
+              const audioStats = fs.statSync(audioPath);
+              const audioSizeInMB = audioStats.size / (1024 * 1024);
+              useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
+              
+              console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
+            } catch (audioErr) {
+              console.error('Audio extraction failed, using original file:', audioErr);
+            }
+          } else {
+            useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
+          }
+
+          // Generate subtitles
+          let result;
+          let geminiFileUri: string | null = null;
+          let geminiFileExpiration: string | null = null;
+          let fileId: string | null = null;
+          
+          const { getGlobalSettings } = await import("@/lib/global-settings-store");
+          const { processWithFallback } = await import("@/lib/ai-provider");
+          const settings = getGlobalSettings();
+          const targetModel = modelName || "gemini-2.0-flash"; // Favoring 2.0/3.1 flash per user hint
+
+          if (useInlineData) {
+            sendProgress("generating_subtitles");
+            console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
+            
+            if (!isPathSafe(processPath)) {
+                console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
+                throw new Error('Unauthorized path');
+            }
+            const fileBuffer = fs.readFileSync(processPath);
+            const base64Data = fileBuffer.toString('base64');
+            
+            result = await processWithFallback(
+              'generate',
+              { 
+                base64Data, 
+                mimeType, 
+                secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage, 
+                isInline: true,
+                modelName: modelName // Pass requested model
+              },
+              settings.aiFallbackChain
+            );
+          } else {
+            console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
+            
+            const geminiFile = await uploadToGemini(processPath, mimeType, (stage, percent) => {
+               sendProgress(stage, percent);
+            });
+            geminiFileUri = geminiFile.uri || null;
+            geminiFileExpiration = geminiFile.expirationTime || null;
+            fileId = geminiFile.name || null;
+            
+            sendProgress("generating_subtitles");
+            result = await processWithFallback(
+              'generate',
+              { 
+                fileUri: geminiFile.uri!, 
+                mimeType, 
+                secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+                modelName: modelName // Pass requested model
+              },
+              settings.aiFallbackChain
+            );
+          }
+          
+          const { subtitles, detectedLanguage } = result;
+
+          try {
+              if (processPath !== videoPath && fs.existsSync(processPath)) {
+                secureDelete(processPath).catch(e => console.error("Cleanup error", e)); 
+              }
+          } catch (e) { console.error("Cleanup error", e); }
+
+          controller.enqueue(encoder.encode(JSON.stringify({ 
+            type: "complete",
+            data: {
+              subtitles, 
+              videoPath, 
+              detectedLanguage,
+              geminiFileUri,
+              geminiFileExpiration,
+              fileId,
+              fileSize: fs.statSync(videoPath).size,
+              originalFilename
+            }
+          }) + "\n"));
+          controller.close();
+        } catch (error: any) {
+          console.error("Error processing video:", error);
+          controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message: error.message || "Failed to process video" }) + "\n"));
+          
+          if (videoPath && fs.existsSync(videoPath)) {
+              secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
+          }
+          controller.close();
         }
-
-        const audioPath = path.join(stagingDir, `${path.basename(videoPath, path.extname(videoPath))}_audio.${ext}`);
-        
-        await extractAudio(videoPath, audioPath);
-        console.log('Audio extraction complete');
-        
-        processPath = audioPath;
-        mimeType = newMime;
-        
-        const audioStats = fs.statSync(audioPath);
-        const audioSizeInMB = audioStats.size / (1024 * 1024);
-        useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
-        
-        console.log(`Extracted audio: ${audioSizeInMB.toFixed(2)} MB`);
-      } catch (audioErr) {
-        console.error('Audio extraction failed, using original file:', audioErr);
       }
-    } else {
-      useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
-    }
+    });
 
-    // Generate subtitles
-    let result;
-    let geminiFileUri: string | null = null;
-    let geminiFileExpiration: string | null = null;
-    let fileId: string | null = null;
-    
-    const { getGlobalSettings } = await import("@/lib/global-settings-store");
-    const { processWithFallback } = await import("@/lib/ai-provider");
-    const settings = getGlobalSettings();
-
-    if (useInlineData) {
-      console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
-      
-      if (!isPathSafe(processPath)) {
-          console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
-          return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
-      }
-      const fileBuffer = fs.readFileSync(processPath);
-      const base64Data = fileBuffer.toString('base64');
-      
-      // Note: currently processWithFallback needs to handle inline vs Files API
-      // I'll update it to pass through more info or just use a specific task
-      result = await processWithFallback(
-        'generate',
-        { base64Data, mimeType, secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage, isInline: true },
-        settings.aiFallbackChain
-      );
-    } else {
-      console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
-      
-      const geminiFile = await uploadToGemini(processPath, mimeType);
-      geminiFileUri = geminiFile.uri || null;
-      geminiFileExpiration = geminiFile.expirationTime || null;
-      fileId = geminiFile.name || null;
-      
-      result = await processWithFallback(
-        'generate',
-        { fileUri: geminiFile.uri!, mimeType, secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage },
-        settings.aiFallbackChain
-      );
-    }
-    
-    const { subtitles, detectedLanguage } = result;
-
-    try {
-        if (processPath !== videoPath && fs.existsSync(processPath)) {
-          secureDelete(processPath).catch(e => console.error("Cleanup error", e)); // Clean audio extract
-        }
-    } catch (e) { console.error("Cleanup error", e); }
-
-    return NextResponse.json({ 
-      subtitles, 
-      videoPath, 
-      detectedLanguage,
-      geminiFileUri,
-      geminiFileExpiration,
-      fileId,
-      fileSize: fs.statSync(videoPath).size,
-      originalFilename
+    return new NextResponse(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
     });
 
   } catch (error: any) {
-    console.error("Error processing video:", error);
-    
-    // Attempt cleanup of temp video file on error
-    if (videoPath && fs.existsSync(videoPath)) {
-        // Fire-and-forget secure delete
-        secureDelete(videoPath)
-          .then(() => console.log(`Cleaned up temp video on error: ${videoPath}`))
-          .catch(err => console.error("Failed to cleanup temp video:", err));
-    }
-    
+    console.error("Fatal Error processing video:", error);
     return NextResponse.json({ error: error.message || "Failed to process video" }, { status: 500 });
   }
 }

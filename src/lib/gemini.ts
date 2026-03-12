@@ -26,8 +26,14 @@ function cleanJsonOutput(text: string): string {
 
 
 
-export async function uploadToGemini(filePath: string, mimeType: string) {
+export async function uploadToGemini(
+  filePath: string, 
+  mimeType: string,
+  onProgress?: (stage: string, percent?: number) => void
+) {
   // Upload file using new SDK
+  if (onProgress) onProgress("uploading_to_gemini");
+  
   const uploadResult = await ai.files.upload({
     file: filePath,
     config: {
@@ -46,13 +52,17 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   let waitCount = 0;
   const maxWaitChecks = 60; 
 
+  if (onProgress) onProgress("gemini_processing");
+
   // Wait for file to be processed
   while (file.state === FileState.PROCESSING && waitCount < maxWaitChecks) {
     waitCount++;
+
     if (waitCount % 3 === 0) {
         console.log(`[${new Date().toISOString()}] [Gemini] Still processing file ${fileName}... (${waitCount}/${maxWaitChecks})`);
     }
     await new Promise((resolve) => setTimeout(resolve, 10_000));
+
 
     // Retry with exponential backoff on transient errors
     try {
