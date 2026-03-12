@@ -10,6 +10,7 @@ import busboy from "busboy";
 import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { secureDelete } from "@/lib/security";
+import { validateAuth } from "@/lib/auth";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
@@ -32,6 +33,11 @@ const ALLOWED_LANGUAGES = [
 ];
 
 export async function POST(req: NextRequest) {
+  // Security check: enforce authentication
+  if (!validateAuth(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   // Handle JSON requests for Reprocessing/Translation
   if (req.headers.get("content-type")?.includes("application/json")) {
     try {
