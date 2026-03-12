@@ -151,4 +151,12 @@ describe('isPathSafe', () => {
     const trickyPath = path.join(stagingDir, '..', '..', 'secret.txt');
     expect(isPathSafe(trickyPath)).toBe(false);
   });
+
+  it('should block sensitive database files in staging directory', () => {
+    const dbPath = path.join(stagingDir, 'drafts.db');
+    const sqlitePath = path.join(stagingDir, 'data.sqlite');
+    // These should be BLOCKED (false) but are currently ALLOWED (true)
+    expect(isPathSafe(dbPath)).toBe(false);
+    expect(isPathSafe(sqlitePath)).toBe(false);
+  });
 });

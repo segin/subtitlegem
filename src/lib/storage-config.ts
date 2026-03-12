@@ -342,10 +342,18 @@ export function isPathSafe(filePath: string | null | undefined): boolean {
     console.warn('[Security] Blocked shell variable injection in path');
     return false;
   }
-  
+
   // 5. Standard path prefix validation
   const stagingDir = getStagingDir();
   const resolvedPath = path.resolve(filePath);
+
+  // 6. Block sensitive file extensions (databases)
+  const sensitiveExtensions = ['.db', '.sqlite'];
+  const ext = path.extname(resolvedPath).toLowerCase();
+  if (sensitiveExtensions.includes(ext)) {
+    console.warn('[Security] Blocked access to sensitive file extension:', ext);
+    return false;
+  }
   const resolvedStagingDir = path.resolve(stagingDir);
   // Check if path is within staging directory (STRICT: Project root access denied)
   return resolvedPath.startsWith(resolvedStagingDir + path.sep) || 
