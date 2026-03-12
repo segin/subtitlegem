@@ -1,4 +1,12 @@
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_FPS } from './constants';
+import {
+  REFERENCE_WIDTH,
+  REFERENCE_HEIGHT,
+  DEFAULT_FPS,
+  DEFAULT_PRIMARY_LANGUAGE,
+  DEFAULT_SECONDARY_LANGUAGE,
+  DEFAULT_GLOBAL_SECONDARY_LANGUAGE,
+  DEFAULT_AI_MODEL
+} from './constants';
 
 export interface SubtitleLine {
   id: string;
@@ -67,8 +75,8 @@ export interface SubtitleConfig {
 }
 
 export const DEFAULT_CONFIG: SubtitleConfig = {
-  primaryLanguage: 'English',
-  secondaryLanguage: 'Secondary',
+  primaryLanguage: DEFAULT_PRIMARY_LANGUAGE,
+  secondaryLanguage: DEFAULT_SECONDARY_LANGUAGE,
   // Default to empty to inherit from Global Settings
   primary: {}, 
   secondary: {},
@@ -396,18 +404,18 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     outlineWidth: 0.2,
   },
 
-  defaultPrimaryLanguage: 'English',
-  defaultSecondaryLanguage: 'Simplified Chinese',
+  defaultPrimaryLanguage: DEFAULT_PRIMARY_LANGUAGE,
+  defaultSecondaryLanguage: DEFAULT_GLOBAL_SECONDARY_LANGUAGE,
   subtitleStyle: 'split',
   defaultHwaccel: 'none',
   defaultPreset: 'veryfast',
   defaultCrf: 23,
-  defaultGeminiModel: 'gemini-2.0-flash',
+  defaultGeminiModel: DEFAULT_AI_MODEL,
   aiFallbackChain: [
     {
       id: 'default-gemini',
       provider: 'gemini',
-      modelName: 'gemini-2.0-flash',
+      modelName: DEFAULT_AI_MODEL,
       enabled: true
     }
   ],

@@ -19,3 +19,15 @@ export const REFERENCE_PIXELS = REFERENCE_WIDTH * REFERENCE_HEIGHT;
 
 /** Default frame rate for projects */
 export const DEFAULT_FPS = 30;
+
+/** Default primary language for subtitles */
+export const DEFAULT_PRIMARY_LANGUAGE = 'English';
+
+/** Default secondary language for subtitles (placeholder) */
+export const DEFAULT_SECONDARY_LANGUAGE = 'Secondary';
+
+/** Default secondary language for global settings */
+export const DEFAULT_GLOBAL_SECONDARY_LANGUAGE = 'Simplified Chinese';
+
+/** Default AI model for processing */
+export const DEFAULT_AI_MODEL = 'gemini-2.0-flash';
