@@ -1,48 +1,38 @@
-import { expect, it, describe, mock, beforeEach } from "bun:test";
 import { DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { GET, PUT, DELETE } from "./route";
+import { NextRequest } from "next/server";
 
-/**
- * Settings API Route Tests
- *
- * Tests the GET, PUT, and DELETE handlers for the global settings API.
- * Uses Bun's module mocking to isolate the handlers from external dependencies
- * like next/server and the global-settings-store.
- */
+const mockGetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
+const mockSaveGlobalSettings = jest.fn((s: any) => {});
+const mockResetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
 
-// 1. Register mocks BEFORE loading the handlers
-mock.module("next/server", () => ({
-  NextResponse: {
-    json: (data: any, init?: any) => ({
-      status: init?.status || 200,
-      json: async () => data,
-    }),
-  },
-  NextRequest: class {
-    url: string;
-    _body: any;
-    constructor(url: string, init?: any) {
-      this.url = url;
-      this._body = init?.body;
-    }
-    async json() {
-      return typeof this._body === 'string' ? JSON.parse(this._body) : this._body;
-    }
-  },
+jest.mock("next/server", () => {
+  return {
+    NextResponse: {
+      json: (data: any, init?: any) => ({
+        status: init?.status || 200,
+        json: async () => data,
+      }),
+    },
+    NextRequest: class {
+      url: string;
+      _body: any;
+      constructor(url: string, init?: any) {
+        this.url = url;
+        this._body = init?.body;
+      }
+      async json() {
+        return typeof this._body === 'string' ? JSON.parse(this._body) : this._body;
+      }
+    },
+  };
+});
+
+jest.mock("@/lib/global-settings-store", () => ({
+  getGlobalSettings: () => mockGetGlobalSettings(),
+  saveGlobalSettings: (s: any) => mockSaveGlobalSettings(s),
+  resetGlobalSettings: () => mockResetGlobalSettings(),
 }));
-
-const mockGetGlobalSettings = mock(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
-const mockSaveGlobalSettings = mock(() => {});
-const mockResetGlobalSettings = mock(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
-
-mock.module("@/lib/global-settings-store", () => ({
-  getGlobalSettings: mockGetGlobalSettings,
-  saveGlobalSettings: mockSaveGlobalSettings,
-  resetGlobalSettings: mockResetGlobalSettings,
-}));
-
-// 2. Load handlers using require to ensure they pick up the registered mocks
-// (Static imports would be resolved before the mocks are applied in Bun)
-const { GET, PUT, DELETE } = require("./route");
 
 describe("/api/settings", () => {
   beforeEach(() => {

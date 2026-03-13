@@ -1568,7 +1568,6 @@ export function VideoUpload({
                                  startUpload(nextToUpload);
                               }
                               checkCompletion();
-                              resolve();
                             } else if (part.type === "error") {
                                activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                                reject(new Error(part.message));

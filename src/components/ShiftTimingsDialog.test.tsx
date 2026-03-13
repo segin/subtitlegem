@@ -102,7 +102,7 @@ describe('ShiftTimingsDialog', () => {
 
   test('calls onClose when pressing Escape key', () => {
     render(<ShiftTimingsDialog {...defaultProps} />);
-    fireEvent.keydown(document, { key: 'Escape' });
+    fireEvent.keyDown(document, { key: 'Escape' });
     expect(defaultProps.onClose).toHaveBeenCalled();
   });
 
@@ -111,7 +111,7 @@ describe('ShiftTimingsDialog', () => {
     // The overlay is the first div in the component
     const overlay = screen.getByRole('dialog').parentElement;
     if (overlay) {
-      fireEvent.mousedown(overlay);
+      fireEvent.mouseDown(overlay);
       expect(defaultProps.onClose).toHaveBeenCalled();
     }
   });
@@ -119,7 +119,7 @@ describe('ShiftTimingsDialog', () => {
   test('does not call onClose when clicking inside the dialog', () => {
     render(<ShiftTimingsDialog {...defaultProps} />);
     const dialog = screen.getByRole('dialog');
-    fireEvent.mousedown(dialog);
+    fireEvent.mouseDown(dialog);
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 

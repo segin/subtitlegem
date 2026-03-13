@@ -449,6 +449,9 @@ export default function Home() {
            clipDuration: dur,
         };
         setTimelineClips([newTimelineClip]);
+     } else {
+       // Switch to Projects/Library to see the newly drafted content (N:1, Batch, Advanced)
+       setShowVideoLibrary(true);
      }
   };
   

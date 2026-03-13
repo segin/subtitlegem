@@ -14,6 +14,11 @@ import { validateAuth } from "@/lib/auth";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
+export const maxDuration = 300; // 5 minutes
+
+// Next.js config for this specific route
+export const dynamic = 'force-dynamic';
+
 
 const ALLOWED_LANGUAGES = [
   "Simplified Chinese", 
