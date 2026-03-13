@@ -35,6 +35,8 @@ export async function PUT(req: NextRequest) {
       defaultCrf: body.defaultCrf ?? existing.defaultCrf,
       defaultGeminiModel: body.defaultGeminiModel ?? existing.defaultGeminiModel,
       aiFallbackChain: body.aiFallbackChain ?? existing.aiFallbackChain,
+      maxFileSizeMB: body.maxFileSizeMB ?? existing.maxFileSizeMB,
+      maxProjectSizeMB: body.maxProjectSizeMB ?? existing.maxProjectSizeMB,
     };
     
     saveGlobalSettings(settings);

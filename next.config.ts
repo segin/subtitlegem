@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // basePath: '/subtitlegem',
   
   experimental: {
-    proxyClientMaxBodySize: '2000mb', // Replace middlewareClientMaxBodySize
+    proxyClientMaxBodySize: '50gb', // Allow uploads up to 50 GB per file
   },
 };
 

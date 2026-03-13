@@ -375,6 +375,18 @@ export async function POST(req: NextRequest) {
     const fileSizeInMB = stats.size / (1024 * 1024);
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
 
+    // Enforce configurable per-file size limit
+    const { getGlobalSettings: getSettings } = await import("@/lib/global-settings-store");
+    const uploadSettings = getSettings();
+    const maxFileSizeMB = uploadSettings.maxFileSizeMB ?? 51200; // Default: 50 GB
+    if (fileSizeInMB > maxFileSizeMB) {
+      console.warn(`[Process] File exceeds max size: ${fileSizeInMB.toFixed(0)} MB > ${maxFileSizeMB} MB limit`);
+      secureDelete(videoPath).catch(e => console.error("Cleanup error", e));
+      return NextResponse.json(
+        { error: `File too large (${fileSizeInMB.toFixed(0)} MB). Maximum allowed: ${maxFileSizeMB} MB. Adjust in Global Settings.` },
+        { status: 413 }
+      );
+    }
     const stagingDir = tempDir; 
     const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 

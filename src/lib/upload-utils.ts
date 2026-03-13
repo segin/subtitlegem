@@ -22,15 +22,22 @@ const ALLOWED_VIDEO_TYPES = [
 
 /**
  * Validate a video file for upload
+ * @param file - The file to validate
+ * @param maxFileSizeMB - Optional per-file size limit in MB (from Global Settings)
  */
-export function validateVideoFile(file: File): FileValidationResult {
+export function validateVideoFile(file: File, maxFileSizeMB?: number): FileValidationResult {
   if (!file) {
     return { valid: false, error: 'No file provided' };
   }
 
-
   if (!ALLOWED_VIDEO_TYPES.includes(file.type) && !file.name.match(/\.(mp4|webm|mov|avi|mkv|mpeg|ogv)$/i)) {
     return { valid: false, error: 'Unsupported video format' };
+  }
+
+  if (maxFileSizeMB && file.size > maxFileSizeMB * 1024 * 1024) {
+    const fileSizeGB = (file.size / (1024 * 1024 * 1024)).toFixed(1);
+    const limitGB = (maxFileSizeMB / 1024).toFixed(0);
+    return { valid: false, error: `File too large (${fileSizeGB} GB). Maximum: ${limitGB} GB. Adjust in Global Settings.` };
   }
 
   return { valid: true };

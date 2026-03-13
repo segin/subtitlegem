@@ -367,6 +367,12 @@ export interface GlobalSettings {
 
   // Safety Re-route (Phase 7)
   aiFallbackChain: ModelConfig[];
+
+  // Upload size limits (in MB)
+  /** Maximum single file size in MB. Default: 51200 (50 GB) */
+  maxFileSizeMB: number;
+  /** Maximum aggregate project size in MB. Default: 102400 (100 GB) */
+  maxProjectSizeMB: number;
 }
 
 export type AIProvider = 'gemini' | 'openai' | 'anthropic' | 'deepseek' | 'ollama' | 'local';
@@ -419,4 +425,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
       enabled: true
     }
   ],
+  maxFileSizeMB: 51200,     // 50 GB
+  maxProjectSizeMB: 102400, // 100 GB
 };

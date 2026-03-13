@@ -98,6 +98,19 @@ export function VideoUpload({
   const [insertProjectId, setInsertProjectId] = useState<string | null>(null);
   const [insertIndex, setInsertIndex] = useState<number | null>(null); // null = append, number = insert before
   
+  // Upload size limit from Global Settings
+  const [maxFileSizeMB, setMaxFileSizeMB] = useState<number | undefined>(undefined);
+
+  // Fetch upload limits on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        if (data.maxFileSizeMB) setMaxFileSizeMB(data.maxFileSizeMB);
+      })
+      .catch(() => {}); // Fail silently, server will enforce anyway
+  }, []);
+
   // Model Data & Global Selection State
   const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
   const [testing, setTesting] = useState(false); // Global testing state for main UI
@@ -238,7 +251,7 @@ export function VideoUpload({
   };
 
   const handleFileSelect = useCallback((selectedFile: File) => {
-    const result = validateVideoFile(selectedFile);
+    const result = validateVideoFile(selectedFile, maxFileSizeMB);
     if (result.valid) {
       setFile(selectedFile);
       setError(null);
@@ -247,7 +260,7 @@ export function VideoUpload({
     } else {
       setError(result.error || 'Invalid video file');
     }
-  }, []);
+  }, [maxFileSizeMB]);
 
   // Multi-file select for Mode 1/2
   const handleMultiFileSelect = useCallback((selectedFiles: FileList | File[]) => {
