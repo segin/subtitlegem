@@ -8,7 +8,7 @@
  */
 
 import * as fc from 'fast-check';
-import { resolveTrackStyle, normalizeToPx, getPreviewStyle } from './style-resolver';
+import { resolveTrackStyle, normalizeToPx, getPreviewStyle, percentToPx } from './style-resolver';
 import { TrackStyle, DEFAULT_GLOBAL_SETTINGS } from '@/types/subtitle';
 
 // ============================================================================
@@ -115,6 +115,60 @@ describe('resolveTrackStyle', () => {
               { fontSize: lineFontSize }
             );
             return result.fontSize === lineFontSize;
+          }
+        )
+      );
+    });
+  });
+});
+
+// ============================================================================
+// percentToPx Tests
+// ============================================================================
+
+describe('percentToPx', () => {
+  describe('unit tests', () => {
+    test('calculates pixels from percentage and fullSize', () => {
+      expect(percentToPx(5, 1000)).toBe(50);
+      expect(percentToPx(10, 1920)).toBe(192);
+      expect(percentToPx(50, 100)).toBe(50);
+    });
+
+    test('returns 0 for undefined or null', () => {
+      expect(percentToPx(undefined, 1000)).toBe(0);
+      // @ts-ignore
+      expect(percentToPx(null, 1000)).toBe(0);
+    });
+
+    test('handles zero and 100%', () => {
+      expect(percentToPx(0, 1080)).toBe(0);
+      expect(percentToPx(100, 1080)).toBe(1080);
+    });
+
+    test('handles large values (>100)', () => {
+      expect(percentToPx(200, 100)).toBe(200);
+    });
+
+    test('handles negative values', () => {
+      expect(percentToPx(-10, 1000)).toBe(-100);
+    });
+
+    test('handles decimal percentages', () => {
+      expect(percentToPx(5.5, 1000)).toBe(55);
+    });
+  });
+
+  describe('property tests', () => {
+    test('result is always (value / 100) * fullSize', () => {
+      fc.assert(
+        fc.property(
+          fc.float({ noNaN: true }),
+          fc.float({ noNaN: true }),
+          (value, fullSize) => {
+            const result = percentToPx(value, fullSize);
+            const expected = (value / 100) * fullSize;
+            if (isNaN(expected)) return isNaN(result);
+            return Math.abs(result - expected) < 0.0001;
           }
         )
       );
