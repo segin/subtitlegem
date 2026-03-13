@@ -7,7 +7,7 @@ const nextConfig: NextConfig = {
   // basePath: '/subtitlegem',
   
   experimental: {
-    // @ts-ignore
+    proxyClientMaxBodySize: '2000mb', // Replace middlewareClientMaxBodySize
   },
 };
 
