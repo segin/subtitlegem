@@ -7,9 +7,9 @@ export async function POST(req: NextRequest) {
 
     if (!apiPassword || apiPassword.trim() === "") {
       return NextResponse.json({
-        success: true,
-        message: "Authentication disabled"
-      });
+        success: false,
+        error: "Authentication is not configured. Please set the API_PASSWORD environment variable."
+      }, { status: 503 });
     }
 
     if (password === apiPassword) {
