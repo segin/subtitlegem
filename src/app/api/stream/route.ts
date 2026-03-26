@@ -77,7 +77,6 @@ export async function GET(req: NextRequest) {
 
       ffmpegProcess.stderr.on('data', (data) => {
         // Log stderr but don't fail stream unless exit code is bad
-        // console.log(`[FFmpeg-Stream Stderr]: ${data}`);
       });
       
       ffmpegProcess.on('error', (err) => {
