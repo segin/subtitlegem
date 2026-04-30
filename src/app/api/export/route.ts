@@ -66,9 +66,15 @@ export async function POST(req: NextRequest) {
        if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
 
        const assPath = path.join(exportDir, "subtitles.ass");
-       const safeBaseName = (filename || 'project').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+       const MAX_BASENAME = 100;
+       const safeBaseName = (filename || 'project')
+         .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+         .substring(0, MAX_BASENAME);
        const outputName = `${safeBaseName}_export_${Date.now()}.mp4`;
        const outputPath = path.join(exportDir, outputName);
+       if (!path.resolve(outputPath).startsWith(path.resolve(exportDir) + path.sep)) {
+         return NextResponse.json({ error: 'Invalid output path' }, { status: 400 });
+       }
 
        // Video Dimensions from Project Config
        const videoDimensions: VideoDimensions = {
@@ -149,11 +155,17 @@ export async function POST(req: NextRequest) {
         ? path.basename(filename, path.extname(filename)) 
         : path.basename(videoPath, path.extname(videoPath));
         
-    // Clean string (alphanumeric + safe chars) to prevent FS issues
-    const safeBaseName = baseName.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-    
-    const outputName = `${safeBaseName}_export_${Date.now()}.mp4`; // Unique output name
+    // Clean string (alphanumeric + safe chars) and cap length to prevent FS issues
+    const MAX_BASENAME = 100;
+    const safeBaseName = baseName
+      .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+      .substring(0, MAX_BASENAME);
+
+    const outputName = `${safeBaseName}_export_${Date.now()}.mp4`;
     const outputPath = path.join(exportDir, outputName);
+    if (!path.resolve(outputPath).startsWith(path.resolve(exportDir) + path.sep)) {
+      return NextResponse.json({ error: 'Invalid output path' }, { status: 400 });
+    }
 
     // Get video dimensions for proper ASS PlayRes scaling
     let videoDimensions: VideoDimensions | undefined;

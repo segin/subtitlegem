@@ -60,9 +60,18 @@ export async function POST(req: NextRequest) {
         promptHints: z.string().optional().refine(val => !val || val.length <= 1000, { message: "Prompt hints cannot exceed 1000 characters" }),
       }).refine(data => data.fileUri || data.filePath, { message: "Either fileUri or filePath is required" });
 
+      const SubtitleLineSchema = z.object({
+        id: z.string(),
+        startTime: z.number(),
+        endTime: z.number(),
+        text: z.string(),
+        secondaryText: z.string().optional(),
+        clipId: z.string().optional(),
+      }).passthrough();
+
       const TranslateSchema = z.object({
         mode: z.literal('translate'),
-        subtitles: z.array(z.any()), // Basic check, could be stricter
+        subtitles: z.array(SubtitleLineSchema).max(5000),
         secondaryLanguage: z.string(),
         model: z.string().optional(),
         clipId: z.string().optional(),
@@ -523,6 +532,9 @@ export async function POST(req: NextRequest) {
           
           if (videoPath && fs.existsSync(videoPath)) {
               secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
+          }
+          if (processPath && processPath !== videoPath && fs.existsSync(processPath)) {
+              secureDelete(processPath).catch(err => console.error("Failed to cleanup extracted audio:", err));
           }
           controller.close();
         }

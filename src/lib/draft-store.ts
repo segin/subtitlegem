@@ -8,6 +8,7 @@
  */
 
 import Database from "better-sqlite3";
+import { z } from "zod";
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
@@ -260,6 +261,35 @@ export function loadDraft(id: string): Draft | null {
   return rowToDraft(row);
 }
 
+function safeJsonParse<T>(str: string | null, fallback: T): T {
+  if (!str) return fallback;
+  try {
+    return JSON.parse(str);
+  } catch {
+    console.warn('[DraftStore] Failed to parse JSON, using fallback');
+    return fallback;
+  }
+}
+
+const SubtitleLineDataSchema = z.object({
+  id: z.string(),
+  startTime: z.number(),
+  endTime: z.number(),
+  text: z.string(),
+}).passthrough();
+
+function safeParseSubtitles(str: string | null): SubtitleLine[] | undefined {
+  if (!str) return undefined;
+  try {
+    const parsed = JSON.parse(str);
+    if (!Array.isArray(parsed)) return [];
+    return z.array(SubtitleLineDataSchema).parse(parsed) as SubtitleLine[];
+  } catch {
+    console.warn('[DraftStore] Invalid subtitle data in draft, returning empty array');
+    return [];
+  }
+}
+
 /**
  * Convert database row to Draft object
  */
@@ -271,22 +301,22 @@ function rowToDraft(row: DraftRow): Draft {
       id: row.id,
       name: row.name,
       version: 2,
-      clips: JSON.parse(row.clips),
-      timeline: JSON.parse(row.timeline),
-      projectConfig: row.project_config ? JSON.parse(row.project_config) : DEFAULT_PROJECT_CONFIG,
-      subtitleConfig: row.config ? JSON.parse(row.config) : {},
+      clips: safeJsonParse(row.clips, [] as VideoClip[]),
+      timeline: safeJsonParse(row.timeline, [] as TimelineClip[]),
+      projectConfig: safeJsonParse(row.project_config, DEFAULT_PROJECT_CONFIG),
+      subtitleConfig: safeJsonParse(row.config, {} as SubtitleConfig),
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
   }
-  
+
   return {
     id: row.id,
     name: row.name,
     version: 1,
     videoPath: row.video_path || undefined,
-    subtitles: row.subtitles ? JSON.parse(row.subtitles) : undefined,
-    config: row.config ? JSON.parse(row.config) : undefined,
+    subtitles: safeParseSubtitles(row.subtitles),
+    config: safeJsonParse(row.config, undefined as SubtitleConfig | undefined),
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
   };

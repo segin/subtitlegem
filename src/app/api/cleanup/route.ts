@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { promises as fsPromises } from 'fs';
-import { getStorageConfig } from '@/lib/storage-config';
+import { getStorageConfig, isPathSafe } from '@/lib/storage-config';
 import { getDirectorySize } from '@/lib/storage-utils';
 import { z } from 'zod';
 
@@ -39,21 +39,41 @@ export async function POST(req: NextRequest) {
 
     // Specific file deletion
     if (fileIds && fileIds.length > 0) {
+        const resolvedTargetDir = path.resolve(targetDir);
         for (const fileId of fileIds) {
-            // Basic sanitization
-            const safeName = path.basename(fileId); 
+            const safeName = path.basename(fileId);
             const filePath = path.join(targetDir, safeName);
-            
+            const resolvedPath = path.resolve(filePath);
+
+            // Verify path stays within target directory
+            if (!resolvedPath.startsWith(resolvedTargetDir + path.sep)) {
+                errors.push(`Access denied: ${safeName}`);
+                continue;
+            }
+
+            // Full security validation
+            if (!isPathSafe(resolvedPath)) {
+                errors.push(`Access denied: ${safeName}`);
+                continue;
+            }
+
+            // lstat: check existence and reject symlinks atomically
             try {
-                await fsPromises.access(filePath);
-                try {
-                    await fsPromises.unlink(filePath);
-                    deletedCount++;
-                } catch (e: any) {
-                    errors.push(`Failed to delete ${safeName}: ${e.message}`);
+                const lstats = await fsPromises.lstat(filePath);
+                if (lstats.isSymbolicLink()) {
+                    errors.push(`Access denied (symlink): ${safeName}`);
+                    continue;
                 }
             } catch {
-                // File does not exist, ignore
+                // File does not exist, skip
+                continue;
+            }
+
+            try {
+                await fsPromises.unlink(filePath);
+                deletedCount++;
+            } catch (e: unknown) {
+                errors.push(`Failed to delete ${safeName}: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
     }

@@ -10,10 +10,49 @@
  * Results are cached in memory (not persisted to disk).
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 
-const execAsync = promisify(exec);
+function spawnAsync(
+  cmd: string,
+  args: string[],
+  timeoutMs?: number
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(cmd, args);
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = timeoutMs
+      ? setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            proc.kill();
+            reject(new Error(`Process timed out after ${timeoutMs}ms`));
+          }
+        }, timeoutMs)
+      : null;
+
+    proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+    proc.on('close', (code: number | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`Process exited with code ${code}`));
+      } else {
+        resolve({ stdout, stderr });
+      }
+    });
+    proc.on('error', (err: Error) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      reject(err);
+    });
+  });
+}
 
 export interface FFmpegEncoder {
   name: string;
@@ -60,7 +99,7 @@ async function parseEncoders(): Promise<{ video: FFmpegEncoder[], audio: FFmpegE
   const audio: FFmpegEncoder[] = [];
   
   try {
-    const { stdout } = await execAsync('ffmpeg -encoders -hide_banner 2>/dev/null');
+    const { stdout } = await spawnAsync('ffmpeg', ['-encoders', '-hide_banner']);
     const lines = stdout.split('\n');
     
     // Skip header lines until we hit "------"
@@ -109,7 +148,7 @@ async function parseFormats(): Promise<FFmpegFormat[]> {
   const formats: FFmpegFormat[] = [];
   
   try {
-    const { stdout } = await execAsync('ffmpeg -formats -hide_banner 2>/dev/null');
+    const { stdout } = await spawnAsync('ffmpeg', ['-formats', '-hide_banner']);
     const lines = stdout.split('\n');
     
     let started = false;
@@ -146,7 +185,7 @@ async function parseFormats(): Promise<FFmpegFormat[]> {
  */
 async function parseHwaccels(): Promise<{ hwaccels: string[]; hwEncoders: HWEncoderInfo[] }> {
   const ENCODER_TEST_TIMEOUT = 8000;
-  const TEST_INPUT = '-f lavfi -i testsrc=duration=0.1:size=64x64';
+  const TEST_INPUT_ARGS = ['-f', 'lavfi', '-i', 'testsrc=duration=0.1:size=64x64'];
   
   // Define all platforms and their encoders per codec
   const platforms: {
@@ -227,30 +266,30 @@ async function parseHwaccels(): Promise<{ hwaccels: string[]; hwEncoders: HWEnco
   console.log('[FFmpeg] Broad-spectrum encoder probe starting...');
   const startTime = Date.now();
   
-  // Build all test tasks
-  const testTasks: { platform: string; displayName: string; codec: string; encoder: string; cmd: string }[] = [];
-  
+  // Build all test tasks with argument arrays (no shell string interpolation)
+  const testTasks: { platform: string; displayName: string; codec: string; encoder: string; args: string[] }[] = [];
+
   for (const platform of platforms) {
     for (const enc of platform.encoders) {
-      const extraArgs = enc.cmd || '';
-      const cmd = `ffmpeg ${extraArgs} ${TEST_INPUT} -c:v ${enc.name} -f null - 2>&1`;
+      const extraArgs = enc.cmd ? enc.cmd.trim().split(/\s+/).filter(Boolean) : [];
+      const args = [...extraArgs, ...TEST_INPUT_ARGS, '-c:v', enc.name, '-f', 'null', '-'];
       testTasks.push({
         platform: platform.name,
         displayName: platform.displayName,
         codec: enc.codec,
         encoder: enc.name,
-        cmd,
+        args,
       });
     }
   }
-  
+
   console.log(`[FFmpeg] Testing ${testTasks.length} encoder combinations...`);
-  
+
   // Run all tests in parallel
   const results = await Promise.all(
     testTasks.map(async (task) => {
       try {
-        await execAsync(task.cmd, { timeout: ENCODER_TEST_TIMEOUT });
+        await spawnAsync('ffmpeg', task.args, ENCODER_TEST_TIMEOUT);
         console.log(`[FFmpeg] ✓ ${task.encoder}`);
         return { ...task, available: true };
       } catch {
@@ -295,10 +334,11 @@ async function parseHwaccels(): Promise<{ hwaccels: string[]; hwEncoders: HWEnco
  */
 async function getVersion(): Promise<string> {
   try {
-    const { stdout } = await execAsync('ffmpeg -version 2>/dev/null | head -1');
-    const match = stdout.match(/ffmpeg version (\S+)/);
+    const { stdout } = await spawnAsync('ffmpeg', ['-version']);
+    const firstLine = stdout.split('\n')[0];
+    const match = firstLine.match(/ffmpeg version (\S+)/);
     return match ? match[1] : 'unknown';
-  } catch (error) {
+  } catch {
     return 'unknown';
   }
 }
