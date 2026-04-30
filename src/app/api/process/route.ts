@@ -449,80 +449,90 @@ export async function POST(req: NextRequest) {
           }
 
           // Generate subtitles
-          let result;
+          let result: { subtitles: unknown; detectedLanguage: unknown } | null = null;
           let geminiFileUri: string | null = null;
           let geminiFileExpiration: string | null = null;
           let fileId: string | null = null;
-          
+          let subtitleGenerationFailed = false;
+
           const { getGlobalSettings } = await import("@/lib/global-settings-store");
           const { processWithFallback } = await import("@/lib/ai-provider");
           const settings = getGlobalSettings();
           const targetModel = modelName || "gemini-2.0-flash"; // Favoring 2.0/3.1 flash per user hint
 
-          if (useInlineData) {
-            sendProgress("generating_subtitles");
-            console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
-            
-            if (!isPathSafe(processPath)) {
-                console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
-                throw new Error('Unauthorized path');
+          try {
+            if (useInlineData) {
+              sendProgress("generating_subtitles");
+              console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
+
+              if (!isPathSafe(processPath)) {
+                  console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
+                  throw new Error('Unauthorized path');
+              }
+              const fileBuffer = fs.readFileSync(processPath);
+              const base64Data = fileBuffer.toString('base64');
+
+              result = await processWithFallback(
+                'generate',
+                {
+                  base64Data,
+                  mimeType,
+                  secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+                  isInline: true,
+                  modelName: modelName
+                },
+                settings.aiFallbackChain
+              );
+            } else {
+              console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
+
+              const geminiFile = await uploadToGemini(processPath, mimeType, (stage, percent) => {
+                 sendProgress(stage, percent);
+              });
+              geminiFileUri = geminiFile.uri || null;
+              geminiFileExpiration = geminiFile.expirationTime || null;
+              fileId = geminiFile.name || null;
+
+              sendProgress("generating_subtitles");
+              result = await processWithFallback(
+                'generate',
+                {
+                  fileUri: geminiFile.uri!,
+                  mimeType,
+                  secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
+                  modelName: modelName
+                },
+                settings.aiFallbackChain
+              );
             }
-            const fileBuffer = fs.readFileSync(processPath);
-            const base64Data = fileBuffer.toString('base64');
-            
-            result = await processWithFallback(
-              'generate',
-              { 
-                base64Data, 
-                mimeType, 
-                secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage, 
-                isInline: true,
-                modelName: modelName // Pass requested model
-              },
-              settings.aiFallbackChain
-            );
-          } else {
-            console.log(`Using Files API (file >= ${INLINE_SIZE_LIMIT_MB} MB)`);
-            
-            const geminiFile = await uploadToGemini(processPath, mimeType, (stage, percent) => {
-               sendProgress(stage, percent);
-            });
-            geminiFileUri = geminiFile.uri || null;
-            geminiFileExpiration = geminiFile.expirationTime || null;
-            fileId = geminiFile.name || null;
-            
-            sendProgress("generating_subtitles");
-            result = await processWithFallback(
-              'generate',
-              { 
-                fileUri: geminiFile.uri!, 
-                mimeType, 
-                secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
-                modelName: modelName // Pass requested model
-              },
-              settings.aiFallbackChain
-            );
+          } catch (aiError: any) {
+            // Re-throw security/infrastructure errors; only swallow AI service failures
+            if (aiError.message === 'Unauthorized path') throw aiError;
+            console.warn("[Process] Subtitle generation failed, adding video with no subtitles:", aiError.message);
+            subtitleGenerationFailed = true;
           }
-          
-          const { subtitles, detectedLanguage } = result;
+
+          const subtitles = result?.subtitles ?? [];
+          const detectedLanguage = result?.detectedLanguage ?? null;
 
           try {
               if (processPath !== videoPath && fs.existsSync(processPath)) {
-                secureDelete(processPath).catch(e => console.error("Cleanup error", e)); 
+                secureDelete(processPath).catch(e => console.error("Cleanup error", e));
               }
           } catch (e) { console.error("Cleanup error", e); }
 
-          controller.enqueue(encoder.encode(JSON.stringify({ 
+          controller.enqueue(encoder.encode(JSON.stringify({
             type: "complete",
             data: {
-              subtitles, 
-              videoPath, 
+              subtitles,
+              videoPath,
               detectedLanguage,
               geminiFileUri,
               geminiFileExpiration,
               fileId,
               fileSize: fs.statSync(videoPath).size,
-              originalFilename
+              originalFilename,
+              ...(subtitleGenerationFailed && { subtitleGenerationFailed: true })
             }
           }) + "\n"));
           controller.close();

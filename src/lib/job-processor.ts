@@ -33,7 +33,7 @@ export async function processJob(
     throw new Error('Unauthorized path in job metadata');
   }
 
-  if (!fs.existsSync(videoPath)) {
+  if (item.metadata.type !== 'multi-export' && !fs.existsSync(videoPath)) {
     throw new Error(`Source video not found: ${videoPath}`);
   }
 

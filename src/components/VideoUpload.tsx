@@ -44,6 +44,7 @@ export interface FileProgress {
   status: 'pending' | 'uploading' | 'processing' | 'complete' | 'error';
   stage?: string;
   percent?: number;
+  warning?: string;
 }
 
 interface VideoUploadProps {
@@ -973,7 +974,9 @@ export function VideoUpload({
                                   );
                                 }
                                 if (prog?.status === 'complete') {
-                                  return <Check className="w-3 h-3 text-[#4caf50]" />;
+                                  return prog.warning
+                                    ? <AlertCircle className="w-3 h-3 text-[#f0a500]" title={prog.warning} />
+                                    : <Check className="w-3 h-3 text-[#4caf50]" />;
                                 }
                                 return null;
                               })()}
@@ -1135,7 +1138,15 @@ export function VideoUpload({
                                   } else if (part.type === "complete") {
                                     setFileProgressMap(prev => ({
                                       ...prev,
-                                      [key]: { ...prev[key], status: 'complete', stage: undefined, percent: undefined }
+                                      [key]: {
+                                        ...prev[key],
+                                        status: 'complete',
+                                        stage: undefined,
+                                        percent: undefined,
+                                        warning: part.data?.subtitleGenerationFailed
+                                          ? 'Subtitle generation failed — video added without subtitles'
+                                          : undefined,
+                                      }
                                     }));
                                     resolve(part.data);
                                   } else if (part.type === "error") {
@@ -1373,7 +1384,9 @@ export function VideoUpload({
                                    );
                                  }
                                  if (prog?.status === 'complete') {
-                                   return <Check className="w-3 h-3 text-[#4caf50]" />;
+                                   return prog.warning
+                                     ? <AlertCircle className="w-3 h-3 text-[#f0a500]" title={prog.warning} />
+                                     : <Check className="w-3 h-3 text-[#4caf50]" />;
                                  }
                                  return null;
                                })()}
@@ -1551,7 +1564,15 @@ export function VideoUpload({
 
                               setFileProgressMap(prev => ({
                                 ...prev,
-                                [item.key]: { ...prev[item.key], status: 'complete', stage: undefined, percent: undefined }
+                                [item.key]: {
+                                  ...prev[item.key],
+                                  status: 'complete',
+                                  stage: undefined,
+                                  percent: undefined,
+                                  warning: data.subtitleGenerationFailed
+                                    ? 'Subtitle generation failed — video added without subtitles'
+                                    : undefined,
+                                }
                               }));
 
                               // If all files for THIS project are done, create draft
