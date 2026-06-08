@@ -134,18 +134,14 @@ export default function Home() {
   // Load draft functionality
   const handleLoadDraft = async (draft: DraftItem) => {
     try {
-      console.log("[Draft] Loading draft:", draft.id);
       const res = await fetch(`/api/drafts?id=${draft.id}`);
       const data: DraftData = await res.json();
-      
-      console.log("[Draft] Loaded data:", { id: data.id, version: data.version, hasClips: !!data.clips?.length, videoPath: data.videoPath });
       
       if (data.id) {
         setCurrentDraftId(data.id);
         
         // Handle V2 drafts (multi-video format)
         if (data.version === 2 && data.clips && data.clips.length > 0) {
-          console.log("[Draft] Loading V2 draft with", data.clips.length, "clips");
           
           // Fetch metadata for clips with missing duration
           const clipsWithDuration = await Promise.all(
@@ -154,7 +150,6 @@ export default function Home() {
                 try {
                   const infoRes = await fetch(`/api/video-info?path=${encodeURIComponent(clip.filePath)}`);
                   const info = await infoRes.json();
-                  console.log("[Draft] Fetched duration for clip:", clip.id, info.duration);
                   return {
                     ...clip,
                     duration: info.duration || 0,
@@ -208,7 +203,6 @@ export default function Home() {
           const firstVideoPath = firstClip.filePath;
           setVideoPath(firstVideoPath || null);
           const url = firstVideoPath ? `/api/storage?path=${encodeURIComponent(firstVideoPath)}` : null;
-          console.log("[Draft] Setting V2 video URL from first clip:", url);
           setVideoUrl(url);
           
           // Set duration from first clip
@@ -217,11 +211,9 @@ export default function Home() {
           }
         } else {
           // Handle V1 drafts (legacy single-video format)
-          console.log("[Draft] Loading V1 draft");
           resetHistory(data.subtitles || []);
           setVideoPath(data.videoPath || null);
           const url = data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null;
-          console.log("[Draft] Setting V1 video URL:", url);
           setVideoUrl(url);
           if (data.config) setConfig(data.config);
         }
@@ -295,14 +287,14 @@ export default function Home() {
     setTimelineClips(prev => prev.filter(c => c.videoClipId !== clipId));
   };
 
-  const handleRemoveImage = (imageId: string) => {
-    const isUsed = timelineImages.some(img => img.imageAssetId === imageId);
+  const handleRemoveImage = (assetId: string) => {
+    const isUsed = timelineImages.some(i => i.imageAssetId === assetId);
     if (isUsed && !confirm('This image is used on the timeline. Removing it will also remove it from the timeline. Continue?')) {
       return;
     }
 
-    setImageAssets(prev => prev.filter(img => img.id !== imageId));
-    setTimelineImages(prev => prev.filter(img => img.imageAssetId !== imageId));
+    setImageAssets(prev => prev.filter(a => a.id !== assetId));
+    setTimelineImages(prev => prev.filter(i => i.imageAssetId !== assetId));
   };
 
   const handleRelinkClip = async (clipId: string, file: File) => {
@@ -457,6 +449,9 @@ export default function Home() {
            clipDuration: dur,
         };
         setTimelineClips([newTimelineClip]);
+     } else {
+       // Switch to Projects/Library to see the newly drafted content (N:1, Batch, Advanced)
+       setShowVideoLibrary(true);
      }
   };
   
@@ -717,7 +712,6 @@ export default function Home() {
 
   // Consolidate reset logic
   const closeProject = useCallback(() => {
-    console.log('[Page] Closing/Resetting project...');
     // Reset all core state
     setVideoUrl(null);
     setVideoPath(null);
@@ -743,8 +737,6 @@ export default function Home() {
     setProjectConfig(DEFAULT_PROJECT_CONFIG);
     setSelectedClipId(null);
     setSelectedImageId(null);
-    
-    console.log('[Page] Project reset complete');
   }, [
     setVideoUrl, setVideoPath, setDuration, setCurrentTime,
     setSubtitles, setInitialSubtitles, resetHistory, setSelectedSubtitleIds,
@@ -890,12 +882,9 @@ export default function Home() {
     }
     if (shiftKey && lastSelectedIdRef.current) {
       // Range selection
-      const lastIndex = subtitles.findIndex(s => s.id === lastSelectedIdRef.current);
-      const currentIndex = subtitles.findIndex(s => s.id === id);
+      const rangeIds = getRangeSelectionIds(subtitles, lastSelectedIdRef.current, id);
       
-      if (lastIndex !== -1 && currentIndex !== -1) {
-        const rangeIds = getRangeSelectionIds(subtitles, lastSelectedIdRef.current, id);
-        
+      if (rangeIds.length > 0) {
         if (ctrlKey) {
           // Add range to existing selection
           setSelectedSubtitleIds(prev => Array.from(new Set([...prev, ...rangeIds])));
@@ -1203,7 +1192,6 @@ export default function Home() {
             onDelete={(id) => {
               handleDeleteDraft(id);
               if (currentDraftId === id) {
-                console.log("Deleted active project, closing editor...");
                 closeProject();
               }
             }}
@@ -1751,8 +1739,7 @@ export default function Home() {
                       return;
                     }
                     
-                    const result = await response.json();
-                    console.log('Export job added to queue:', result);
+                    await response.json();
                     
                     // Refresh queue to show new job
                     const queueRes = await fetch('/api/queue');

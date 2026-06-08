@@ -102,6 +102,13 @@ src/
 | `GEMINI_API_KEY` | Google Gemini API authentication | Yes |
 | `STAGING_DIR` | Root directory for file storage | No (defaults to `./storage`) |
 
+## Global Settings (via `/api/settings`)
+
+| Setting | Purpose | Default |
+|---------|---------|---------|
+| `maxFileSizeMB` | Maximum single file upload size (MB) | `51200` (50 GB) |
+| `maxProjectSizeMB` | Maximum aggregate project size (MB) | `102400` (100 GB) |
+
 ## Dependencies
 
 - **FFmpeg** - Must be installed on system for video processing

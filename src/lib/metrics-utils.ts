@@ -1,7 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { Draft, DraftV1, DraftV2 } from "@/lib/draft-store";
+import { Draft, DraftV1, DraftV2, DraftSummary } from "@/lib/draft-store";
 import { getStagingDir } from "@/lib/storage-config";
 import { getDirectorySizeAsync } from "@/lib/storage-utils";
 
@@ -35,10 +35,10 @@ export function getMetadataPath(draftId: string): string {
 
 /**
  * Compute aggregate metrics for a draft (Asynchronous)
- * @param draft V1 or V2 draft object
+ * @param draft V1 or V2 draft object, or a DraftSummary
  * @param stagingDir (Optional) Injection for testing. Defaults to live config.
  */
-export async function computeMetrics(draft: Draft, stagingDir?: string): Promise<DraftMetrics> {
+export async function computeMetrics(draft: Draft | DraftSummary, stagingDir?: string): Promise<DraftMetrics> {
   const rootDir = stagingDir || getStagingDir();
   
   let sourceSize = 0;
@@ -48,19 +48,19 @@ export async function computeMetrics(draft: Draft, stagingDir?: string): Promise
   let renderCount = 0;
 
   // 1. Source Metrics
+  // Note: For DraftSummary, we might not have 'clips' or 'subtitles' arrays.
+  // In those cases, source metrics will stay 0 and should be backfilled from cache by the caller.
   if ('version' in draft && draft.version === 2) {
     // V2: Multi-video
-    const v2 = draft as DraftV2;
-    if (v2.clips) {
+    const v2 = draft as any; // Cast to access clips if present
+    if (v2.clips && Array.isArray(v2.clips)) {
       sourceCount = v2.clips.length;
       // Sum clip fileSizes
-      sourceSize = v2.clips.reduce((acc, clip) => acc + (clip.fileSize || 0), 0);
+      sourceSize = v2.clips.reduce((acc: number, clip: any) => acc + (clip.fileSize || 0), 0);
     }
-    // V2 Subtitle Count: Not easily accessible if not in top-level prop. 
-    // We assume caller (API) might backfill it from other sources or leave as 0.
   } else {
     // V1: Single-video
-    const v1 = draft as DraftV1;
+    const v1 = draft as any; // Cast to access videoPath/subtitles if present
     if (v1.videoPath) {
       sourceCount = 1;
       try {
@@ -69,7 +69,7 @@ export async function computeMetrics(draft: Draft, stagingDir?: string): Promise
         sourceSize = stats.size;
       } catch {}
     }
-    if (v1.subtitles) {
+    if (v1.subtitles && Array.isArray(v1.subtitles)) {
       subtitleCount = v1.subtitles.length;
     }
   }

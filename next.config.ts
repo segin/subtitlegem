@@ -7,12 +7,11 @@ const nextConfig: NextConfig = {
   // basePath: '/subtitlegem',
   
   experimental: {
-    serverActions: {
-      allowedOrigins: ["*"],
-    },
-    // @ts-ignore
-
+    proxyClientMaxBodySize: '50gb', // Allow uploads up to 50 GB per file
   },
+  allowedDevOrigins: [
+    'mediastar.intranet.talamardevelopments.com',
+  ],
 };
 
 export default nextConfig;

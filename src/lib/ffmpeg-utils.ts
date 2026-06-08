@@ -134,8 +134,23 @@ export async function getVideoDimensions(filePath: string): Promise<{ width: num
 /**
  * Extract audio from video file
  */
-export async function extractAudio(videoPath: string, outputPath: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+export async function extractAudio(
+  videoPath: string, 
+  outputPath: string, 
+  onProgress?: (progress: number) => void
+): Promise<string> {
+  return new Promise(async (resolve, reject) => {
+    // Get total duration for progress
+    let totalDuration = 0;
+    if (onProgress) {
+      try {
+        const metadata = await ffprobe(videoPath);
+        totalDuration = metadata.duration;
+      } catch (e) {
+        console.warn('[FFmpeg] Could not get video duration for extractAudio progress:', e);
+      }
+    }
+
     const args = [
       '-i', videoPath,
       '-vn',           // No video
@@ -147,7 +162,18 @@ export async function extractAudio(videoPath: string, outputPath: string): Promi
     const proc = spawn('ffmpeg', args);
     let stderr = '';
 
-    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+    proc.stderr.on('data', (data) => {
+      const line = data.toString();
+      stderr += line;
+
+      if (onProgress && totalDuration > 0) {
+        const currentTime = parseProgressTime(line);
+        if (currentTime !== null) {
+          const percent = Math.min((currentTime / totalDuration) * 100, 100);
+          onProgress(percent);
+        }
+      }
+    });
 
     proc.on('close', (code) => {
       if (code !== 0) {

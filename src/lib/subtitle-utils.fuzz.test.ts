@@ -10,9 +10,9 @@ describe('subtitle-utils fuzzing', () => {
     startTime: fc.double({min: 0, max: 10000, noNaN: true}),
     duration: fc.double({min: 0.1, max: 100, noNaN: true}), // Generate duration to ensure endTime > startTime
     text: fc.string(),
-    secondaryText: fc.option(fc.string()),
-    primaryColor: fc.option(fc.nat(0xFFFFFF).map(n => '#' + n.toString(16).padStart(6, '0'))),
-    secondaryColor: fc.option(fc.nat(0xFFFFFF).map(n => '#' + n.toString(16).padStart(6, '0')))
+    secondaryText: fc.option(fc.string(), { nil: undefined }),
+    primaryColor: fc.option(fc.nat(0xFFFFFF).map(n => '#' + n.toString(16).padStart(6, '0')), { nil: undefined }),
+    secondaryColor: fc.option(fc.nat(0xFFFFFF).map(n => '#' + n.toString(16).padStart(6, '0')), { nil: undefined })
   }).map(s => ({
     ...s,
     endTime: s.startTime + s.duration,

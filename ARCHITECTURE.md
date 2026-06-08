@@ -169,6 +169,19 @@ subtitlegem/
 - `QueueManager` - Singleton state machine (pending/processing/completed/failed)
 - `JobProcessor` - FFmpeg execution with progress callbacks
 
+#### 3.2.4. Upload Size Limits
+**Enforcement:** Three-layer system for controlling maximum upload sizes.
+
+| Layer | Location | Setting | Default | Purpose |
+|-------|----------|---------|---------|---------|
+| **Proxy** | `next.config.ts` | `proxyClientMaxBodySize` | `50gb` | Hard ceiling enforced by Next.js before the request reaches any route handler |
+| **Server** | `/api/process` | `maxFileSizeMB` (from Global Settings) | `51200` (50 GB) | Per-file limit checked after the file is written to disk; returns HTTP 413 if exceeded |
+| **Client** | `VideoUpload.tsx` | `maxFileSizeMB` (fetched from `/api/settings`) | `51200` (50 GB) | Early rejection before upload begins; prevents wasted bandwidth |
+
+**Per-project limit:** `maxProjectSizeMB` (default: `102400` = 100 GB) is available in Global Settings for aggregate project size validation.
+
+**Configuration:** Both `maxFileSizeMB` and `maxProjectSizeMB` are persisted in the Settings Database (`settings.db`) via the `PUT /api/settings` endpoint and can be changed through the Global Settings dialog.
+
 ---
 
 ## 4. Data Stores
