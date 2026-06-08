@@ -193,7 +193,7 @@ describe('/api/process (JSON modes)', () => {
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({
            mode: 'translate',
-           subtitles: [{id: '1', text: 'test'}],
+           subtitles: [{id: '1', text: 'test', startTime: 0, endTime: 10}],
            secondaryLanguage: 'Spanish'
          }),
        });

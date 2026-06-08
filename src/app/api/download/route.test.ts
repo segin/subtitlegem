@@ -9,6 +9,7 @@ import fs from 'fs';
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
   statSync: jest.fn(),
+  lstatSync: jest.fn(),
   createReadStream: jest.fn(),
 }));
 
@@ -16,17 +17,20 @@ jest.mock('@/lib/storage-config', () => ({
   getStorageConfig: jest.fn(() => ({
     stagingDir: '/mock/staging',
   })),
+  isPathSafe: jest.fn((p) => true),
 }));
 
 describe('/api/download', () => {
   const mockExistsSync = fs.existsSync as jest.Mock;
   const mockStatSync = fs.statSync as jest.Mock;
+  const mockLstatSync = (fs as any).lstatSync as jest.Mock;
   const mockCreateReadStream = fs.createReadStream as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockExistsSync.mockReturnValue(true);
     mockStatSync.mockReturnValue({ size: 1024 });
+    mockLstatSync.mockReturnValue({ isSymbolicLink: () => false, isFile: () => true, size: 1024 });
     
     // Mock createReadStream to return a readable stream-like object
     mockCreateReadStream.mockReturnValue({
@@ -63,7 +67,7 @@ describe('/api/download', () => {
   describe('Security', () => {
     it('should block path traversal attempts', async () => {
       // The route sanitizes to basename only, so file won't exist
-      mockExistsSync.mockReturnValue(false);
+      mockLstatSync.mockImplementation(() => { throw new Error('ENOENT'); });
       
       const maliciousPath = '../../../etc/passwd';
       const req = new NextRequest(
@@ -71,14 +75,12 @@ describe('/api/download', () => {
       );
 
       const res = await GET(req);
-      // The route uses path.basename which sanitizes to just 'passwd'
-      // Then checks if it exists in tempDir - it won't, so 404
       expect(res.status).toBe(404);
     });
 
     it('should block absolute paths outside temp directory', async () => {
       // The route sanitizes to basename only, so file won't exist
-      mockExistsSync.mockReturnValue(false);
+      mockLstatSync.mockImplementation(() => { throw new Error('ENOENT'); });
       
       const maliciousPath = '/etc/passwd';
       const req = new NextRequest(
@@ -91,26 +93,26 @@ describe('/api/download', () => {
 
     it('should only serve files from temp directory', async () => {
       // The route constructs: path.join(tempDir, path.basename(filePath))
-      // So even if you pass a full path, it only uses the filename
       const req = new NextRequest(
         `http://localhost/api/download?path=/some/other/path/video.mp4`
       );
 
       // Mock: file exists in temp dir
-      mockExistsSync.mockImplementation((p: string) => 
-        p === '/mock/staging/temp/video.mp4'
-      );
+      mockLstatSync.mockImplementation((p: string) => {
+        if (p.includes('/mock/staging/temp/video.mp4')) {
+          return { isSymbolicLink: () => false, isFile: () => true, size: 1024 };
+        }
+        throw new Error('ENOENT');
+      });
 
       const res = await GET(req);
-      // Will check if /mock/staging/temp/video.mp4 exists
       expect(res.status).toBe(200);
     });
   });
 
   describe('Success Cases', () => {
     it('should return file stream with correct headers', async () => {
-      mockExistsSync.mockReturnValue(true);
-      mockStatSync.mockReturnValue({ size: 2048 });
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false, isFile: () => true, size: 2048 });
 
       const req = new NextRequest(
         'http://localhost/api/download?path=video.mp4'
@@ -128,7 +130,7 @@ describe('/api/download', () => {
 
   describe('Error Cases', () => {
     it('should return 404 when file does not exist', async () => {
-      mockExistsSync.mockReturnValue(false);
+      mockLstatSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
       const req = new NextRequest(
         'http://localhost/api/download?path=missing.mp4'
@@ -142,8 +144,7 @@ describe('/api/download', () => {
     });
 
     it('should return 500 on read error', async () => {
-      mockExistsSync.mockReturnValue(true);
-      mockStatSync.mockReturnValue({ size: 1024 });
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false, isFile: () => true, size: 1024 });
       mockCreateReadStream.mockImplementation(() => {
         throw new Error('Read error');
       });

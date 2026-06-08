@@ -143,24 +143,26 @@ async function performSubtitleGeneration(
     return JSON.parse(cleanJsonOutput(text));
   } catch (error: unknown) {
     const status = (error as any)?.status;
-    
-    if (status === 429 && attempt < 3) {
-      const msg = (error instanceof Error) ? error.message : String(error);
-      const delayMatch = msg.match(/retry in ([\d.]+)s/);
-      const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
+    const isRetryable = status === 429 || status === 500 || status === 502 || status === 503;
+
+    if (isRetryable && attempt < 4) {
+      let delayMs: number;
+      if (status === 429) {
+        const msg = (error instanceof Error) ? error.message : String(error);
+        const delayMatch = msg.match(/retry in ([\d.]+)s/);
+        const delaySec = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
+        delayMs = Math.min(delaySec * 1000, 60000);
+      } else {
+        // Exponential backoff with jitter for 5xx errors
+        const baseDelay = Math.pow(2, attempt) * 1000;
+        delayMs = Math.min(baseDelay + Math.random() * 1000, 30000);
+      }
 
       console.log(
-        `Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`
+        `API error (${status}). Retrying in ${(delayMs / 1000).toFixed(1)}s (Attempt ${attempt}/4)...`
       );
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
-      );
-      return performSubtitleGeneration(
-        mediaPart,
-        secondaryLanguage,
-        attempt + 1,
-        modelName
-      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return performSubtitleGeneration(mediaPart, secondaryLanguage, attempt + 1, modelName);
     }
     throw error;
   }

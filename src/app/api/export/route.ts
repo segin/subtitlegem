@@ -4,6 +4,7 @@ import { burnSubtitles, getVideoDimensions } from "@/lib/ffmpeg-utils";
 import { generateAss, VideoDimensions } from "@/lib/ass-utils";
 import { SubtitleLine, SubtitleConfig, FFmpegConfig } from "@/types/subtitle";
 import * as fs from "fs";
+const fsPromises = fs.promises;
 import * as path from "path";
 import { getStagingDir } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
@@ -63,12 +64,18 @@ export async function POST(req: NextRequest) {
        const exportDir = draftId 
          ? path.join(stagingDir, "exports", draftId)
          : path.join(stagingDir, "exports", jobId);
-       if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+       await fsPromises.mkdir(exportDir, { recursive: true });
 
        const assPath = path.join(exportDir, "subtitles.ass");
-       const safeBaseName = (filename || 'project').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+       const MAX_BASENAME = 100;
+       const safeBaseName = (filename || 'project')
+         .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+         .substring(0, MAX_BASENAME);
        const outputName = `${safeBaseName}_export_${Date.now()}.mp4`;
        const outputPath = path.join(exportDir, outputName);
+       if (!path.resolve(outputPath).startsWith(path.resolve(exportDir) + path.sep)) {
+         return NextResponse.json({ error: 'Invalid output path' }, { status: 400 });
+       }
 
        // Video Dimensions from Project Config
        const videoDimensions: VideoDimensions = {
@@ -78,7 +85,7 @@ export async function POST(req: NextRequest) {
 
        // Generate ASS
        const assContent = generateAss(flattenedSubtitles, project.subtitleConfig, videoDimensions);
-       fs.writeFileSync(assPath, assContent);
+       await fsPromises.writeFile(assPath, assContent);
 
        // Queue Job
        const queueItem = queueManager.addItem({
@@ -126,7 +133,9 @@ export async function POST(req: NextRequest) {
     }
 
     const resolvedPath = path.resolve(videoPath);
-    if (!fs.existsSync(resolvedPath)) {
+    try {
+      await fsPromises.access(resolvedPath);
+    } catch {
       return NextResponse.json({ error: "Video file not found" }, { status: 404 });
     }
 
@@ -137,9 +146,7 @@ export async function POST(req: NextRequest) {
       ? path.join(stagingDir, "exports", draftId)
       : path.join(stagingDir, "exports", jobId);
     
-    if (!fs.existsSync(exportDir)) {
-      fs.mkdirSync(exportDir, { recursive: true });
-    }
+    await fsPromises.mkdir(exportDir, { recursive: true });
 
     const assPath = path.join(exportDir, "subtitles.ass");
     
@@ -149,11 +156,17 @@ export async function POST(req: NextRequest) {
         ? path.basename(filename, path.extname(filename)) 
         : path.basename(videoPath, path.extname(videoPath));
         
-    // Clean string (alphanumeric + safe chars) to prevent FS issues
-    const safeBaseName = baseName.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-    
-    const outputName = `${safeBaseName}_export_${Date.now()}.mp4`; // Unique output name
+    // Clean string (alphanumeric + safe chars) and cap length to prevent FS issues
+    const MAX_BASENAME = 100;
+    const safeBaseName = baseName
+      .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+      .substring(0, MAX_BASENAME);
+
+    const outputName = `${safeBaseName}_export_${Date.now()}.mp4`;
     const outputPath = path.join(exportDir, outputName);
+    if (!path.resolve(outputPath).startsWith(path.resolve(exportDir) + path.sep)) {
+      return NextResponse.json({ error: 'Invalid output path' }, { status: 400 });
+    }
 
     // Get video dimensions for proper ASS PlayRes scaling
     let videoDimensions: VideoDimensions | undefined;
@@ -166,13 +179,13 @@ export async function POST(req: NextRequest) {
 
     // Generate ASS file with actual video dimensions
     const assContent = generateAss(subtitles, config, videoDimensions);
-    fs.writeFileSync(assPath, assContent);
+    await fsPromises.writeFile(assPath, assContent);
 
     // Add to queue with persistent metadata
     const queueItem = queueManager.addItem({
       file: {
         name: `Export: ${filename || path.basename(videoPath)}`,
-        size: fs.statSync(videoPath).size,
+        size: (await fsPromises.stat(videoPath)).size,
         type: "video/mp4",
       },
       model: `Export: ${filename || 'Video'}`, // Readable display name for Queue
@@ -215,11 +228,13 @@ export async function GET(req: NextRequest) {
   }
 
   const filePath = item.result.videoPath;
-  if (!fs.existsSync(filePath)) {
+  try {
+    await fsPromises.access(filePath);
+  } catch {
     return NextResponse.json({ error: "File vanished from storage" }, { status: 410 });
   }
 
-  const stat = fs.statSync(filePath);
+  const stat = await fsPromises.stat(filePath);
   const fileStream = fs.createReadStream(filePath);
   const fileName = path.basename(filePath);
 

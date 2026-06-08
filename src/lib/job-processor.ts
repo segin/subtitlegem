@@ -1,5 +1,6 @@
 import { QueueItem } from '@/types/queue';
 import { burnSubtitles } from './ffmpeg-utils';
+import { isPathSafe } from './storage-config';
 import path from 'path';
 import fs from 'fs';
 
@@ -24,7 +25,15 @@ export async function processJob(
     throw new Error('Missing required paths in job metadata');
   }
 
-  if (!fs.existsSync(videoPath)) {
+  // Re-validate all paths from stored metadata before use
+  const pathsToValidate: string[] = [outputPath];
+  if (item.metadata.type !== 'multi-export') pathsToValidate.push(videoPath);
+  if (assPath) pathsToValidate.push(assPath);
+  if (pathsToValidate.some(p => !isPathSafe(p))) {
+    throw new Error('Unauthorized path in job metadata');
+  }
+
+  if (item.metadata.type !== 'multi-export' && !fs.existsSync(videoPath)) {
     throw new Error(`Source video not found: ${videoPath}`);
   }
 
