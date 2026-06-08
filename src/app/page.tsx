@@ -1024,16 +1024,19 @@ export default function Home() {
       let newSecondary = sub.secondaryText;
       let replaced = false;
 
+      // Escape $ to prevent JS replace special sequences ($&, $1, etc.) from being interpreted
+      const safeReplacement = replacement.replace(/\$/g, '$$$$');
+
       if (currentRes.field === 'primary' && options.searchPrimary) {
           const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags); // escape regex chars
-          const updated = newText.replace(regex, replacement);
+          const updated = newText.replace(regex, safeReplacement);
           if (updated !== newText) {
               newText = updated;
               replaced = true;
           }
       } else if (currentRes.field === 'secondary' && options.searchSecondary && newSecondary) {
            const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
-           const updated = newSecondary.replace(regex, replacement);
+           const updated = newSecondary.replace(regex, safeReplacement);
            if (updated !== newSecondary) {
                newSecondary = updated;
                replaced = true;
@@ -1059,25 +1062,26 @@ export default function Home() {
   const handleReplaceAll = (query: string, replacement: string, options: FindOptions): number => {
       const flags = options.caseSensitive ? 'g' : 'gi';
       const regex = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags);
+      // Escape $ to prevent JS replace special sequences ($&, $1, etc.) from being interpreted
+      const safeReplacement = replacement.replace(/\$/g, '$$$$');
       let count = 0;
-      
+
       const newSubtitles = subtitles.map(sub => {
           let text = sub.text;
           let secondaryText = sub.secondaryText;
           let changed = false;
-          
+
           if (options.searchPrimary && text) {
-             const updated = text.replace(regex, replacement);
+             const updated = text.replace(regex, safeReplacement);
              if (updated !== text) {
                  text = updated;
-                 // count += (text.match(regex) || []).length; // approximation
-                 count++; // count lines changed or occurrences? UI usually shows occurrences.
+                 count++;
                  changed = true;
              }
           }
-          
+
           if (options.searchSecondary && secondaryText) {
-             const updated = secondaryText.replace(regex, replacement);
+             const updated = secondaryText.replace(regex, safeReplacement);
              if (updated !== secondaryText) {
                  secondaryText = updated;
                  count++;

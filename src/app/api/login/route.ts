@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createSessionToken, SESSION_MAX_AGE } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,13 +19,15 @@ export async function POST(req: NextRequest) {
         message: "Login successful"
       });
 
-      // Set secure cookie
-      response.cookies.set("sb_api_key", apiPassword, {
+      // Store a signed session token, not the raw password
+      const token = createSessionToken(apiPassword);
+      response.cookies.set("sb_session", token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
+        // Default to secure unless explicitly disabled (e.g., local HTTP dev)
+        secure: process.env.SECURE_COOKIES !== "false",
         sameSite: "strict",
         path: "/",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
+        maxAge: SESSION_MAX_AGE, // 24 hours
       });
 
       return response;
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest) {
       error: "Invalid password"
     }, { status: 401 });
 
-  } catch (error) {
+  } catch {
     return NextResponse.json({
       success: false,
       error: "Invalid request"
@@ -58,6 +61,7 @@ export async function GET() {
  */
 export async function DELETE() {
   const response = NextResponse.json({ success: true, message: "Logged out" });
-  response.cookies.delete("sb_api_key");
+  response.cookies.delete("sb_session");
+  response.cookies.delete("sb_api_key"); // clean up legacy cookie if present
   return response;
 }
