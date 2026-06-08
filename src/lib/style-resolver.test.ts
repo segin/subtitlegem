@@ -168,6 +168,7 @@ describe('percentToPx', () => {
             const result = percentToPx(value, fullSize);
             const expected = (value / 100) * fullSize;
             if (isNaN(expected)) return isNaN(result);
+            if (!isFinite(expected)) return result === expected;
             return Math.abs(result - expected) < 0.0001;
           }
         )
