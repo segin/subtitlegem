@@ -41,9 +41,10 @@ SubtitleGem is a powerful, web-based tool built with Next.js that leverages the 
    ```
 
 3. Set up environment variables:
-   Create a `.env.local` file and add your Gemini API key:
+   Create a `.env.local` file and add your Gemini API key and an API password:
    ```env
    GOOGLE_GENERATIVE_AI_API_KEY=your_actual_api_key_here
+   API_PASSWORD=your_secure_password_here
    ```
 
 4. Run the development server:

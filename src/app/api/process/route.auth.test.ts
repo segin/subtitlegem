@@ -42,7 +42,7 @@ describe('/api/process Authentication', () => {
     process.env = originalEnv;
   });
 
-  it('should allow access when API_PASSWORD is not set', async () => {
+  it('should return 401 when API_PASSWORD is not set (Enforced by Default)', async () => {
     process.env.API_PASSWORD = '';
 
     const req = new NextRequest('http://localhost/api/process', {
@@ -52,8 +52,7 @@ describe('/api/process Authentication', () => {
     });
 
     const res = await POST(req);
-    // Should NOT be 401. If it's 400 or something else, it means it passed auth check.
-    expect(res.status).not.toBe(401);
+    expect(res.status).toBe(401);
   });
 
   it('should return 401 when API_PASSWORD is set but no auth provided', async () => {

@@ -38,6 +38,10 @@ jest.mock('@/lib/ai-provider', () => ({
   processWithFallback: jest.fn(),
 }));
 
+jest.mock('@/lib/auth', () => ({
+  validateAuth: jest.fn(() => true),
+}));
+
 jest.mock('@/lib/gemini', () => ({
   uploadToGemini: jest.fn(),
 }));

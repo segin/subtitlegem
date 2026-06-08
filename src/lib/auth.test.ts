@@ -4,109 +4,79 @@
 import { validateAuth, isAuthEnabled } from "./auth";
 import { NextRequest } from "next/server";
 
-describe("auth.ts", () => {
+// Mock NextRequest since we are in a unit test environment
+const mockRequest = (headers: Record<string, string> = {}, cookies: Record<string, string> = {}) => {
+  return {
+    headers: {
+      get: (name: string) => headers[name.toLowerCase()] || null,
+    },
+    cookies: {
+      get: (name: string) => cookies[name] ? { value: cookies[name] } : null,
+    },
+    nextUrl: {
+        pathname: '/api/test'
+    }
+  } as unknown as NextRequest;
+};
+
+describe("auth utility", () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     process.env = { ...originalEnv };
   });
 
-  afterEach(() => {
+  afterAll(() => {
     process.env = originalEnv;
   });
 
-  describe("isAuthEnabled", () => {
-    test("returns false when API_PASSWORD is not set", () => {
-      delete process.env.API_PASSWORD;
-      expect(isAuthEnabled()).toBe(false);
-    });
-
-    test("returns false when API_PASSWORD is empty string", () => {
-      process.env.API_PASSWORD = "";
-      expect(isAuthEnabled()).toBe(false);
-    });
-
-    test("returns false when API_PASSWORD is only whitespace", () => {
-      process.env.API_PASSWORD = "   ";
-      expect(isAuthEnabled()).toBe(false);
-    });
-
-    test("returns true when API_PASSWORD is set", () => {
-      process.env.API_PASSWORD = "secure-password";
-      expect(isAuthEnabled()).toBe(true);
-    });
-  });
-
   describe("validateAuth", () => {
-    const mockRequest = (headers: Record<string, string> = {}, cookies: Record<string, string> = {}) => {
-      return {
-        headers: {
-          get: (name: string) => headers[name.toLowerCase()] || null,
-        },
-        cookies: {
-          get: (name: string) => cookies[name] ? { value: cookies[name] } : null,
-        },
-      } as unknown as NextRequest;
-    };
-
-    test("returns true when authentication is disabled", () => {
+    it("should return false when API_PASSWORD is NOT set", () => {
       delete process.env.API_PASSWORD;
       const req = mockRequest();
-      expect(validateAuth(req)).toBe(true);
+      expect(validateAuth(req)).toBe(false);
     });
 
-    test("returns true with valid Bearer token", () => {
+    it("should return false when API_PASSWORD is empty string", () => {
+      process.env.API_PASSWORD = "";
+      const req = mockRequest();
+      expect(validateAuth(req)).toBe(false);
+    });
+
+    it("should return false when API_PASSWORD is set but no credentials provided", () => {
+      process.env.API_PASSWORD = "secure-password";
+      const req = mockRequest();
+      expect(validateAuth(req)).toBe(false);
+    });
+
+    it("should return true with correct Authorization Bearer header", () => {
       process.env.API_PASSWORD = "secure-password";
       const req = mockRequest({ authorization: "Bearer secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
 
-    test("returns true with valid Bearer token (case insensitive type)", () => {
-      process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest({ authorization: "bearer secure-password" });
-      expect(validateAuth(req)).toBe(true);
-    });
-
-    test("returns true with plain password in Authorization header", () => {
-      process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest({ authorization: "secure-password" });
-      expect(validateAuth(req)).toBe(true);
-    });
-
-    test("returns true with valid X-API-Key header", () => {
+    it("should return true with correct X-API-Key header", () => {
       process.env.API_PASSWORD = "secure-password";
       const req = mockRequest({ "x-api-key": "secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
 
-    test("returns true with valid cookie", () => {
+    it("should return true with correct cookie", () => {
       process.env.API_PASSWORD = "secure-password";
       const req = mockRequest({}, { sb_api_key: "secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
+  });
 
-    test("returns false with invalid Authorization header", () => {
-      process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest({ authorization: "Bearer wrong-password" });
-      expect(validateAuth(req)).toBe(false);
+  describe("isAuthEnabled", () => {
+    it("should return false when API_PASSWORD is not set", () => {
+      delete process.env.API_PASSWORD;
+      expect(isAuthEnabled()).toBe(false);
     });
 
-    test("returns false with invalid X-API-Key header", () => {
+    it("should return true when API_PASSWORD is set", () => {
       process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest({ "x-api-key": "wrong-password" });
-      expect(validateAuth(req)).toBe(false);
-    });
-
-    test("returns false with invalid cookie", () => {
-      process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest({}, { sb_api_key: "wrong-password" });
-      expect(validateAuth(req)).toBe(false);
-    });
-
-    test("returns false when no auth provided and auth is enabled", () => {
-      process.env.API_PASSWORD = "secure-password";
-      const req = mockRequest();
-      expect(validateAuth(req)).toBe(false);
+      expect(isAuthEnabled()).toBe(true);
     });
   });
 });

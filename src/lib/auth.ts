@@ -16,9 +16,9 @@ import { validateSessionToken } from "./session";
 export function validateAuth(req: NextRequest): boolean {
   const apiPassword = process.env.API_PASSWORD;
 
-  // If no password is set, authentication is disabled (trusted environment)
+  // Authentication is REQUIRED. If no password is set, all requests are denied.
   if (!apiPassword || apiPassword.trim() === "") {
-    return true;
+    return false;
   }
 
   // 1. Check Authorization Header (Bearer)
