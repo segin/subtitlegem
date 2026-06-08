@@ -1,4 +1,6 @@
-import { expect, test, describe, beforeEach, afterEach } from "bun:test";
+/**
+ * @jest-environment node
+ */
 import { validateAuth, isAuthEnabled } from "./auth";
 import { NextRequest } from "next/server";
 
