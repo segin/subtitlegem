@@ -311,6 +311,5 @@ export function close(): void {
   if (db) {
     db.close();
     db = null;
-  // console.log('[SQLite] Database closed');
   }
 }

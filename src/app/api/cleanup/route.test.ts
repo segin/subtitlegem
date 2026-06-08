@@ -11,6 +11,7 @@ jest.mock('fs', () => ({
     access: jest.fn(),
     readdir: jest.fn(),
     stat: jest.fn(),
+    lstat: jest.fn(),
     unlink: jest.fn(),
   },
 }));
@@ -19,6 +20,7 @@ jest.mock('@/lib/storage-config', () => ({
   getStorageConfig: jest.fn(() => ({
     stagingDir: '/mock/staging',
   })),
+  isPathSafe: jest.fn(() => true),
 }));
 
 jest.mock('@/lib/storage-utils', () => ({
@@ -29,11 +31,13 @@ describe('/api/cleanup', () => {
   const mockAccess = fsPromises.access as jest.Mock;
   const mockReaddir = fsPromises.readdir as jest.Mock;
   const mockStat = fsPromises.stat as jest.Mock;
+  const mockLstat = fsPromises.lstat as jest.Mock;
   const mockUnlink = fsPromises.unlink as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockAccess.mockResolvedValue(undefined);
+    mockLstat.mockResolvedValue({ isSymbolicLink: () => false, isFile: () => true });
   });
 
   describe('Validation', () => {
@@ -99,9 +103,9 @@ describe('/api/cleanup', () => {
     });
 
     it('should handle missing files gracefully', async () => {
-      mockAccess.mockResolvedValueOnce(undefined) // directory exists
-        .mockRejectedValueOnce(new Error('ENOENT')) // file1 missing
-        .mockResolvedValueOnce(undefined); // file2 exists
+      mockAccess.mockResolvedValue(undefined); // directory exists
+      mockLstat.mockRejectedValueOnce(new Error('ENOENT')) // file1 missing
+        .mockResolvedValueOnce({ isSymbolicLink: () => false, isFile: () => true }); // file2 exists
 
       const req = new NextRequest('http://localhost/api/cleanup', {
         method: 'POST',

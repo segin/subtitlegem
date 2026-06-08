@@ -38,6 +38,10 @@ jest.mock('@/lib/ai-provider', () => ({
   processWithFallback: jest.fn(),
 }));
 
+jest.mock('@/lib/auth', () => ({
+  validateAuth: jest.fn(() => true),
+}));
+
 jest.mock('@/lib/gemini', () => ({
   uploadToGemini: jest.fn(),
 }));
@@ -193,7 +197,7 @@ describe('/api/process (JSON modes)', () => {
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({
            mode: 'translate',
-           subtitles: [{id: '1', text: 'test'}],
+           subtitles: [{id: '1', text: 'test', startTime: 0, endTime: 10}],
            secondaryLanguage: 'Spanish'
          }),
        });

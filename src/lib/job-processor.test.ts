@@ -9,6 +9,10 @@ jest.mock('./ffmpeg-utils', () => ({
   burnSubtitles: jest.fn()
 }));
 
+jest.mock('./storage-config', () => ({
+  isPathSafe: jest.fn(() => true)
+}));
+
 // Mock dynamic import of ffmpeg-concat
 // Since jest hoist mocks, we mock the module. Dynamic import() returns the module.
 jest.mock('./ffmpeg-concat', () => ({

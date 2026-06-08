@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { validateSessionToken } from "./session";
 
 /**
  * Validates if the request is authorized.
@@ -39,9 +40,14 @@ export function validateAuth(req: NextRequest): boolean {
     return true;
   }
 
-  // 3. Check Cookie
-  const cookieToken = req.cookies.get("sb_api_key")?.value;
-  if (cookieToken === apiPassword) {
+  // 3. Check cookie — prefer new signed session token, fall back to legacy direct match
+  const sessionToken = req.cookies.get("sb_session")?.value;
+  if (sessionToken && validateSessionToken(sessionToken, apiPassword)) {
+    return true;
+  }
+  // Legacy: old sb_api_key cookie containing the raw password (pre-session-token)
+  const legacyCookie = req.cookies.get("sb_api_key")?.value;
+  if (legacyCookie === apiPassword) {
     return true;
   }
 

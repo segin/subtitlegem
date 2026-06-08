@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterAll } from "bun:test";
+/**
+ * @jest-environment node
+ */
 import { validateAuth, isAuthEnabled } from "./auth";
 import { NextRequest } from "next/server";
 
@@ -29,41 +31,39 @@ describe("auth utility", () => {
   });
 
   describe("validateAuth", () => {
-    it("should return false when API_PASSWORD is NOT set (FIX VERIFICATION)", () => {
+    it("should return false when API_PASSWORD is NOT set", () => {
       delete process.env.API_PASSWORD;
       const req = mockRequest();
-      // Fixed behavior returns false
       expect(validateAuth(req)).toBe(false);
     });
 
-    it("should return false when API_PASSWORD is empty string (FIX VERIFICATION)", () => {
+    it("should return false when API_PASSWORD is empty string", () => {
       process.env.API_PASSWORD = "";
       const req = mockRequest();
-      // Fixed behavior returns false
       expect(validateAuth(req)).toBe(false);
     });
 
     it("should return false when API_PASSWORD is set but no credentials provided", () => {
-      process.env.API_PASSWORD = "secret-password";
+      process.env.API_PASSWORD = "secure-password";
       const req = mockRequest();
       expect(validateAuth(req)).toBe(false);
     });
 
     it("should return true with correct Authorization Bearer header", () => {
-      process.env.API_PASSWORD = "secret-password";
-      const req = mockRequest({ authorization: "Bearer secret-password" });
+      process.env.API_PASSWORD = "secure-password";
+      const req = mockRequest({ authorization: "Bearer secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
 
     it("should return true with correct X-API-Key header", () => {
-      process.env.API_PASSWORD = "secret-password";
-      const req = mockRequest({ "x-api-key": "secret-password" });
+      process.env.API_PASSWORD = "secure-password";
+      const req = mockRequest({ "x-api-key": "secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
 
     it("should return true with correct cookie", () => {
-      process.env.API_PASSWORD = "secret-password";
-      const req = mockRequest({}, { sb_api_key: "secret-password" });
+      process.env.API_PASSWORD = "secure-password";
+      const req = mockRequest({}, { sb_api_key: "secure-password" });
       expect(validateAuth(req)).toBe(true);
     });
   });
@@ -75,7 +75,7 @@ describe("auth utility", () => {
     });
 
     it("should return true when API_PASSWORD is set", () => {
-      process.env.API_PASSWORD = "secret-password";
+      process.env.API_PASSWORD = "secure-password";
       expect(isAuthEnabled()).toBe(true);
     });
   });
