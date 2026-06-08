@@ -311,16 +311,22 @@ export function isPathSafe(filePath: string | null | undefined): boolean {
   }
   
   // 2. Block traversal sequences (including URL-encoded and double-encoded variants)
-  const traversalPatterns = [
-    '..',                   // Direct traversal
-    '%2e%2e',              // URL encoded ..
-    '%252e%252e',          // Double URL encoded ..
+  // Use a regex to identify ".." as a distinct path segment to avoid false positives
+  // with legitimate filenames like "my..file.txt"
+  const traversalRegex = /(^|[/\\]|%2f|%5c)(\.\.|%2e%2e|%252e%252e)([/\\]|%2f|%5c|$)/i;
+  if (traversalRegex.test(filePath)) {
+    console.warn('[Security] Blocked traversal pattern in path');
+    return false;
+  }
+
+  // Additional defense-in-depth for mixed encoding and other variants
+  const additionalPatterns = [
     '..%2f', '%2f..',      // Mixed encoding
-    '..\\', '..%5c',       // Windows style
+    '..%5c', '%5c..',      // Mixed encoding Windows
     '.%00.',               // Null byte split
   ];
   const lowerPath = filePath.toLowerCase();
-  for (const pattern of traversalPatterns) {
+  for (const pattern of additionalPatterns) {
     if (lowerPath.includes(pattern.toLowerCase())) {
       console.warn('[Security] Blocked traversal pattern in path:', pattern);
       return false;
@@ -342,10 +348,18 @@ export function isPathSafe(filePath: string | null | undefined): boolean {
     console.warn('[Security] Blocked shell variable injection in path');
     return false;
   }
-  
+
   // 5. Standard path prefix validation
   const stagingDir = getStagingDir();
   const resolvedPath = path.resolve(filePath);
+
+  // 6. Block sensitive file extensions (databases)
+  const sensitiveExtensions = ['.db', '.sqlite'];
+  const ext = path.extname(resolvedPath).toLowerCase();
+  if (sensitiveExtensions.includes(ext)) {
+    console.warn('[Security] Blocked access to sensitive file extension:', ext);
+    return false;
+  }
   const resolvedStagingDir = path.resolve(stagingDir);
   // Check if path is within staging directory (STRICT: Project root access denied)
   return resolvedPath.startsWith(resolvedStagingDir + path.sep) || 

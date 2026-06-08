@@ -97,7 +97,7 @@ async function callGenerate(config: ModelConfig, params: Record<string, any>): P
         params.mimeType,
         params.secondaryLanguage,
         1,
-        config.modelName
+        params.modelName || config.modelName
       );
     }
     const { generateSubtitles } = await import("./gemini");
@@ -106,7 +106,7 @@ async function callGenerate(config: ModelConfig, params: Record<string, any>): P
       params.mimeType,
       params.secondaryLanguage,
       1,
-      config.modelName
+      params.modelName || config.modelName
     );
   }
 
@@ -206,7 +206,7 @@ async function callTranslate(config: ModelConfig, params: Record<string, any>) {
     const subtitles = await translateSubtitles(
       params.subtitles,
       params.targetLanguage,
-      config.modelName
+      params.modelName || config.modelName
     );
     return { subtitles };
   }

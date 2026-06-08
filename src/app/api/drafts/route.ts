@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft, DraftV1, DraftV2 } from "@/lib/draft-store";
+import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft, DraftV1, DraftV2, DraftSummary } from "@/lib/draft-store";
 import { generateSummary, deleteFileFromGemini } from "@/lib/gemini";
 import fs from 'fs';
 import path from 'path';
@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
   }
   
   // List all drafts with hydrated metrics
-  const drafts = await Promise.all(listDrafts().map(async (draft) => {
+  const drafts = await Promise.all(listDrafts().map(async (draft: DraftSummary) => {
     try {
       const metaPath = getMetadataPath(draft.id);
       let metadata: ProjectMetadata = {};
@@ -75,19 +75,28 @@ export async function GET(req: NextRequest) {
         metadata = JSON.parse(metaStr);
       } catch { /* missing or corrupted metadata */ }
       
+      // computeMetrics will only compute what it can from the summary (mostly render metrics)
       const metrics = await computeMetrics(draft);
 
-      // Merge cached subtitle count if available (assuming POST updated it)
-      if (metadata.metrics && metadata.metrics.subtitleCount > 0 && metrics.subtitleCount === 0) {
-        metrics.subtitleCount = metadata.metrics.subtitleCount;
+      // Backfill source-related metrics from cached metadata since DraftSummary excludes them
+      if (metadata.metrics) {
+        if (metrics.sourceSize === 0 && metadata.metrics.sourceSize > 0) {
+          metrics.sourceSize = metadata.metrics.sourceSize;
+        }
+        if (metrics.sourceCount === 0 && metadata.metrics.sourceCount > 0) {
+          metrics.sourceCount = metadata.metrics.sourceCount;
+        }
+        if (metrics.subtitleCount === 0 && metadata.metrics.subtitleCount > 0) {
+          metrics.subtitleCount = metadata.metrics.subtitleCount;
+        }
+
+        // Always preserve lifetimeRenderCount (it's only incremented on export, never recomputed from disk)
+        if (metadata.metrics.lifetimeRenderCount > 0) {
+          metrics.lifetimeRenderCount = metadata.metrics.lifetimeRenderCount;
+        }
       }
       
-      // Preserve lifetimeRenderCount from cached metadata (never decrements)
-      if (metadata.metrics && metadata.metrics.lifetimeRenderCount > 0) {
-        metrics.lifetimeRenderCount = metadata.metrics.lifetimeRenderCount;
-      }
-      
-      // Merge with cache (preserve summary and cache metrics)
+      // Update cache with fresh render metrics while preserving source metrics
       const newMetadata = {
         ...metadata,
         metrics,

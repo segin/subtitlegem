@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
-import { getStorageConfig } from '@/lib/storage-config';
+import { promises as fsPromises } from 'fs';
+import { getStorageConfig, isPathSafe } from '@/lib/storage-config';
+import { getDirectorySize } from '@/lib/storage-utils';
 import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
@@ -27,7 +28,9 @@ export async function POST(req: NextRequest) {
     if (target === 'drafts') targetDir = path.join(config.stagingDir, 'drafts'); 
     if (target === 'video') targetDir = path.join(config.stagingDir, 'videos');
 
-    if (!fs.existsSync(targetDir)) {
+    try {
+        await fsPromises.access(targetDir);
+    } catch {
          return NextResponse.json({ deletedCount: 0, message: "Directory does not exist" });
     }
 
@@ -36,36 +39,57 @@ export async function POST(req: NextRequest) {
 
     // Specific file deletion
     if (fileIds && fileIds.length > 0) {
+        const resolvedTargetDir = path.resolve(targetDir);
         for (const fileId of fileIds) {
-            // Basic sanitization
-            const safeName = path.basename(fileId); 
+            const safeName = path.basename(fileId);
             const filePath = path.join(targetDir, safeName);
-            
-            if (fs.existsSync(filePath)) {
-                try {
-                    fs.unlinkSync(filePath);
-                    deletedCount++;
-                    // Also try to cleanup related files (e.g. .json sidecars for videos?)
-                    // For now keeping it simple.
-                } catch (e: any) {
-                    errors.push(`Failed to delete ${safeName}: ${e.message}`);
+            const resolvedPath = path.resolve(filePath);
+
+            // Verify path stays within target directory
+            if (!resolvedPath.startsWith(resolvedTargetDir + path.sep)) {
+                errors.push(`Access denied: ${safeName}`);
+                continue;
+            }
+
+            // Full security validation
+            if (!isPathSafe(resolvedPath)) {
+                errors.push(`Access denied: ${safeName}`);
+                continue;
+            }
+
+            // lstat: check existence and reject symlinks atomically
+            try {
+                const lstats = await fsPromises.lstat(filePath);
+                if (lstats.isSymbolicLink()) {
+                    errors.push(`Access denied (symlink): ${safeName}`);
+                    continue;
                 }
+            } catch {
+                // File does not exist, skip
+                continue;
+            }
+
+            try {
+                await fsPromises.unlink(filePath);
+                deletedCount++;
+            } catch (e: unknown) {
+                errors.push(`Failed to delete ${safeName}: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
     }
 
     // Bulk cleanup (older than X)
     if (olderThanHours !== undefined) {
-        const files = fs.readdirSync(targetDir);
+        const files = await fsPromises.readdir(targetDir);
         const now = Date.now();
         const maxAgeMs = olderThanHours * 60 * 60 * 1000;
 
         for (const file of files) {
             const filePath = path.join(targetDir, file);
             try {
-                const stats = fs.statSync(filePath);
+                const stats = await fsPromises.stat(filePath);
                 if (now - stats.mtimeMs > maxAgeMs) {
-                    fs.unlinkSync(filePath);
+                    await fsPromises.unlink(filePath);
                     deletedCount++;
                 }
             } catch (e: any) {
@@ -74,10 +98,12 @@ export async function POST(req: NextRequest) {
         }
     }
 
+    const currentSize = getDirectorySize(targetDir);
+
     return NextResponse.json({ 
         success: true, 
         deletedCount, 
-        currentSize: 0, // TODO: calculate new size if needed
+        currentSize,
         errors: errors.length > 0 ? errors : undefined 
     });
 

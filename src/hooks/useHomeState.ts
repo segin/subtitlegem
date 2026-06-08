@@ -36,9 +36,15 @@ export function useDialogState() {
   const [showFindReplace, setShowFindReplace] = useState(false);
   const [showVideoProperties, setShowVideoProperties] = useState(false);
   const [showVideoLibrary, setShowVideoLibrary] = useState(false);
-  const [showQueue, setShowQueue] = useState(true);
+  const [showQueue, setShowQueue] = useState(false);
   const [showRestoreOption, setShowRestoreOption] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+      setShowQueue(true);
+    }
+  }, []);
 
   return {
     showProjectSettings, setShowProjectSettings,

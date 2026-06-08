@@ -26,8 +26,14 @@ function cleanJsonOutput(text: string): string {
 
 
 
-export async function uploadToGemini(filePath: string, mimeType: string) {
+export async function uploadToGemini(
+  filePath: string, 
+  mimeType: string,
+  onProgress?: (stage: string, percent?: number) => void
+) {
   // Upload file using new SDK
+  if (onProgress) onProgress("uploading_to_gemini");
+  
   const uploadResult = await ai.files.upload({
     file: filePath,
     config: {
@@ -46,13 +52,17 @@ export async function uploadToGemini(filePath: string, mimeType: string) {
   let waitCount = 0;
   const maxWaitChecks = 60; 
 
+  if (onProgress) onProgress("gemini_processing");
+
   // Wait for file to be processed
   while (file.state === FileState.PROCESSING && waitCount < maxWaitChecks) {
     waitCount++;
+
     if (waitCount % 3 === 0) {
         console.log(`[${new Date().toISOString()}] [Gemini] Still processing file ${fileName}... (${waitCount}/${maxWaitChecks})`);
     }
     await new Promise((resolve) => setTimeout(resolve, 10_000));
+
 
     // Retry with exponential backoff on transient errors
     try {
@@ -133,24 +143,26 @@ async function performSubtitleGeneration(
     return JSON.parse(cleanJsonOutput(text));
   } catch (error: unknown) {
     const status = (error as any)?.status;
-    
-    if (status === 429 && attempt < 3) {
-      const msg = (error instanceof Error) ? error.message : String(error);
-      const delayMatch = msg.match(/retry in ([\d.]+)s/);
-      const delaySeconds = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
+    const isRetryable = status === 429 || status === 500 || status === 502 || status === 503;
+
+    if (isRetryable && attempt < 4) {
+      let delayMs: number;
+      if (status === 429) {
+        const msg = (error instanceof Error) ? error.message : String(error);
+        const delayMatch = msg.match(/retry in ([\d.]+)s/);
+        const delaySec = delayMatch ? parseFloat(delayMatch[1]) : 10 * attempt;
+        delayMs = Math.min(delaySec * 1000, 60000);
+      } else {
+        // Exponential backoff with jitter for 5xx errors
+        const baseDelay = Math.pow(2, attempt) * 1000;
+        delayMs = Math.min(baseDelay + Math.random() * 1000, 30000);
+      }
 
       console.log(
-        `Rate limited (429). Retrying in ${delaySeconds}s (Attempt ${attempt}/3)...`
+        `API error (${status}). Retrying in ${(delayMs / 1000).toFixed(1)}s (Attempt ${attempt}/4)...`
       );
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.min(delaySeconds * 1000, 60000))
-      );
-      return performSubtitleGeneration(
-        mediaPart,
-        secondaryLanguage,
-        attempt + 1,
-        modelName
-      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      return performSubtitleGeneration(mediaPart, secondaryLanguage, attempt + 1, modelName);
     }
     throw error;
   }
