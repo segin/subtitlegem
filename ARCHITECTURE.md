@@ -402,7 +402,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-02-11 |
+| **Date of Last Update** | 2026-02-12 |
 
 ---
 

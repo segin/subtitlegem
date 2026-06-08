@@ -100,6 +100,7 @@ src/
 | Variable | Purpose | Required |
 |----------|---------|----------|
 | `GEMINI_API_KEY` | Google Gemini API authentication | Yes |
+| `API_PASSWORD` | Optional application password (enables auth) | No |
 | `STAGING_DIR` | Root directory for file storage | No (defaults to `./storage`) |
 
 ## Global Settings (via `/api/settings`)
