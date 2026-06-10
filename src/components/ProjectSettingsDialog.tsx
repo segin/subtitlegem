@@ -349,7 +349,7 @@ export function ProjectSettingsDialog({
                             className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm relative overflow-hidden shrink-0 mx-auto transition-all"
                             style={{ width: previewWidth, height: previewHeight }}
                         >
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222]" />
+                            <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222] pointer-events-none" />
                             
                             {/* Reference Grid */}
                             <div className="absolute inset-0 opacity-10 pointer-events-none grid grid-cols-3 grid-rows-3">

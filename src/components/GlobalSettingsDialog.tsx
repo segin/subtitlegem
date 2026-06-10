@@ -256,7 +256,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                         style={{ width: previewWidth, height: previewHeight }}
                     >
                       {/* Simulated video background */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222]" />
+                      <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222] pointer-events-none" />
                       
                       {/* Reference Grid */}
                       <div className="absolute inset-0 opacity-10 pointer-events-none grid grid-cols-3 grid-rows-3">
