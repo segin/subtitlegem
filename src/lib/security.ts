@@ -6,7 +6,12 @@ import crypto from 'crypto';
  * secureDelete
  * Emulates `shred -uzv` behavior if SECURE_ERASE environment variable is true.
  * Performs operation asynchronously.
- * 
+ *
+ * CAVEAT: Overwrite-in-place does NOT guarantee erasure on modern storage.
+ * SSDs (wear leveling), copy-on-write filesystems (btrfs/ZFS/APFS), snapshots,
+ * and journaled/WAL data can retain the original blocks. Treat this as a
+ * best-effort hygiene measure, not a compliance-grade data-destruction tool.
+ *
  * Behavior:
  * 1. Overwrites file with random data (3 passes default)
  * 2. Overwrites with zeros (1 pass)

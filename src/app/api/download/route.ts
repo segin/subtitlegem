@@ -40,10 +40,16 @@ export async function GET(req: NextRequest) {
   try {
     const stream = fs.createReadStream(safePath);
 
+    // Build a header-safe filename. Strip quotes/control chars from the ASCII
+    // fallback, and provide an RFC 5987 UTF-8 variant for the real name.
+    const rawName = path.basename(safePath);
+    const asciiName = rawName.replace(/["\\\r\n]/g, "_");
+    const encodedName = encodeURIComponent(rawName);
+
     return new NextResponse(stream as any, {
       status: 200,
       headers: {
-        'Content-Disposition': `attachment; filename="${path.basename(safePath)}"`,
+        'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
         'Content-Type': 'video/mp4',
         'Content-Length': fileStats.size.toString(),
       },

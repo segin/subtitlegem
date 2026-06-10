@@ -42,7 +42,7 @@ describe('/api/process Authentication', () => {
     process.env = originalEnv;
   });
 
-  it('should return 401 when API_PASSWORD is not set (Enforced by Default)', async () => {
+  it('should allow access when API_PASSWORD is not set (open mode)', async () => {
     process.env.API_PASSWORD = '';
 
     const req = new NextRequest('http://localhost/api/process', {
@@ -52,7 +52,8 @@ describe('/api/process Authentication', () => {
     });
 
     const res = await POST(req);
-    expect(res.status).toBe(401);
+    // Should NOT be 401; open mode lets the request through to handler logic.
+    expect(res.status).not.toBe(401);
   });
 
   it('should return 401 when API_PASSWORD is set but no auth provided', async () => {

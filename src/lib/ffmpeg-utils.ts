@@ -244,7 +244,15 @@ export function burnSubtitles(
     const videoFilters: string[] = [];
 
     if (resolution && resolution !== 'original' && resolution.includes('x')) {
-      const [width, height] = resolution.split('x');
+      const [wRaw, hRaw] = resolution.split('x');
+      const width = parseInt(wRaw, 10);
+      const height = parseInt(hRaw, 10);
+      // Only emit scale/pad for sane integer dimensions; this keeps attacker-
+      // controlled config from injecting extra filters into the graph.
+      if (!Number.isInteger(width) || !Number.isInteger(height) ||
+          width <= 0 || height <= 0 || width > 16384 || height > 16384) {
+        return reject(new Error(`Invalid resolution: ${resolution}`));
+      }
       videoFilters.push(`scale=${width}:${height}:force_original_aspect_ratio=decrease`);
       videoFilters.push(`pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`);
     }
