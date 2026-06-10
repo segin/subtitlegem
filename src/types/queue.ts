@@ -1,4 +1,15 @@
-import { SubtitleLine } from '@/types/subtitle';
+import { SubtitleLine, FFmpegConfig, MultiVideoProjectState } from '@/types/subtitle';
+
+/** Job-specific data attached to a queue item (e.g. for export/burn jobs). */
+export interface QueueItemMetadata {
+  type?: string; // e.g. 'multi-export'
+  videoPath?: string;
+  assPath?: string;
+  outputPath?: string;
+  sampleDuration?: number;
+  ffmpegConfig?: FFmpegConfig;
+  projectState?: MultiVideoProjectState;
+}
 
 export interface QueueItem {
   id: string;
@@ -24,7 +35,7 @@ export interface QueueItem {
   startedAt?: number;
   completedAt?: number;
   retryCount?: number; // Number of times this job has been retried
-  metadata?: Record<string, any>; // Additional metadata
+  metadata?: QueueItemMetadata; // Additional job-specific metadata
 }
 
 export type QueueItemStatus = QueueItem['status'];

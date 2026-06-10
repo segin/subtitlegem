@@ -38,11 +38,11 @@ export async function GET(req: NextRequest) {
           model: testModel,
           response: response.text?.substring(0, 100)
         });
-      } catch (error: any) {
-        return NextResponse.json({ 
-          success: false, 
+      } catch (error) {
+        return NextResponse.json({
+          success: false,
           model: testModel,
-          error: error.message || "Model not accessible"
+          error: error instanceof Error ? error.message : "Model not accessible"
         }, { status: 400 });
       }
     }
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
     for await (const model of pager) {
       const modelName = model.name || "";
       // Only include generative models that support generateContent
-      const supportedActions = (model as any).supportedActions || [];
+      const supportedActions = (model as { supportedActions?: string[] }).supportedActions || [];
       if (supportedActions.includes("generateContent")) {
         models.push({
           name: modelName.replace("models/", ""),
@@ -77,8 +77,8 @@ export async function GET(req: NextRequest) {
     });
     
     return NextResponse.json({ models });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Models API] Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

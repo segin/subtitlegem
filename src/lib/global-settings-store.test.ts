@@ -22,14 +22,23 @@ jest.mock('better-sqlite3', () => {
     close: jest.fn()
   }));
 
-  (mockClass as any).mGet = mGet;
-  (mockClass as any).mPrepare = mPrepare;
-  (mockClass as any).mRun = mRun;
+  const exposed = mockClass as unknown as {
+    mGet: jest.Mock;
+    mPrepare: jest.Mock;
+    mRun: jest.Mock;
+  };
+  exposed.mGet = mGet;
+  exposed.mPrepare = mPrepare;
+  exposed.mRun = mRun;
 
   return mockClass;
 });
 
-const { mGet, mPrepare, mRun } = Database as any;
+const { mGet, mPrepare, mRun } = Database as unknown as {
+  mGet: jest.Mock;
+  mPrepare: jest.Mock;
+  mRun: jest.Mock;
+};
 
 jest.mock('./storage-config', () => ({
   getStagingDir: () => '/mock/staging',

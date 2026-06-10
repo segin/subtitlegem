@@ -46,12 +46,21 @@ export function FindReplaceDialog({
   const findInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Reset transient result/action state when the dialog transitions to open,
+  // using the render-adjustment pattern (instead of a synchronous setState in an effect).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setCurrentResult(null);
+      setLastAction("");
+    }
+  }
+
   // Focus find input when dialog opens
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => findInputRef.current?.focus(), 100);
-      setCurrentResult(null);
-      setLastAction("");
     }
   }, [isOpen]);
 

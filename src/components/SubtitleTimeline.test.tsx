@@ -45,7 +45,6 @@ describe('SubtitleTimeline', () => {
 
   describe('Legacy/Single-Track Mode', () => {
     it('renders correctly with only subtitles', () => {
-      // @ts-ignore - testing legacy props shape if needed, or just default props
       render(<SubtitleTimeline {...defaultProps} onUpdate={defaultProps.onSubtitlesUpdate} />);
       
       expect(screen.getByText('Hello')).toBeInTheDocument();

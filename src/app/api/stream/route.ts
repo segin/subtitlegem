@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     }
   });
 
-  return new NextResponse(stream as any, {
+  return new NextResponse(stream as unknown as ReadableStream, {
     headers: {
       'Content-Type': 'video/mp4',
       // 'Transfer-Encoding': 'chunked' // Next.js/Node handles this automatically for streams?

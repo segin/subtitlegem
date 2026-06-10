@@ -32,7 +32,7 @@ describe('subtitle properties', () => {
         resolution: fc.string()
       })
     })
-  }) as any as fc.Arbitrary<ProjectState>;
+  }) as unknown as fc.Arbitrary<ProjectState>;
 
   test('migrateToMultiVideo always produces valid V2 state', () => {
     fc.assert(

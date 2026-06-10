@@ -1,5 +1,6 @@
 import { processWithFallback } from './ai-provider';
 import * as gemini from './gemini';
+import { ModelConfig } from '@/types/subtitle';
 
 // Mock the gemini module
 jest.mock('./gemini', () => ({
@@ -19,11 +20,11 @@ describe('ai-provider', () => {
     mimeType: 'audio/mp3'
   };
 
-  const geminiConfig: any = {
+  const geminiConfig: ModelConfig = {
     id: '1', provider: 'gemini', modelName: 'gemini-pro', enabled: true
   };
-  
-  const openaiConfig: any = {
+
+  const openaiConfig: ModelConfig = {
     id: '2', provider: 'openai', modelName: 'whisper-1', enabled: true
   };
 

@@ -3,9 +3,10 @@ describe('Gemini Integration', () => {
     let mockGenerateContent: jest.Mock;
     let mockUpload: jest.Mock;
     let mockGetFile: jest.Mock;
-    let generateSubtitles: any;
-    let generateSubtitlesInline: any;
-    let translateSubtitles: any;
+    type GeminiModule = typeof import('./gemini');
+    let generateSubtitles: GeminiModule['generateSubtitles'];
+    let generateSubtitlesInline: GeminiModule['generateSubtitlesInline'];
+    let translateSubtitles: GeminiModule['translateSubtitles'];
 
     beforeEach(async () => {
         jest.resetModules();

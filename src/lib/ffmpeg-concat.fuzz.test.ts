@@ -49,7 +49,11 @@ describe('ffmpeg-concat (fuzzing)', () => {
             }));
 
             // EXECUTE
-            const result = generateFilterComplex(inputs as any, timeline, config);
+            const result = generateFilterComplex(
+                inputs as unknown as Array<{ type: 'video' | 'image'; path: string; id: string }>,
+                timeline,
+                config
+            );
 
             // VERIFICATIONS
             // 1. result should exist

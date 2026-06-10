@@ -4,6 +4,12 @@ import { EventEmitter } from 'events';
 
 jest.mock('child_process');
 
+type MockProc = EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  kill?: jest.Mock;
+};
+
 describe('ffmpeg-probe', () => {
   
   beforeEach(() => {
@@ -13,7 +19,7 @@ describe('ffmpeg-probe', () => {
   const mockSpawn = (stdout: string, stderr: string = '', code: number = 0) => {
     const stdoutStream = new EventEmitter();
     const stderrStream = new EventEmitter();
-    const proc = new EventEmitter() as any;
+    const proc = new EventEmitter() as MockProc;
     proc.stdout = stdoutStream;
     proc.stderr = stderrStream;
     proc.kill = jest.fn();
@@ -34,7 +40,7 @@ describe('ffmpeg-probe', () => {
     (spawn as jest.Mock).mockImplementation((cmd, args) => {
         const stdoutStream = new EventEmitter();
         const stderrStream = new EventEmitter();
-        const proc = new EventEmitter() as any;
+        const proc = new EventEmitter() as MockProc;
         proc.stdout = stdoutStream;
         proc.stderr = stderrStream;
         
@@ -64,7 +70,7 @@ describe('ffmpeg-probe', () => {
     (spawn as jest.Mock).mockImplementation((cmd, args) => {
         const stdoutStream = new EventEmitter();
         const stderrStream = new EventEmitter();
-        const proc = new EventEmitter() as any;
+        const proc = new EventEmitter() as MockProc;
         proc.stdout = stdoutStream;
         proc.stderr = stderrStream;
         

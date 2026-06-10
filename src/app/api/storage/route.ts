@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        return new NextResponse(stream as any, {
+        return new NextResponse(stream as unknown as ReadableStream, {
           status: 206,
           headers: {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -137,7 +137,7 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        return new NextResponse(stream as any, {
+        return new NextResponse(stream as unknown as ReadableStream, {
           status: 200,
           headers: {
             'Content-Length': fileSize.toString(),
@@ -156,9 +156,9 @@ export async function GET(req: NextRequest) {
       validation,
       currentSizeGB,
     });
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -192,9 +192,9 @@ export async function POST(req: NextRequest) {
       validation: stagingDir ? await validateStagingDir(stagingDir) : null,
     });
     
-  } catch (error: any) {
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }
@@ -215,10 +215,10 @@ export async function DELETE(req: NextRequest) {
       cleanedCount,
       currentSizeGB,
     });
-    
-  } catch (error: any) {
+
+  } catch (error) {
     return NextResponse.json(
-      { error: error.message },
+      { error: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

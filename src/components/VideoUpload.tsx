@@ -975,7 +975,7 @@ export function VideoUpload({
                                 }
                                 if (prog?.status === 'complete') {
                                   return prog.warning
-                                    ? <AlertCircle className="w-3 h-3 text-[#f0a500]" title={prog.warning} />
+                                    ? <span title={prog.warning}><AlertCircle className="w-3 h-3 text-[#f0a500]" /></span>
                                     : <Check className="w-3 h-3 text-[#4caf50]" />;
                                 }
                                 return null;
@@ -1212,9 +1212,9 @@ export function VideoUpload({
                 // Complete
                 onUploadComplete([], '', '', '', '', '', 0); // Trigger refresh/redirect
                 
-              } catch (err: any) {
+              } catch (err) {
                 console.error('Upload failed:', err);
-                setError(err.message || 'Upload failed');
+                setError((err instanceof Error ? err.message : String(err)) || 'Upload failed');
               } finally {
                 setLoading(false);
                 setIsUploading(false);
@@ -1385,7 +1385,7 @@ export function VideoUpload({
                                  }
                                  if (prog?.status === 'complete') {
                                    return prog.warning
-                                     ? <AlertCircle className="w-3 h-3 text-[#f0a500]" title={prog.warning} />
+                                     ? <span title={prog.warning}><AlertCircle className="w-3 h-3 text-[#f0a500]" /></span>
                                      : <Check className="w-3 h-3 text-[#4caf50]" />;
                                  }
                                  return null;
@@ -1625,9 +1625,9 @@ export function VideoUpload({
                   startUpload(0);
                 });
 
-              } catch (err: any) {
+              } catch (err) {
                 console.error('Upload failed:', err);
-                setError(err.message || 'Upload failed');
+                setError((err instanceof Error ? err.message : String(err)) || 'Upload failed');
               } finally {
                 setLoading(false);
                 setIsUploading(false);

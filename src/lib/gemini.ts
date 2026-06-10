@@ -1,4 +1,4 @@
-import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold, Part } from "@google/genai";
 import fs from "fs";
 import { SubtitleLine } from "@/types/subtitle";
 import { subtitleSchema, translationSchema } from "./gemini-schemas";
@@ -19,7 +19,7 @@ const safetySettings = [
 // Helper to strip markdown code blocks from JSON response
 function cleanJsonOutput(text: string): string {
   // Remove markdown code blocks (```json ... ``` or just ``` ... ```)
-  let clean = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1');
+  const clean = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, '$1');
   // Remove any leading/trailing whitespace
   return clean.trim();
 }
@@ -103,7 +103,7 @@ export async function uploadToGemini(
  * Internal helper for shared subtitle generation logic
  */
 async function performSubtitleGeneration(
-  mediaPart: any,
+  mediaPart: Part,
   secondaryLanguage?: string,
   attempt = 1,
   modelName: string = "gemini-2.5-flash"
@@ -135,14 +135,14 @@ async function performSubtitleGeneration(
       ],
       config: {
         responseMimeType: "application/json",
-        responseSchema: subtitleSchema as any,
+        responseSchema: subtitleSchema,
       },
     });
 
     const text = response.text!;
     return JSON.parse(cleanJsonOutput(text));
   } catch (error: unknown) {
-    const status = (error as any)?.status;
+    const status = (error as { status?: number })?.status;
     const isRetryable = status === 429 || status === 500 || status === 502 || status === 503;
 
     if (isRetryable && attempt < 4) {
@@ -237,7 +237,7 @@ export async function translateSubtitles(
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: { 
         responseMimeType: "application/json",
-        responseSchema: translationSchema as any,
+        responseSchema: translationSchema,
         safetySettings,
       },
     });

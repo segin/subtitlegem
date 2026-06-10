@@ -60,6 +60,7 @@ jest.mock('busboy', () => {
 
 import { processWithFallback } from '@/lib/ai-provider';
 import { uploadToGemini } from '@/lib/gemini';
+import { isPathSafe } from '@/lib/storage-config';
 
 describe('/api/process (JSON modes)', () => {
   const mockProcess = processWithFallback as jest.Mock;
@@ -155,7 +156,6 @@ describe('/api/process (JSON modes)', () => {
     });
 
     it('should block unsafe filePath even with sampleDuration', async () => {
-      const { isPathSafe } = require('@/lib/storage-config');
       (isPathSafe as jest.Mock).mockReturnValue(false);
 
       const req = new NextRequest('http://localhost/api/process', {

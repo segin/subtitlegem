@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
       audioCodec: metadata.audioCodec,
       pixFmt: metadata.pixFmt,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Probe error:', error);
-    return NextResponse.json({ error: error.message || 'Failed to probe video' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to probe video' }, { status: 500 });
   }
 }

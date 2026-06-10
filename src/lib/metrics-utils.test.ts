@@ -29,14 +29,14 @@ describe('metrics-utils', () => {
         updatedAt: new Date(),
       };
 
-      (mockedFs.promises as any) = {
+      mockedFs.promises = {
         stat: jest.fn().mockImplementation((path: string) => {
           if (path === '/path/to/video.mp4') return Promise.resolve({ size: 5000, isDirectory: () => false });
           if (path === '/staging/exports/test-v1') return Promise.resolve({ isDirectory: () => true });
           return Promise.reject(new Error('Not found'));
         }),
         readdir: jest.fn().mockResolvedValue([])
-      };
+      } as unknown as typeof fs.promises;
 
       const metrics = await computeMetrics(draft, '/staging');
 
@@ -63,13 +63,13 @@ describe('metrics-utils', () => {
         updatedAt: new Date(),
       };
 
-      (mockedFs.promises as any) = {
+      mockedFs.promises = {
         stat: jest.fn().mockImplementation((path: string) => {
           if (path.includes('exports')) return Promise.resolve({ isDirectory: () => true });
           return Promise.reject(new Error('Not found'));
         }),
         readdir: jest.fn().mockResolvedValue(['output1.mp4'])
-      };
+      } as unknown as typeof fs.promises;
 
       const metrics = await computeMetrics(draft, '/staging');
 
@@ -130,30 +130,30 @@ describe('metrics-utils', () => {
 
   describe('Fuzzing & Edge Cases', () => {
     it('should handle draft with missing clips (undefined)', async () => {
-      const draft = { id: 'fuzz-1', version: 2 } as any;
+      const draft = { id: 'fuzz-1', version: 2 } as unknown as DraftV2;
       const metrics = await computeMetrics(draft, '/staging');
       expect(metrics.sourceCount).toBe(0);
       expect(metrics.sourceSize).toBe(0);
     });
 
     it('should handle V1 with non-existent video path', async () => {
-      const draft = { id: 'fuzz-2', version: 1, videoPath: '/missing' } as any;
-      (mockedFs.promises as any) = {
+      const draft = { id: 'fuzz-2', version: 1, videoPath: '/missing' } as unknown as DraftV1;
+      mockedFs.promises = {
         stat: jest.fn().mockRejectedValue(new Error('ENOENT')),
-      };
+      } as unknown as typeof fs.promises;
       const metrics = await computeMetrics(draft, '/staging');
       expect(metrics.sourceSize).toBe(0);
     });
 
     it('should not crash when readdirSync fails', async () => {
-      const draft = { id: 'fuzz-3', version: 1 } as any;
-      (mockedFs.promises as any) = {
+      const draft = { id: 'fuzz-3', version: 1 } as unknown as DraftV1;
+      mockedFs.promises = {
         stat: jest.fn().mockImplementation((path: string) => {
           if (path.includes('exports')) return Promise.resolve({ isDirectory: () => true });
           return Promise.reject(new Error('Not found'));
         }),
         readdir: jest.fn().mockRejectedValue(new Error('Permission denied'))
-      };
+      } as unknown as typeof fs.promises;
       
       await expect(computeMetrics(draft, '/staging')).resolves.not.toThrow();
     });

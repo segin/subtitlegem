@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     if (text) {
       const result = await processWithFallback(
         'translate',
-        { subtitles: [{ text }], targetLanguage },
+        { subtitles: [{ id: "single", startTime: 0, endTime: 0, text }], targetLanguage },
         settings.aiFallbackChain
       );
       
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ error: "No text provided" }, { status: 400 });
-  } catch (error: any) {
+  } catch (error) {
     console.error("Translation error:", error);
-    return NextResponse.json({ error: error.message || "Failed to translate" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to translate" }, { status: 500 });
   }
 }

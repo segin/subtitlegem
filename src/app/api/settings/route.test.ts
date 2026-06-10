@@ -1,23 +1,30 @@
-import { DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { DEFAULT_GLOBAL_SETTINGS, GlobalSettings } from "@/types/subtitle";
 import { GET, PUT, DELETE } from "./route";
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
+
+// Shape of the JSON payloads returned by the route handlers in these tests.
+interface SettingsResponseBody {
+  error?: string;
+  success?: boolean;
+  settings: GlobalSettings;
+}
 
 const mockGetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
-const mockSaveGlobalSettings = jest.fn((s: any) => {});
+const mockSaveGlobalSettings = jest.fn((s: GlobalSettings): void => {});
 const mockResetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
 
 jest.mock("next/server", () => {
   return {
     NextResponse: {
-      json: (data: any, init?: any) => ({
+      json: (data: unknown, init?: { status?: number }) => ({
         status: init?.status || 200,
         json: async () => data,
       }),
     },
     NextRequest: class {
       url: string;
-      _body: any;
-      constructor(url: string, init?: any) {
+      _body: unknown;
+      constructor(url: string, init?: { body?: unknown }) {
         this.url = url;
         this._body = init?.body;
       }
@@ -30,7 +37,7 @@ jest.mock("next/server", () => {
 
 jest.mock("@/lib/global-settings-store", () => ({
   getGlobalSettings: () => mockGetGlobalSettings(),
-  saveGlobalSettings: (s: any) => mockSaveGlobalSettings(s),
+  saveGlobalSettings: (s: GlobalSettings) => mockSaveGlobalSettings(s),
   resetGlobalSettings: () => mockResetGlobalSettings(),
 }));
 
@@ -49,7 +56,7 @@ describe("/api/settings", () => {
     it("should return the current global settings", async () => {
       const res = await GET();
       expect(res.status).toBe(200);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
       expect(data).toEqual(DEFAULT_GLOBAL_SETTINGS);
       expect(mockGetGlobalSettings).toHaveBeenCalled();
     });
@@ -60,7 +67,7 @@ describe("/api/settings", () => {
       });
       const res = await GET();
       expect(res.status).toBe(500);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
       expect(data.error).toBe("Store error");
     });
   });
@@ -70,11 +77,11 @@ describe("/api/settings", () => {
       const partialUpdate = { defaultPrimaryLanguage: "French", defaultCrf: 18 };
       const mockReq = {
         json: async () => partialUpdate,
-      } as any;
+      } as unknown as NextRequest;
 
       const res = await PUT(mockReq);
       expect(res.status).toBe(200);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
 
       expect(data.success).toBe(true);
       expect(data.settings.defaultPrimaryLanguage).toBe("French");
@@ -90,10 +97,10 @@ describe("/api/settings", () => {
         json: async () => {
           throw new Error("Malformed JSON");
         },
-      } as any;
+      } as unknown as NextRequest;
       const res = await PUT(mockReq);
       expect(res.status).toBe(500);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
       expect(data.error).toBe("Malformed JSON");
     });
   });
@@ -102,7 +109,7 @@ describe("/api/settings", () => {
     it("should reset settings to defaults", async () => {
       const res = await DELETE();
       expect(res.status).toBe(200);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
 
       expect(data.success).toBe(true);
       expect(data.settings).toEqual(DEFAULT_GLOBAL_SETTINGS);
@@ -115,7 +122,7 @@ describe("/api/settings", () => {
       });
       const res = await DELETE();
       expect(res.status).toBe(500);
-      const data = (await res.json()) as any;
+      const data = (await res.json()) as SettingsResponseBody;
       expect(data.error).toBe("Reset failed");
     });
   });

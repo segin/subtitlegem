@@ -1,5 +1,6 @@
 import { processJob } from './job-processor';
 import { QueueItem } from '@/types/queue';
+import { FFmpegConfig, MultiVideoProjectState } from '@/types/subtitle';
 import fs from 'fs';
 import { burnSubtitles } from './ffmpeg-utils';
 import * as ffmpegConcat from './ffmpeg-concat';
@@ -30,7 +31,7 @@ describe('job-processor', () => {
             videoPath: '/source/v.mp4',
             assPath: '/source/s.ass',
             outputPath: '/out/v.mp4',
-            ffmpegConfig: {}
+            ffmpegConfig: {} as FFmpegConfig
         }
     };
 
@@ -41,7 +42,7 @@ describe('job-processor', () => {
     });
 
     test('validates metadata', async () => {
-        const invalidItem = { ...mockItem, metadata: {} } as any;
+        const invalidItem = { ...mockItem, metadata: {} } as QueueItem;
         await expect(processJob(invalidItem, jest.fn()))
             .rejects.toThrow('Missing required paths');
     });
@@ -71,7 +72,7 @@ describe('job-processor', () => {
             metadata: {
                 ...mockItem.metadata,
                 type: 'multi-export',
-                projectState: { clips: [] }
+                projectState: { clips: [] } as unknown as MultiVideoProjectState
             }
         };
 

@@ -14,6 +14,7 @@ jest.mock('child_process', () => ({
 
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
+  lstatSync: jest.fn(() => ({ isFile: () => true, isSymbolicLink: () => false })),
 }));
 
 jest.mock('@/lib/storage-config', () => ({
@@ -97,6 +98,7 @@ describe('/api/stream', () => {
 
   it('should return 404 if file does not exist', async () => {
     mockExistsSync.mockReturnValue(false);
+    (fs.lstatSync as jest.Mock).mockImplementationOnce(() => { throw new Error('ENOENT'); });
     const validPath = '/mock/staging/missing.mp4';
     const req = new NextRequest(`http://localhost/api/stream?path=${encodeURIComponent(validPath)}`);
     

@@ -16,7 +16,17 @@ export interface BurnOptions {
   resolution?: string; // 'original' or 'WIDTHxHEIGHT'
   codec?: string;
   sampleDuration?: number;
-  onProgress?: (progress: number, details?: any) => void;
+  onProgress?: (progress: number, details?: { timemark: string }) => void;
+}
+
+/** Subset of an FFprobe stream object that we read. */
+interface FFprobeStream {
+  codec_type?: string;
+  codec_name?: string;
+  width?: number;
+  height?: number;
+  pix_fmt?: string;
+  r_frame_rate?: string;
 }
 
 export interface VideoMetadata {
@@ -83,18 +93,18 @@ export async function ffprobe(filePath: string): Promise<VideoMetadata> {
         const data = JSON.parse(stdout);
         
         // Find all video streams
-        const videoStreams = data.streams?.filter((s: any) => s.codec_type === 'video') || [];
-        
+        const videoStreams: FFprobeStream[] = data.streams?.filter((s: FFprobeStream) => s.codec_type === 'video') || [];
+
         // Select the "best" video stream (largest resolution)
         // This handles cases where file might have a cover art stream or mjpeg thumbnail stream first
-        videoStreams.sort((a: any, b: any) => {
+        videoStreams.sort((a: FFprobeStream, b: FFprobeStream) => {
              const resA = (a.width || 0) * (a.height || 0);
              const resB = (b.width || 0) * (b.height || 0);
              return resB - resA; // Descending
         });
 
         const videoStream = videoStreams[0];
-        const audioStream = data.streams?.find((s: any) => s.codec_type === 'audio');
+        const audioStream = data.streams?.find((s: FFprobeStream) => s.codec_type === 'audio');
         const format = data.format || {};
 
         resolve({

@@ -492,7 +492,7 @@ export default function Home() {
   const handleExport = (format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
     let content = "";
     let fileName = "subtitles";
-    let mimeType = "text/plain";
+    const mimeType = "text/plain";
 
     if (format === 'ass') {
       content = generateAss(subtitles, config);
@@ -1751,8 +1751,8 @@ export default function Home() {
                       const data = await queueRes.json();
                       setQueueItems(data.items);
                     }
-                  } catch (err: any) {
-                    alert(`Export failed: ${err.message}`);
+                  } catch (err) {
+                    alert(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
                   }
                 }}
               />

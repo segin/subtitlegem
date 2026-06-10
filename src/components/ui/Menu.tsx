@@ -103,17 +103,22 @@ export function Menu({
   const menuId = useId();
   const triggerId = useId();
 
-  // Reset focus when menu opens
+  // Reset the focused index on open/close transitions using the render-adjustment
+  // pattern (instead of a synchronous setState in an effect). Items are intentionally
+  // captured only at the transition to prevent focus jumping while the menu is open.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    setFocusedIndex(isOpen ? getFirstFocusableIndex(items) : -1);
+  }
+
+  // Focus the first item (DOM side effect) after the menu opens.
   useEffect(() => {
     if (isOpen) {
       const firstIndex = getFirstFocusableIndex(items);
-      setFocusedIndex(firstIndex);
-      // Focus the first item after render
       requestAnimationFrame(() => {
         itemRefs.current[firstIndex]?.focus();
       });
-    } else {
-      setFocusedIndex(-1);
     }
   }, [isOpen]); // Removed items from dependency to prevent focus jumping
 

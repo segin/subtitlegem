@@ -136,7 +136,7 @@ describe('percentToPx', () => {
 
     test('returns 0 for undefined or null', () => {
       expect(percentToPx(undefined, 1000)).toBe(0);
-      // @ts-ignore
+      // @ts-expect-error - testing null input which is not in the type signature
       expect(percentToPx(null, 1000)).toBe(0);
     });
 

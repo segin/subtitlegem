@@ -20,7 +20,7 @@ const FONTS = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georg
 
 export function TrackStyleEditor({ style, onChange, onReset, compact = false, mode = 'pixel' }: TrackStyleEditorProps) {
   
-  const update = (key: keyof TrackStyle, value: any) => {
+  const update = (key: keyof TrackStyle, value: string | number | undefined) => {
     // If unit mode is different, handle conversion if needed, OR just save raw
     // For this editor, we enforce the unit of the mode.
     // If mode is percentage, we save string "50%".

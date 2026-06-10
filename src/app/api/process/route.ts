@@ -11,6 +11,7 @@ import { Readable } from "stream";
 import { pipeline } from "stream/promises";
 import { secureDelete } from "@/lib/security";
 import { validateAuth } from "@/lib/auth";
+import { SubtitleLine } from "@/types/subtitle";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
@@ -85,7 +86,18 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
       }
 
-      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId, sampleDuration, promptHints } = validation.data as any;
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId, sampleDuration, promptHints } = validation.data as {
+        mode: 'reprocess' | 'translate';
+        fileUri?: string;
+        filePath?: string;
+        language?: string;
+        secondaryLanguage?: string;
+        subtitles?: SubtitleLine[];
+        model?: string;
+        clipId?: string;
+        sampleDuration?: number;
+        promptHints?: string;
+      };
       const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
@@ -223,7 +235,7 @@ export async function POST(req: NextRequest) {
          // Handle Sample Mode
          let processUri = targetUri;
          let cleanupPath: string | null = null;
-         let uploadedSampleFile: any = null;
+         let uploadedSampleFile: Awaited<ReturnType<typeof uploadToGemini>> | null = null;
 
          if (sampleDuration && filePath) {
              console.log(`Creating ${sampleDuration}s sample from ${filePath}`);
@@ -294,9 +306,9 @@ export async function POST(req: NextRequest) {
       
       return NextResponse.json({ error: "Invalid mode" }, { status: 400 });
 
-    } catch (e: any) {
+    } catch (e) {
       console.error("API Error:", e);
-      return NextResponse.json({ error: e.message }, { status: 500 });
+      return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
     }
   }
 
@@ -382,15 +394,15 @@ export async function POST(req: NextRequest) {
       // ensuring we handle errors properly.
       bb.on("error", reject);
       
-      // @ts-ignore
+      // @ts-expect-error req.body Web ReadableStream is compatible with Readable.fromWeb at runtime
       const nodeStream = Readable.fromWeb(req.body);
       nodeStream.pipe(bb);
     });
     
     try {
       await fileWritePromise;
-    } catch (err: any) {
-      if (sizeExceeded || err?.message === "FILE_TOO_LARGE") {
+    } catch (err) {
+      if (sizeExceeded || (err instanceof Error && err.message === "FILE_TOO_LARGE")) {
         console.warn(`[Process] Upload aborted: exceeded ${maxFileSizeMB} MB limit`);
         if (videoPath && fs.existsSync(videoPath)) {
           secureDelete(videoPath).catch(e => console.error("Cleanup error", e));
@@ -476,7 +488,7 @@ export async function POST(req: NextRequest) {
           }
 
           // Generate subtitles
-          let result: { subtitles: unknown; detectedLanguage: unknown } | null = null;
+          let result: { subtitles: unknown; detectedLanguage?: unknown } | null = null;
           let geminiFileUri: string | null = null;
           let geminiFileExpiration: string | null = null;
           let fileId: string | null = null;
@@ -532,10 +544,11 @@ export async function POST(req: NextRequest) {
                 settings.aiFallbackChain
               );
             }
-          } catch (aiError: any) {
+          } catch (aiError) {
             // Re-throw security/infrastructure errors; only swallow AI service failures
-            if (aiError.message === 'Unauthorized path') throw aiError;
-            console.warn("[Process] Subtitle generation failed, adding video with no subtitles:", aiError.message);
+            const aiErrorMessage = aiError instanceof Error ? aiError.message : String(aiError);
+            if (aiErrorMessage === 'Unauthorized path') throw aiError;
+            console.warn("[Process] Subtitle generation failed, adding video with no subtitles:", aiErrorMessage);
             subtitleGenerationFailed = true;
           }
 
@@ -563,9 +576,9 @@ export async function POST(req: NextRequest) {
             }
           }) + "\n"));
           controller.close();
-        } catch (error: any) {
+        } catch (error) {
           console.error("Error processing video:", error);
-          controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message: error.message || "Failed to process video" }) + "\n"));
+          controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message: error instanceof Error ? error.message : "Failed to process video" }) + "\n"));
           
           if (videoPath && fs.existsSync(videoPath)) {
               secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
@@ -586,8 +599,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("Fatal Error processing video:", error);
-    return NextResponse.json({ error: error.message || "Failed to process video" }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to process video" }, { status: 500 });
   }
 }

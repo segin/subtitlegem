@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { SubtitleConfig, TrackStyle, Alignment, GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { SubtitleConfig, TrackStyle, Alignment, GlobalSettings, DEFAULT_GLOBAL_SETTINGS, FFmpegConfig } from "@/types/subtitle";
 import { resolveTrackStyle } from "@/lib/style-resolver";
 import { AlignLeft, AlignCenter, AlignRight, Type, Palette, Layout, Move, Cpu, Settings, MonitorPlay } from "lucide-react";
 
@@ -203,7 +203,7 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
               </label>
               <select 
                 value={config.ffmpeg.hwaccel} 
-                onChange={(e) => onChange({...config, ffmpeg: {...config.ffmpeg, hwaccel: e.target.value as any}})}
+                onChange={(e) => onChange({...config, ffmpeg: {...config.ffmpeg, hwaccel: e.target.value as FFmpegConfig['hwaccel']}})}
                 className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
               >
                 <option value="none">CPU (libx264)</option>
@@ -240,7 +240,7 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
               </label>
               <select 
                 value={config.ffmpeg.preset} 
-                onChange={(e) => onChange({...config, ffmpeg: {...config.ffmpeg, preset: e.target.value as any}})}
+                onChange={(e) => onChange({...config, ffmpeg: {...config.ffmpeg, preset: e.target.value as FFmpegConfig['preset']}})}
                 className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
               >
                 <option value="ultrafast">Ultrafast</option>
