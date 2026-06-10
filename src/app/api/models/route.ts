@@ -69,14 +69,59 @@ export async function GET(req: NextRequest) {
       }
     }
     
-    // Sort by name (gemini-2.x first, then gemini-1.x)
+    // Sort by name (gemini-2.x first, then gemma-4.x, etc.)
     models.sort((a, b) => {
-      const aVersion = a.name.match(/gemini-(\d+)/)?.[1] || "0";
-      const bVersion = b.name.match(/gemini-(\d+)/)?.[1] || "0";
-      return parseInt(bVersion) - parseInt(aVersion);
+      // Helper to extract family and version
+      const getScore = (name: string) => {
+        // Boost '-latest' versions to the very top of their family
+        const latestBoost = name.includes('-latest') ? 100 : 0;
+        
+        const geminiMatch = name.match(/gemini-(\d+)\.?(\d+)?/);
+        if (geminiMatch) {
+          const major = parseInt(geminiMatch[1]);
+          const minor = parseInt(geminiMatch[2] || "0");
+          return 2000 + major * 10 + minor + latestBoost;
+        }
+        
+        // Handle gemini-pro-latest / gemini-flash-latest without specific version numbers
+        if (name.startsWith('gemini')) return 2000 + latestBoost;
+
+        const gemmaMatch = name.match(/gemma-(\d+)\.?(\d+)?/);
+        if (gemmaMatch) {
+          const major = parseInt(gemmaMatch[1]);
+          const minor = parseInt(gemmaMatch[2] || "0");
+          return 1000 + major * 10 + minor + latestBoost;
+        }
+        
+        if (name.startsWith('gemma')) return 1000 + latestBoost;
+
+        return 0;
+      };
+      
+      return getScore(b.name) - getScore(a.name);
+    });
+
+    // Add category metadata for the UI
+    const categorizedModels = models.map(m => ({
+        ...m,
+        category: m.name.startsWith('gemini') ? 'Gemini' : 
+                  m.name.startsWith('gemma') ? 'Gemma' : 'Other'
+    }));
+    
+    // Ensure Latest Gemma 4 models are present (pinned if not returned by API)
+    const pinnedGemma = [
+      { name: 'gemma-4-31b', displayName: 'Gemma 4 31B (Ultra)', category: 'Gemma' },
+      { name: 'gemma-4-12b-unified', displayName: 'Gemma 4 12B Unified', category: 'Gemma' },
+      { name: 'gemma-4-26b-a4b', displayName: 'Gemma 4 26B A4B (MoE)', category: 'Gemma' }
+    ];
+    
+    pinnedGemma.forEach(p => {
+      if (!categorizedModels.find(m => m.name === p.name)) {
+        categorizedModels.push(p);
+      }
     });
     
-    return NextResponse.json({ models });
+    return NextResponse.json({ models: categorizedModels });
   } catch (error) {
     console.error("[Models API] Error:", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });

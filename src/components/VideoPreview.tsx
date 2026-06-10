@@ -393,7 +393,7 @@ export function VideoPreview({
             >
               {/* Custom Loading Spinner - shown until video is ready */}
               {(!videoReady || !activeSrc) && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black">
+                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-black pointer-events-none">
                   <div className="w-8 h-8 border-2 border-[#007acc] border-t-transparent rounded-full animate-spin mb-2" />
                   <span className="text-[11px] text-[#666]">
                     {!metadataReady ? 'Checking format...' : 'Loading video...'}

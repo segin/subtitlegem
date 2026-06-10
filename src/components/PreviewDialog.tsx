@@ -52,7 +52,7 @@ export function PreviewDialog({ isOpen, onClose, onApply, isLoading, subtitles, 
         <div className="flex-1 bg-[#1e1e1e] relative min-h-[300px] flex flex-col">
            
            {isLoading ? (
-               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4">
+               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 pointer-events-none">
                    <div className="w-6 h-6 border-2 border-[#007acc] border-t-transparent rounded-full animate-spin"></div>
                    <span className="text-xs text-[#888]">Generating preview...</span>
                </div>

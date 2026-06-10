@@ -42,7 +42,7 @@ export function useDialogState() {
   // (and in a non-synchronous callback) to keep server and initial client render
   // identical, avoiding hydration mismatches.
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
       const id = requestAnimationFrame(() => setShowQueue(true));
       return () => cancelAnimationFrame(id);
     }

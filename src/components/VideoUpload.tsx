@@ -112,7 +112,7 @@ export function VideoUpload({
   }, []);
 
   // Model Data & Global Selection State
-  const [availableModels, setAvailableModels] = useState<{name: string; displayName: string}[]>([]);
+  const [availableModels, setAvailableModels] = useState<{name: string; displayName: string; category?: string}[]>([]);
   const [testing, setTesting] = useState(false); // Global testing state for main UI
   const [testResult, setTestResult] = useState<{success: boolean; message: string} | null>(null);
 
@@ -1779,39 +1779,58 @@ export function VideoUpload({
               ) : (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 gap-1.5">
-                    {availableModels.map(m => (
-                      <button
-                        key={m.name}
-                        onClick={() => {
-                          setSelectedInModal(m.name);
-                          setModalTestResult(null);
-                        }}
-                        className={`flex items-center gap-3 p-3 text-left border rounded-md transition-all duration-200 group ${
-                          selectedInModal === m.name
-                            ? "bg-[#094771]/20 border-[#007acc] text-white shadow-[0_0_10px_rgba(0,122,204,0.1)]"
-                            : "bg-[#252526] border-[#3e3e42] text-[#cccccc] hover:border-[#555555] hover:bg-[#333333]"
-                        }`}
-                        type="button"
-                      >
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
-                          selectedInModal === m.name ? "border-[#007acc] bg-[#007acc]" : "border-[#454545] bg-transparent"
-                        }`}>
-                          {selectedInModal === m.name && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                    {['Gemini', 'Gemma', 'Other'].map(category => {
+                      const categoryModels = availableModels.filter(m => (m.category || 'Other') === category);
+                      if (categoryModels.length === 0) return null;
+                      
+                      return (
+                        <div key={category} className="space-y-1.5 mb-4">
+                          <div className="text-[10px] font-bold text-[#888888] uppercase tracking-wider pl-1">{category} Models</div>
+                          {categoryModels.map(m => {
+                            const isLatest = m.name.includes('gemma-4') || m.name.includes('gemini-2.5') || m.name.includes('-latest');
+                            
+                            return (
+                              <button
+                                key={m.name}
+                                onClick={() => {
+                                  setSelectedInModal(m.name);
+                                  setModalTestResult(null);
+                                }}
+                                className={`flex items-center gap-3 p-3 text-left border rounded-md transition-all duration-200 group w-full ${
+                                  selectedInModal === m.name
+                                    ? "bg-[#094771]/20 border-[#007acc] text-white shadow-[0_0_10px_rgba(0,122,204,0.1)]"
+                                    : "bg-[#252526] border-[#3e3e42] text-[#cccccc] hover:border-[#555555] hover:bg-[#333333]"
+                                }`}
+                                type="button"
+                              >
+                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                                  selectedInModal === m.name ? "border-[#007acc] bg-[#007acc]" : "border-[#454545] bg-transparent"
+                                }`}>
+                                  {selectedInModal === m.name && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <div className="text-sm font-medium">{m.displayName}</div>
+                                    {isLatest && (
+                                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-bold border border-blue-500/30">LATEST</span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10px] opacity-60 font-mono mt-0.5">{m.name}</div>
+                                </div>
+                                {/* Persistent Test Status Indicator */}
+                                {testedModels[m.name] && (
+                                   <div className={`transition-all duration-300 animate-in zoom-in ${
+                                     testedModels[m.name].success ? 'text-green-500' : 'text-red-500'
+                                   }`}>
+                                     {testedModels[m.name].success ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+                                   </div>
+                                )}
+                              </button>
+                            );
+                          })}
                         </div>
-                        <div className="flex-1">
-                          <div className="text-sm font-medium">{m.displayName}</div>
-                          <div className="text-[10px] opacity-60 font-mono mt-0.5">{m.name}</div>
-                        </div>
-                        {/* Persistent Test Status Indicator */}
-                        {testedModels[m.name] && (
-                           <div className={`transition-all duration-300 animate-in zoom-in ${
-                             testedModels[m.name].success ? 'text-green-500' : 'text-red-500'
-                           }`}>
-                             {testedModels[m.name].success ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                           </div>
-                        )}
-                      </button>
-                    ))}
+                      );
+                    })}
                     {availableModels.length === 0 && (
                       <div className="text-center py-8 text-[#666666]">
                         No additional models found.
