@@ -5,9 +5,7 @@
  * for better control, no deprecated dependencies, and consistent behavior.
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import path from 'path';
-import fs from 'fs';
+import { spawn } from 'child_process';
 
 export interface BurnOptions {
   hwaccel?: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';

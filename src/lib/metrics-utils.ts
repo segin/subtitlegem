@@ -1,7 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { Draft, DraftV1, DraftV2, DraftSummary } from "@/lib/draft-store";
+import { Draft, DraftSummary } from "@/lib/draft-store";
 import { SubtitleLine } from "@/types/subtitle";
 import { getStagingDir } from "@/lib/storage-config";
 import { getDirectorySizeAsync } from "@/lib/storage-utils";
@@ -89,7 +89,7 @@ export async function computeMetrics(draft: Draft | DraftSummary, stagingDir?: s
       const files = await fs.promises.readdir(exportsDir);
       renderCount = files.filter(f => !f.startsWith('.')).length;
     }
-  } catch (e) {
+  } catch {
     // Path doesn't exist or is not a directory
   }
 

@@ -1,7 +1,6 @@
 import fs from 'fs';
 import { statfs } from 'fs/promises';
 import path from 'path';
-import os from 'os';
 import checkDiskSpace from 'check-disk-space';
 
 export interface StorageConfig {
@@ -35,7 +34,7 @@ async function getAvailableSpaceGB(dirPath: string): Promise<number> {
     // Use BigInt for safety with large disks
     const freeBytes = BigInt(stats.bavail) * BigInt(stats.bsize);
     return Number(freeBytes) / (1024 ** 3);
-  } catch (statError) {
+  } catch {
     // Strategy 2: Fallback to check-disk-space library (cross-platform CLI wrapper)
     try {
       const space = await checkDiskSpace(dirPath);
@@ -73,12 +72,10 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
 
     // Check if writable by creating a test file
     const testFile = path.join(dirPath, `.test-${Date.now()}`);
-    let writable = false;
-    
+
     try {
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
-      writable = true;
     } catch (writeError) {
       return {
         exists: true,
@@ -241,7 +238,7 @@ export function getStagingDirSize(stagingDir: string): number {
           size += stats.size;
         }
       }
-    } catch (error) {
+    } catch {
       // If we can't read a directory, skip it
     }
     

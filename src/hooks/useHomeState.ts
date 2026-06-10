@@ -12,14 +12,12 @@ import {
   ProjectConfig,
   SubtitleLine,
   DraftItem,
-  RawSubtitleItem,
 } from '@/types/subtitle';
 import { QueueItem } from '@/types/queue';
 import { VideoProperties } from '@/components/VideoPropertiesDialog';
 import { UploadMode } from '@/components/VideoUpload';
 import { TabId } from '@/components/GlobalSettingsDialog';
 import { useSubtitleHistory } from './useSubtitleHistory';
-import { getProjectDuration } from '@/lib/timeline-utils';
 import { TimelineRef } from '@/components/SubtitleTimeline';
 
 

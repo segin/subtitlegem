@@ -205,7 +205,7 @@ describe('/api/cleanup', () => {
         }),
       });
 
-      const res = await POST(req);
+      await POST(req);
 
       // Should use basename only, so won't find the file
       expect(mockUnlink).toHaveBeenCalledWith(

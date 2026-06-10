@@ -70,7 +70,7 @@ export async function getDirectorySizeAsync(dirPath: string): Promise<number> {
 
       totalSize = sizes.reduce((acc, size) => acc + size, 0);
     }
-  } catch (error) {
+  } catch {
     // If path doesn't exist or other error, return 0
     return 0;
   }

@@ -9,7 +9,7 @@
 
 import * as fc from 'fast-check';
 import { resolveTrackStyle, normalizeToPx, getPreviewStyle, percentToPx } from './style-resolver';
-import { TrackStyle, DEFAULT_GLOBAL_SETTINGS } from '@/types/subtitle';
+import { TrackStyle } from '@/types/subtitle';
 
 // ============================================================================
 // resolveTrackStyle Tests

@@ -6,7 +6,7 @@ import {
   FileVideo, FolderOpen, Save, Download, X, RefreshCw,
   Undo2, Redo2, Scissors, Copy, ClipboardPaste, Search, 
   Merge, Split, Clock, PanelLeft, PanelBottom, 
-  ZoomIn, ZoomOut, Palette, Keyboard, Settings, HelpCircle, ExternalLink, Info
+  ZoomIn, ZoomOut, Palette, Keyboard, Settings, ExternalLink, Info
 } from "lucide-react";
 
 // ============================================================================
@@ -95,7 +95,6 @@ function cleanDividers(items: MenuItem[]): MenuItem[] {
 
 export function MenuBar({
   onNewProject,
-  onOpenDraft,
   onSaveDraft,
   onExport,
   onCloseProject,
@@ -120,7 +119,6 @@ export function MenuBar({
   primaryLanguage = 'English',
   secondaryLanguage = 'Secondary',
   isUploadScreen = false,
-  onToggleQueue,
   onVideoProperties,
   onToggleVideoLibrary,
   isTimelineVisible,
@@ -218,7 +216,7 @@ export function MenuBar({
     );
 
     return items;
-  }, [onNewProject, onOpenProject, onSaveProject, onOpenDraft, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, isUploadScreen, recentDrafts, onLoadDraft]);
+  }, [onNewProject, onOpenProject, onSaveProject, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, recentDrafts, onLoadDraft]);
 
   // ========== EDIT MENU ==========
   const editItems = useMemo<MenuItem[]>(() => [

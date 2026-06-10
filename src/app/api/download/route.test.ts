@@ -17,7 +17,7 @@ jest.mock('@/lib/storage-config', () => ({
   getStorageConfig: jest.fn(() => ({
     stagingDir: '/mock/staging',
   })),
-  isPathSafe: jest.fn((p) => true),
+  isPathSafe: jest.fn(() => true),
 }));
 
 describe('/api/download', () => {

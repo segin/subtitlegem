@@ -1,7 +1,7 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { SubtitleTimeline } from './SubtitleTimeline';
-import { SubtitleLine, VideoClip, TimelineClip, TimelineImage, ImageAsset } from '@/types/subtitle';
+import { SubtitleLine, VideoClip, TimelineClip } from '@/types/subtitle';
 
 // Mock ResizeObserver
 beforeAll(() => {

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { X, Search, Replace, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Search, ChevronDown, ChevronUp } from "lucide-react";
 
 interface FindReplaceDialogProps {
   isOpen: boolean;

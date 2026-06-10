@@ -15,8 +15,8 @@ describe('project-file', () => {
             download: ''
         };
         const spyCreate = jest.spyOn(document, 'createElement').mockReturnValue(link as unknown as HTMLAnchorElement);
-        const spyAppend = jest.spyOn(document.body, 'appendChild').mockImplementation();
-        const spyRemove = jest.spyOn(document.body, 'removeChild').mockImplementation();
+        jest.spyOn(document.body, 'appendChild').mockImplementation();
+        jest.spyOn(document.body, 'removeChild').mockImplementation();
 
         saveProjectFile(project);
 

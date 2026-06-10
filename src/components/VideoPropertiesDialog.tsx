@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { X, FileVideo, Film, Volume2, Clock } from "lucide-react";
+import { X, FileVideo, Film, Volume2 } from "lucide-react";
 
 export interface VideoProperties {
   // File info

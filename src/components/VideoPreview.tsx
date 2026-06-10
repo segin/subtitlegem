@@ -62,7 +62,7 @@ export function VideoPreview({
   // Browser Support & Transcoding State
   const [browserSupport, setBrowserSupport] = useState<BrowserSupport | null>(null);
   const [useTranscoding, setUseTranscoding] = useState(false);
-  const [checkingSupport, setCheckingSupport] = useState(true); // Start true - block until checked
+  const [, setCheckingSupport] = useState(true); // Start true - block until checked
   const [metadataReady, setMetadataReady] = useState(false);
   const [videoReady, setVideoReady] = useState(false); // True only when video can play
 
@@ -121,7 +121,7 @@ export function VideoPreview({
       setActiveImageUrl(null);
       setActiveMetadata(null);
     }
-  }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets, videoProperties, activeVideoUrl]);
+  }, [currentTime, isMultiVideo, videoUrl, timelineClips, videoClips, timelineImages, imageAssets, videoProperties, activeVideoUrl, activeImageUrl]);
 
   // Support check for active video - runs BEFORE video plays
   // Key: only run when URL changes, not when metadata changes (to avoid re-runs)
@@ -361,7 +361,8 @@ export function VideoPreview({
         className="relative inline-block"
       >
         {activeImageUrl ? (
-          <img 
+          /* eslint-disable-next-line @next/next/no-img-element */
+          <img
             src={activeImageUrl} 
             className="max-h-[65vh] max-w-full object-contain block mx-auto"
             alt="Timeline Preview"

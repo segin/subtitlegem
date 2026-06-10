@@ -91,13 +91,13 @@ export async function GET(req: NextRequest) {
           start(controller) {
             fileStream.on('data', (chunk) => {
               try { controller.enqueue(chunk); }
-              catch (e) { fileStream.destroy(); }
+              catch { fileStream.destroy(); }
             });
             fileStream.on('end', () => {
-              try { controller.close(); } catch (e) {}
+              try { controller.close(); } catch {}
             });
             fileStream.on('error', (err) => {
-              try { controller.error(err); } catch (e) {}
+              try { controller.error(err); } catch {}
             });
           },
           cancel() {
@@ -123,13 +123,13 @@ export async function GET(req: NextRequest) {
           start(controller) {
             fileStream.on('data', (chunk) => {
               try { controller.enqueue(chunk); }
-              catch (e) { fileStream.destroy(); }
+              catch { fileStream.destroy(); }
             });
             fileStream.on('end', () => {
-              try { controller.close(); } catch (e) {}
+              try { controller.close(); } catch {}
             });
             fileStream.on('error', (err) => {
-              try { controller.error(err); } catch (e) {}
+              try { controller.error(err); } catch {}
             });
           },
           cancel() {
@@ -167,7 +167,7 @@ export async function GET(req: NextRequest) {
 // POST /api/storage - Update storage configuration
 export async function POST(req: NextRequest) {
   try {
-    const { stagingDir, autoCleanup, maxStorageUsageGB } = await req.json();
+    const { stagingDir } = await req.json();
     
     // Validate the new staging directory
     if (stagingDir) {

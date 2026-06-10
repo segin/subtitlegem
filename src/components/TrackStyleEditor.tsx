@@ -1,5 +1,5 @@
 // ... imports
-import { TrackStyle, Alignment } from "@/types/subtitle";
+import { TrackStyle } from "@/types/subtitle";
 import { RotateCcw } from "lucide-react";
 
 interface TrackStyleEditorProps {

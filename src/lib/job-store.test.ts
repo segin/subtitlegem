@@ -33,7 +33,7 @@ describe('job-store', () => {
     });
 
     test('cleanupOldJobs removes expired jobs', () => {
-        const jobRecent = createJob('recent');
+        createJob('recent');
         const jobOld = createJob('old');
         
         // Manually tamper timestamps if possible? 

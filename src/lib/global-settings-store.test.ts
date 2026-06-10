@@ -1,4 +1,4 @@
-import { saveGlobalSettings, getGlobalSettings, resetGlobalSettings } from './global-settings-store';
+import { saveGlobalSettings, getGlobalSettings } from './global-settings-store';
 import { DEFAULT_GLOBAL_SETTINGS } from '@/types/subtitle';
 
 // Reuse mocks from draft-store pattern ? 

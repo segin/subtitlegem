@@ -53,7 +53,7 @@ describe('GlobalSettingsDialog', () => {
         await waitFor(() => expect(screen.getByText(/Sample Text Line 1/)).toBeInTheDocument());
 
         // Default should be 16:9
-        const btn169 = screen.getByText('16:9');
+        screen.getByText('16:9');
         const btn916 = screen.getByText('9:16');
         
         const sampleText = screen.getByText(/Sample Text Line 1/);

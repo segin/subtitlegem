@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { queueManager } from "@/lib/queue-manager";
-import { burnSubtitles, getVideoDimensions } from "@/lib/ffmpeg-utils";
+import { getVideoDimensions } from "@/lib/ffmpeg-utils";
 import { generateAss, VideoDimensions } from "@/lib/ass-utils";
-import { SubtitleLine, SubtitleConfig, FFmpegConfig } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig } from "@/types/subtitle";
 import * as fs from "fs";
 const fsPromises = fs.promises;
 import * as path from "path";

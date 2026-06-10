@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { SubtitleConfig, TrackStyle, Alignment, GlobalSettings, DEFAULT_GLOBAL_SETTINGS, FFmpegConfig } from "@/types/subtitle";
 import { resolveTrackStyle } from "@/lib/style-resolver";
-import { AlignLeft, AlignCenter, AlignRight, Type, Palette, Layout, Move, Cpu, Settings, MonitorPlay } from "lucide-react";
+import { Type, Palette, Layout, Move, Cpu, Settings, MonitorPlay } from "lucide-react";
 
 interface ConfigProps {
   config: SubtitleConfig;

@@ -16,26 +16,6 @@ describe('ffmpeg-probe', () => {
     jest.clearAllMocks();
   });
 
-  const mockSpawn = (stdout: string, stderr: string = '', code: number = 0) => {
-    const stdoutStream = new EventEmitter();
-    const stderrStream = new EventEmitter();
-    const proc = new EventEmitter() as MockProc;
-    proc.stdout = stdoutStream;
-    proc.stderr = stderrStream;
-    proc.kill = jest.fn();
-
-    (spawn as jest.Mock).mockImplementation(() => {
-      setTimeout(() => {
-        if (stdout) stdoutStream.emit('data', Buffer.from(stdout));
-        if (stderr) stderrStream.emit('data', Buffer.from(stderr));
-        setTimeout(() => {
-          proc.emit('close', code);
-        }, 10);
-      }, 10);
-      return proc;
-    });
-  };
-
   test('parses version correctly', async () => {
     (spawn as jest.Mock).mockImplementation((cmd, args) => {
         const stdoutStream = new EventEmitter();

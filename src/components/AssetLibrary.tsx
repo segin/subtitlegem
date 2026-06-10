@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Film, Image as ImageIcon, Trash2, GripVertical } from 'lucide-react';
+import { Film, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { VideoClip, ImageAsset } from '@/types/subtitle';
 import { formatBytes } from '@/lib/format-utils';
 

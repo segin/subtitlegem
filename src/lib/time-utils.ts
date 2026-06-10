@@ -1,5 +1,4 @@
 import { SubtitleLine } from "@/types/subtitle";
-import { v4 as uuidv4 } from "uuid";
 
 // "HH:MM:SS,mmm" format used by ASS and generic subtitle files
 export const formatTimestamp = (seconds: number): string => {

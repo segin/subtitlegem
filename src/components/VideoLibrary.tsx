@@ -381,7 +381,9 @@ function ImageCard({
     >
       {/* Thumbnail */}
       <div className="aspect-video bg-[#1e1e1e] flex items-center justify-center overflow-hidden">
-        <img 
+        {/* Dynamic API/blob source without intrinsic dimensions; next/image is not suitable here. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={`/api/storage?path=${encodeURIComponent(asset.filePath)}`} 
           alt={asset.originalFilename}
           className="w-full h-full object-cover"

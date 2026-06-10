@@ -120,7 +120,10 @@ export function Menu({
         itemRefs.current[firstIndex]?.focus();
       });
     }
-  }, [isOpen]); // Removed items from dependency to prevent focus jumping
+    // Intentionally only runs when the menu opens; depending on `items` would
+    // make focus jump whenever the list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   // Click outside handler
   useEffect(() => {

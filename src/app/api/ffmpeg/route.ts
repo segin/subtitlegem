@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { 
-  probeFFmpeg, 
-  getCachedCapabilities, 
+  probeFFmpeg,
   getPreferredVideoEncoders,
   getPreferredAudioEncoders,
   getPreferredFormats

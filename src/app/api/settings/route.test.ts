@@ -10,7 +10,7 @@ interface SettingsResponseBody {
 }
 
 const mockGetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
-const mockSaveGlobalSettings = jest.fn((s: GlobalSettings): void => {});
+const mockSaveGlobalSettings = jest.fn<void, [GlobalSettings]>();
 const mockResetGlobalSettings = jest.fn(() => ({ ...DEFAULT_GLOBAL_SETTINGS }));
 
 jest.mock("next/server", () => {

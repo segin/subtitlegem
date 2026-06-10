@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, Trash2, ArrowUpFromLine, Lock, FileText } from "lucide-react";
+import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, ArrowUpFromLine, Lock } from "lucide-react";
 import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
-import { cacheModelResult, checkModelAvailability } from "@/lib/model-cache";
+import { checkModelAvailability } from "@/lib/model-cache";
 import { RawSubtitleItem, ProcessResponse } from "@/types/subtitle";
 
 // Upload modes for multi-video support
@@ -62,7 +62,6 @@ export function VideoUpload({
   pendingProjectFile,
   uploadMode = 'single',
   onUploadModeChange,
-  onMultiVideoUpload,
   isProcessing = false,
 }: VideoUploadProps) {
 
@@ -89,7 +88,7 @@ export function VideoUpload({
   // Upload Progress Tracking
   const [fileProgressMap, setFileProgressMap] = useState<Record<string, FileProgress>>({});
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadStartTime, setUploadStartTime] = useState<number>(0);
+  const [, setUploadStartTime] = useState<number>(0);
 
   // Drag reorder state
   const [dragSourceIndex, setDragSourceIndex] = useState<number | null>(null);
@@ -133,7 +132,7 @@ export function VideoUpload({
 
   const cancelUpload = useCallback(() => {
     activeXhrsRef.current.forEach(xhr => {
-      try { xhr.abort(); } catch (e) {}
+      try { xhr.abort(); } catch {}
     });
     activeXhrsRef.current = [];
     setLoading(false);
@@ -281,7 +280,6 @@ export function VideoUpload({
       // If adding a .sgproj, remove any existing ones first (only one per project in batch mode)
       // In multi-video mode, only allow one .sgproj total
       if (projectFiles.length > 0) {
-        const existingProjects = prev.filter(f => f.name.endsWith('.sgproj'));
         const existingVideos = prev.filter(f => !f.name.endsWith('.sgproj'));
         // Place new .sgproj first, then existing videos, then new videos
         return [...projectFiles.slice(0, 1), ...existingVideos, ...videoFiles];
@@ -430,7 +428,7 @@ export function VideoUpload({
               setError(part.message);
               setLoading(false);
             }
-          } catch (e) {
+          } catch {
             // Partial JSON, wait for next chunk
           }
         }
@@ -1152,7 +1150,7 @@ export function VideoUpload({
                                   } else if (part.type === "error") {
                                     reject(new Error(part.message));
                                   }
-                                } catch (e) { }
+                                } catch { }
                               }
                               batchLastIndex = xhr.responseText.length;
                             }
@@ -1606,7 +1604,7 @@ export function VideoUpload({
                                activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                                reject(new Error(part.message));
                             }
-                          } catch (e) {
+                          } catch {
                             // Partial JSON
                           }
                         }
