@@ -40,9 +40,13 @@ export function useDialogState() {
   const [showRestoreOption, setShowRestoreOption] = useState(false);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
 
+  // Default the queue to open on wider (desktop) viewports. Done after mount
+  // (and in a non-synchronous callback) to keep server and initial client render
+  // identical, avoiding hydration mismatches.
   useEffect(() => {
     if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-      setShowQueue(true);
+      const id = requestAnimationFrame(() => setShowQueue(true));
+      return () => cancelAnimationFrame(id);
     }
   }, []);
 
@@ -70,12 +74,16 @@ export function useQueueState() {
   const [queuePaused, setQueuePaused] = useState(false);
   const [queueWidth, setQueueWidth] = useState(300);
 
-  // Load persisted queue width
+  // Load persisted queue width after mount. The setState is performed in a
+  // non-synchronous callback to avoid cascading renders and hydration mismatches.
   useEffect(() => {
     const savedWidth = localStorage.getItem('subtitlegem_queue_width');
     if (savedWidth) {
       const w = parseInt(savedWidth);
-      if (!isNaN(w) && w >= 250 && w <= 600) setQueueWidth(w);
+      if (!isNaN(w) && w >= 250 && w <= 600) {
+        const id = requestAnimationFrame(() => setQueueWidth(w));
+        return () => cancelAnimationFrame(id);
+      }
     }
   }, []);
 
@@ -99,9 +107,24 @@ export function useQueueState() {
   }, []);
 
   useEffect(() => {
-    fetchQueue();
+    let cancelled = false;
+    // Initial poll: fire fetch synchronously on mount, but apply the result in
+    // the async .then so there is no synchronous setState inside the effect.
+    fetch('/api/queue')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) {
+          setQueueItems(data.items);
+          setQueuePaused(data.isPaused);
+        }
+      })
+      .catch((error) => console.error('Queue poll failed:', error));
+
     const interval = setInterval(fetchQueue, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [fetchQueue]);
 
   const toggleQueuePause = useCallback(async () => {

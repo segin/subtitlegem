@@ -76,7 +76,7 @@ interface MenuBarProps {
 // ============================================================================
 
 function cleanDividers(items: MenuItem[]): MenuItem[] {
-  let result = items.filter((item, i, arr) => {
+  const result = items.filter((item, i, arr) => {
     if (!('divider' in item)) return true;
     if (i === 0) return false;
     if (i === arr.length - 1) return false;
@@ -140,7 +140,10 @@ export function MenuBar({
   const editTriggerRef = useRef<HTMLButtonElement>(null);
   const viewTriggerRef = useRef<HTMLButtonElement>(null);
   const helpTriggerRef = useRef<HTMLButtonElement>(null);
-  const triggerRefs = [fileTriggerRef, editTriggerRef, viewTriggerRef, helpTriggerRef];
+  const triggerRefs = useMemo(
+    () => [fileTriggerRef, editTriggerRef, viewTriggerRef, helpTriggerRef],
+    []
+  );
   const menuCount = isUploadScreen ? 3 : 4; // File, Edit, View (if shown), Help
 
   const isAnyMenuOpen = activeMenuIndex !== null;
@@ -156,7 +159,7 @@ export function MenuBar({
     requestAnimationFrame(() => {
       triggerRefs[prevIndex]?.current?.focus();
     });
-  }, [isUploadScreen, triggerRefs]);
+  }, [isUploadScreen, menuCount, triggerRefs]);
 
   const handleNavigateRight = useCallback((currentIndex: number) => {
     let nextIndex = (currentIndex + 1) % menuCount;
@@ -169,7 +172,7 @@ export function MenuBar({
     requestAnimationFrame(() => {
       triggerRefs[nextIndex]?.current?.focus();
     });
-  }, [isUploadScreen, triggerRefs]);
+  }, [isUploadScreen, menuCount, triggerRefs]);
 
   // ========== FILE MENU ==========
   const fileItems = useMemo<MenuItem[]>(() => {
@@ -251,7 +254,7 @@ export function MenuBar({
     { divider: true },
     { id: "theme", label: "Theme Settings...", icon: <Palette className="w-4 h-4" />, onClick: onThemeSettings, disabled: isUploadScreen },
     { id: "shortcuts", label: "Keyboard Shortcuts", icon: <Keyboard className="w-4 h-4" />, shortcut: "Ctrl+?", onClick: onShowShortcuts },
-  ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onToggleSecondaryTracks, onZoomIn, onZoomOut, onShowShortcuts, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible, isSecondaryTracksVisible]);
+  ], [onToggleVideoLibrary, onVideoProperties, onToggleTimeline, onToggleSubtitleList, onToggleSecondaryTracks, onZoomIn, onZoomOut, onShowShortcuts, onThemeSettings, isUploadScreen, isVideoLibraryVisible, isTimelineVisible, isSubtitleListVisible, isSecondaryTracksVisible]);
 
   // ========== FILTER FOR UPLOAD SCREEN ==========
   const filterForUploadScreen = useCallback((items: MenuItem[]): MenuItem[] => {

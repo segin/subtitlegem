@@ -2,6 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { Draft, DraftV1, DraftV2, DraftSummary } from "@/lib/draft-store";
+import { SubtitleLine } from "@/types/subtitle";
 import { getStagingDir } from "@/lib/storage-config";
 import { getDirectorySizeAsync } from "@/lib/storage-utils";
 
@@ -52,15 +53,17 @@ export async function computeMetrics(draft: Draft | DraftSummary, stagingDir?: s
   // In those cases, source metrics will stay 0 and should be backfilled from cache by the caller.
   if ('version' in draft && draft.version === 2) {
     // V2: Multi-video
-    const v2 = draft as any; // Cast to access clips if present
+    // Cast to access clips if present (DraftSummary may omit the array).
+    const v2 = draft as { clips?: Array<{ fileSize?: number }> };
     if (v2.clips && Array.isArray(v2.clips)) {
       sourceCount = v2.clips.length;
       // Sum clip fileSizes
-      sourceSize = v2.clips.reduce((acc: number, clip: any) => acc + (clip.fileSize || 0), 0);
+      sourceSize = v2.clips.reduce((acc: number, clip) => acc + (clip.fileSize || 0), 0);
     }
   } else {
     // V1: Single-video
-    const v1 = draft as any; // Cast to access videoPath/subtitles if present
+    // Cast to access videoPath/subtitles if present (DraftSummary may omit them).
+    const v1 = draft as { videoPath?: string; subtitles?: SubtitleLine[] };
     if (v1.videoPath) {
       sourceCount = 1;
       try {

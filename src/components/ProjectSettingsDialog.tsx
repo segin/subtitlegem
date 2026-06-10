@@ -22,8 +22,8 @@ interface ProjectSettingsDialogProps {
 }
 
 const TABS = [
-    { id: 'general', label: 'General', icon: <Settings className="w-3.5 h-3.5" /> },
-    { id: 'styles', label: 'Style Overrides', icon: <Type className="w-3.5 h-3.5" /> },
+    { id: 'general' as const, label: 'General', icon: <Settings className="w-3.5 h-3.5" /> },
+    { id: 'styles' as const, label: 'Style Overrides', icon: <Type className="w-3.5 h-3.5" /> },
 ];
 
 export function ProjectSettingsDialog({
@@ -71,7 +71,7 @@ export function ProjectSettingsDialog({
         .then(data => {
             if (data.models) {
                 // Filter out models known to fail
-                const filtered = data.models.filter((m: any) => {
+                const filtered = data.models.filter((m: { name: string; displayName: string }) => {
                     const cached = getCachedModelResult(m.name);
                     // Keep if unknown (null) or successful (true)
                     return cached !== false;
@@ -202,7 +202,7 @@ export function ProjectSettingsDialog({
           {TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id)}
               className={`flex-1 py-2 px-3 text-xs font-medium flex items-center justify-center gap-1.5 transition-colors
                 ${activeTab === tab.id 
                   ? 'bg-[#252526] text-[#e1e1e1] border-b-2 border-[#007acc]' 

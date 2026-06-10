@@ -212,9 +212,9 @@ export async function POST(req: NextRequest) {
       message: `Export job added${sampleDuration ? ` (${sampleDuration}s sample)` : ''}`
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Export API] Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 
@@ -251,7 +251,7 @@ export async function GET(req: NextRequest) {
     }
   });
 
-  return new NextResponse(stream as any, {
+  return new NextResponse(stream as unknown as ReadableStream, {
     headers: {
       "Content-Type": "video/mp4",
       "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,

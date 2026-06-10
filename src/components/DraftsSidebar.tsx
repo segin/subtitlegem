@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useSyncExternalStore } from "react";
 import { FolderOpen, X, Menu, Maximize2, Minimize2 } from "lucide-react";
 import { ProjectCard } from "./ProjectCard";
 import { RenameProjectModal } from "./RenameProjectModal";
@@ -21,19 +21,18 @@ interface DraftsSidebarProps {
 }
 
 // Custom hook to detect desktop (lg breakpoint = 1024px)
+function subscribeToDesktop(callback: () => void) {
+  const mediaQuery = window.matchMedia('(min-width: 1024px)');
+  mediaQuery.addEventListener('change', callback);
+  return () => mediaQuery.removeEventListener('change', callback);
+}
+
 function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(false);
-  
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(min-width: 1024px)');
-    setIsDesktop(mediaQuery.matches);
-    
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-  
-  return isDesktop;
+  return useSyncExternalStore(
+    subscribeToDesktop,
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => false // Server snapshot: default to non-desktop
+  );
 }
 
 export function DraftsSidebar({ 
@@ -56,14 +55,20 @@ export function DraftsSidebar({
   // Drag and drop state
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [localOrder, setLocalOrder] = useState<string[]>([]);
+  const draftIds = drafts.map(d => d.id);
+  const draftIdsKey = draftIds.join(',');
+  const [localOrder, setLocalOrder] = useState<string[]>(draftIds);
+  const [prevDraftIdsKey, setPrevDraftIdsKey] = useState(draftIdsKey);
   const dragStartIndex = useRef<number>(-1);
   const canDragRef = useRef(false);
 
-  // Sync local order with drafts
-  useEffect(() => {
-    setLocalOrder(drafts.map(d => d.id));
-  }, [drafts]);
+  // Sync local order with drafts by adjusting state during render (the React
+  // recommended pattern instead of an effect). When the set of drafts changes,
+  // reset the local order to match the incoming drafts order.
+  if (draftIdsKey !== prevDraftIdsKey) {
+    setPrevDraftIdsKey(draftIdsKey);
+    setLocalOrder(draftIds);
+  }
 
   // Get ordered drafts based on local order
   const orderedDrafts = localOrder
@@ -263,7 +268,7 @@ export function DraftsSidebar({
                   >
                     <div className="text-center w-full">
                       <div className="text-red-200 font-medium mb-1 truncate px-2">
-                        Delete "{draft.name}"?
+                        Delete &quot;{draft.name}&quot;?
                       </div>
                       <p className="text-[10px] text-red-300/70 mb-2 leading-tight">
                         Cannot be undone

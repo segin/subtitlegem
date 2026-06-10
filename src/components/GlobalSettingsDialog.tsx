@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS, AIProvider } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette, Lock, LogOut } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
@@ -124,7 +124,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
       const res = await fetch('/api/models');
       if (res.ok) {
         const data = await res.json();
-        setModels(data.models?.map((m: any) => m.name) || []);
+        setModels(data.models?.map((m: { name: string }) => m.name) || []);
       }
     } catch (err) {
       console.error('Failed to load models:', err);
@@ -491,7 +491,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                               value={model.provider}
                               onChange={(e) => {
                                 const newChain = [...settings.aiFallbackChain];
-                                newChain[index].provider = e.target.value as any;
+                                newChain[index].provider = e.target.value as AIProvider;
                                 setSettings({ ...settings, aiFallbackChain: newChain });
                               }}
                               className="bg-[#2d2d2d] border border-[#3e3e42] text-[#cccccc] text-[10px] px-1 py-0.5 rounded-sm outline-none"

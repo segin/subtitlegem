@@ -21,7 +21,7 @@ interface ReprocessDialogProps {
   subtitleCount: number;
   currentModel?: string;
   currentSecondaryLanguage?: string;
-  onReprocess: (options: ReprocessOptions) => Promise<any>;
+  onReprocess: (options: ReprocessOptions) => Promise<SubtitleLine[]>;
   videoPath?: string | null;
 }
 
@@ -87,8 +87,8 @@ export function ReprocessDialog({
             promptHints: promptHints || undefined
         });
         onClose();
-    } catch (e: any) {
-        setError(e.message);
+    } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
     } finally {
         setIsProcessing(false);
     }
@@ -130,9 +130,9 @@ export function ReprocessDialog({
         // For security/simplicity we might not serve the file back yet.
         // setPreviewVideoPath(data.videoPath); 
         
-    } catch (err: any) {
+    } catch (err) {
         console.error(err);
-        setError(err.message);
+        setError(err instanceof Error ? err.message : String(err));
         // Don't close dialog on error so user can see what happened (maybe add error state to preview dialog?)
     } finally {
         setPreviewLoading(false);

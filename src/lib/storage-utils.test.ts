@@ -165,7 +165,7 @@ describe('storage-utils', () => {
 
            // Build model from flat paths
            const root: DirModel = { files: {}, subdirs: {} };
-           let expectedTotalSize = 0;
+           const expectedTotalSize = 0;
 
            for (const entry of fileEntries) {
              let current = root;

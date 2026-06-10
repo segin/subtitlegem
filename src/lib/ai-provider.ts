@@ -16,6 +16,37 @@ export interface AIResult {
   modelName: string;
 }
 
+/**
+ * Parameters accepted by the AI processing tasks.
+ * Fields are optional because different tasks/providers use different subsets.
+ */
+export interface AIParams {
+  // Generation
+  isInline?: boolean;
+  base64Data?: string;
+  mimeType?: string;
+  fileUri?: string;
+  secondaryLanguage?: string;
+  modelName?: string;
+  promptHints?: string;
+  // Translation
+  subtitles?: SubtitleLine[];
+  targetLanguage?: string;
+}
+
+/** A single transcription segment as returned by the OpenAI Whisper verbose_json format. */
+interface WhisperSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/** Error augmented with HTTP status / response data from an OpenAI-compatible provider. */
+interface ProviderError extends Error {
+  status?: number;
+  data?: { error?: { code?: string; message?: string } };
+}
+
 export class AISafetyError extends Error {
   constructor(public provider: AIProvider, public modelName: string, message: string) {
     super(`Safety Refusal from ${provider} (${modelName}): ${message}`);
@@ -28,7 +59,7 @@ export class AISafetyError extends Error {
  */
 export async function processWithFallback(
   task: 'generate' | 'translate',
-  params: Record<string, any>,
+  params: AIParams,
   fallbackChain: ModelConfig[]
 ): Promise<AIResult> {
   const enabledChain = fallbackChain.filter(c => c.enabled);
@@ -75,7 +106,7 @@ export async function processWithFallback(
       console.error(`[AI-Provider] Error from ${config.provider}:`, errorMessage);
       
       // For now, let's re-route on most transient/recoverable errors too
-      const status = (error as any)?.status;
+      const status = (error as { status?: number })?.status;
       if (status === 429 || (status && status >= 500)) {
         console.warn(`[AI-Provider] Recoverable error from ${config.provider}. Re-routing...`);
         continue;
@@ -88,13 +119,13 @@ export async function processWithFallback(
   throw lastError || new Error("All AI models in chain failed.");
 }
 
-async function callGenerate(config: ModelConfig, params: Record<string, any>): Promise<any> {
+async function callGenerate(config: ModelConfig, params: AIParams): Promise<Partial<AIResult>> {
   if (config.provider === 'gemini') {
     if (params.isInline) {
       const { generateSubtitlesInline } = await import("./gemini");
       return await generateSubtitlesInline(
-        params.base64Data,
-        params.mimeType,
+        params.base64Data!,
+        params.mimeType!,
         params.secondaryLanguage,
         1,
         params.modelName || config.modelName
@@ -102,8 +133,8 @@ async function callGenerate(config: ModelConfig, params: Record<string, any>): P
     }
     const { generateSubtitles } = await import("./gemini");
     return await generateSubtitles(
-      params.fileUri,
-      params.mimeType,
+      params.fileUri!,
+      params.mimeType!,
       params.secondaryLanguage,
       1,
       params.modelName || config.modelName
@@ -119,7 +150,7 @@ async function callGenerate(config: ModelConfig, params: Record<string, any>): P
   throw new Error(`Provider ${config.provider} does not support 'generate' task yet.`);
 }
 
-async function callOpenAIGenerate(config: ModelConfig, params: Record<string, any>): Promise<any> {
+async function callOpenAIGenerate(config: ModelConfig, params: AIParams): Promise<Partial<AIResult>> {
     const endpoint = config.endpoint || 'https://api.openai.com/v1';
     const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
 
@@ -141,7 +172,7 @@ async function callOpenAIGenerate(config: ModelConfig, params: Record<string, an
 
     if (params.isInline) {
          // Convert base64 to Blob
-         const byteCharacters = atob(params.base64Data);
+         const byteCharacters = atob(params.base64Data!);
          const byteNumbers = new Array(byteCharacters.length);
          for (let i = 0; i < byteCharacters.length; i++) {
              byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -179,7 +210,7 @@ async function callOpenAIGenerate(config: ModelConfig, params: Record<string, an
     const data = await response.json();
     
     // Map Whisper segments to SubtitleLine[]
-    const subtitles: SubtitleLine[] = data.segments.map((seg: any, index: number) => ({
+    const subtitles: SubtitleLine[] = data.segments.map((seg: WhisperSegment, index: number) => ({
         id: index + 1,
         startTime: seg.start,
         endTime: seg.end,
@@ -196,7 +227,7 @@ async function callOpenAIGenerate(config: ModelConfig, params: Record<string, an
     };
 }
 
-async function callTranslate(config: ModelConfig, params: Record<string, any>) {
+async function callTranslate(config: ModelConfig, params: AIParams) {
   // Validate subtitle array size to prevent DoS
   if (params.subtitles) {
     validateSubtitleArraySize(params.subtitles);
@@ -204,8 +235,8 @@ async function callTranslate(config: ModelConfig, params: Record<string, any>) {
 
   if (config.provider === 'gemini') {
     const subtitles = await translateSubtitles(
-      params.subtitles,
-      params.targetLanguage,
+      params.subtitles!,
+      params.targetLanguage!,
       params.modelName || config.modelName
     );
     return { subtitles };
@@ -218,7 +249,7 @@ async function callTranslate(config: ModelConfig, params: Record<string, any>) {
   throw new Error(`Provider ${config.provider} does not support 'translate' task yet.`);
 }
 
-async function callOpenAICompatible(config: ModelConfig, params: Record<string, any>) {
+async function callOpenAICompatible(config: ModelConfig, params: AIParams) {
   const endpoint = config.endpoint || (config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1');
   const apiKey = config.apiKey || (config.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY);
 
@@ -262,7 +293,7 @@ async function callOpenAICompatible(config: ModelConfig, params: Record<string, 
     const status = response.status;
     const message = errorData.error?.message || response.statusText;
     
-    const err = new Error(message) as any;
+    const err = new Error(message) as ProviderError;
     err.status = status;
     err.data = errorData;
     throw err;
@@ -282,13 +313,14 @@ async function callOpenAICompatible(config: ModelConfig, params: Record<string, 
   }
 }
 
-function detectSafetyRefusal(provider: AIProvider, error: any): boolean {
-  const message = (error.message || "").toLowerCase();
-  
+function detectSafetyRefusal(provider: AIProvider, error: unknown): boolean {
+  const err = error as Partial<ProviderError> | null | undefined;
+  const message = (err?.message || "").toLowerCase();
+
   // Gemini safety detection
   if (provider === 'gemini') {
     // Check for "SAFETY" in error message or specific SDK error patterns
-    if (message.includes("safety") || message.includes("blocked") || error.status === 400 && message.includes("candidate")) {
+    if (message.includes("safety") || message.includes("blocked") || err?.status === 400 && message.includes("candidate")) {
       return true;
     }
   }
@@ -299,7 +331,7 @@ function detectSafetyRefusal(provider: AIProvider, error: any): boolean {
       return true;
     }
     // DeepSeek specific refusal often returns code 400 with "content_filter" or similar
-    if (error.data?.error?.code === 'content_filter') return true;
+    if (err?.data?.error?.code === 'content_filter') return true;
   }
 
   return false;

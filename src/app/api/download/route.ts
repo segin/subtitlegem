@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const asciiName = rawName.replace(/["\\\r\n]/g, "_");
     const encodedName = encodeURIComponent(rawName);
 
-    return new NextResponse(stream as any, {
+    return new NextResponse(stream as unknown as ReadableStream, {
       status: 200,
       headers: {
         'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,

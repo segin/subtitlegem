@@ -9,6 +9,7 @@ import fs from 'fs';
 import { processJob } from './job-processor';
 import { EventEmitter } from 'events';
 import { secureDelete } from './security';
+import { getMetadataPath } from './metrics-utils';
 
 export class QueueManager extends EventEmitter {
   private queue: Map<string, QueueItem> = new Map();
@@ -78,7 +79,7 @@ export class QueueManager extends EventEmitter {
     const processingItems = Array.from(this.queue.values())
       .filter(item => item.status === 'processing');
     
-    let wasInterrupted = processingItems.length > 0;
+    const wasInterrupted = processingItems.length > 0;
     
     if (processingItems.length > 0) {
       console.log(`[Queue Recovery] Found ${processingItems.length} interrupted jobs`);
@@ -414,8 +415,8 @@ export class QueueManager extends EventEmitter {
         this.updateProgress(item.id, progress);
       });
       this.completeItem(item.id, result);
-    } catch (error: any) {
-      this.failItem(item.id, error.message || String(error));
+    } catch (error) {
+      this.failItem(item.id, error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -492,10 +493,9 @@ export class QueueManager extends EventEmitter {
    */
   private incrementLifetimeRenderCount(draftId: string): void {
     try {
-      const { getMetadataPath } = require('./metrics-utils');
       const metaPath = getMetadataPath(draftId);
-      
-      let metadata: Record<string, any> = {};
+
+      let metadata: { metrics?: { lifetimeRenderCount?: number }; lastUpdated?: number } = {};
       if (fs.existsSync(metaPath)) {
         metadata = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
       }

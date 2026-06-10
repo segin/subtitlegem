@@ -16,11 +16,20 @@ export function ShiftTimingsDialog({ isOpen, onClose, onShift, subtitleCount }: 
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Focus input when dialog opens
-  useEffect(() => {
+  // Reset inputs when the dialog transitions to open, using the render-adjustment
+  // pattern (instead of a synchronous setState in an effect).
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setOffsetSeconds("0");
       setDirection("forward");
+    }
+  }
+
+  // Focus input when dialog opens
+  useEffect(() => {
+    if (isOpen) {
       setTimeout(() => inputRef.current?.select(), 100);
     }
   }, [isOpen]);

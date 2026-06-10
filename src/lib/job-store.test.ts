@@ -38,7 +38,7 @@ describe('job-store', () => {
         
         // Manually tamper timestamps if possible? 
         // job-store exports objects directly.
-        (jobOld as any).createdAt = Date.now() - 10000;
+        jobOld.createdAt = Date.now() - 10000;
         
         // Cleanup with maxAge = 10ms
         cleanupOldJobs(100); // 100ms

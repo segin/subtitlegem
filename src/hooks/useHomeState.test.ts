@@ -130,7 +130,7 @@ describe('useHomeState', () => {
 
   test('video properties loading', async () => {
       // Create a controlled promise
-      let resolveFetch: Function;
+      let resolveFetch: (value?: unknown) => void;
       const fetchPromise = new Promise(resolve => { resolveFetch = resolve; });
       
       mockFetch.mockImplementation(async (url) => {

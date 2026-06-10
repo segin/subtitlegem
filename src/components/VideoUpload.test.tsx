@@ -36,7 +36,7 @@ const mockXHR = {
     })
 };
 
-// @ts-ignore
+// @ts-expect-error - assigning a jest mock to the XMLHttpRequest constructor
 window.XMLHttpRequest = jest.fn(() => mockXHR);
 
 describe('VideoUpload', () => {

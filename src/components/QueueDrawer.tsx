@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { QueueItem } from "@/types/queue";
 import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle, Eye } from "lucide-react";
 
@@ -19,19 +19,18 @@ interface QueueDrawerProps {
 }
 
 // Custom hook to detect desktop (lg breakpoint = 1024px)
+function subscribeToDesktop(callback: () => void) {
+  const mediaQuery = window.matchMedia('(min-width: 1024px)');
+  mediaQuery.addEventListener('change', callback);
+  return () => mediaQuery.removeEventListener('change', callback);
+}
+
 function useIsDesktop() {
-  const [isDesktop, setIsDesktop] = useState(false);
-  
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(min-width: 1024px)');
-    setIsDesktop(mediaQuery.matches);
-    
-    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-  
-  return isDesktop;
+  return useSyncExternalStore(
+    subscribeToDesktop,
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => false // Server snapshot: default to non-desktop
+  );
 }
 
 export function QueueDrawer({
@@ -51,6 +50,16 @@ export function QueueDrawer({
   const [isResizing, setIsResizing] = useState(false);
   const [previewItem, setPreviewItem] = useState<QueueItem | null>(null);
   const isDesktop = useIsDesktop();
+
+  // Snapshot of the current time used for ETA calculations. It is refreshed
+  // whenever the items list changes (e.g. on each poll) so the ETA stays current,
+  // without calling the impure Date.now() during render. The setState happens in
+  // an async callback rather than synchronously in the effect body.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setNow(Date.now()));
+    return () => cancelAnimationFrame(id);
+  }, [items]);
   
   const isOpen = externalIsOpen !== undefined ? externalIsOpen : internalIsOpen;
   const setIsOpen = (val: boolean) => {
@@ -113,7 +122,7 @@ export function QueueDrawer({
   const getEta = (item: QueueItem) => {
     if (item.status !== 'processing' || !item.startedAt || !item.progress || item.progress < 5) return null;
     
-    const elapsed = Date.now() - item.startedAt;
+    const elapsed = now - item.startedAt;
     const rate = item.progress / elapsed; // progress per ms
     const remainingProgress = 100 - item.progress;
     const remainingMs = remainingProgress / rate;

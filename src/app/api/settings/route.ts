@@ -29,9 +29,9 @@ export async function GET() {
   try {
     const settings = getGlobalSettings();
     return NextResponse.json(settings);
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Settings API] GET error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 
@@ -69,9 +69,9 @@ export async function PUT(req: NextRequest) {
     
     saveGlobalSettings(settings);
     return NextResponse.json({ success: true, settings });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Settings API] PUT error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 
@@ -82,8 +82,8 @@ export async function DELETE() {
   try {
     const settings = resetGlobalSettings();
     return NextResponse.json({ success: true, settings });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Settings API] DELETE error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

@@ -1,12 +1,12 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GlobalSettingsDialog } from './GlobalSettingsDialog';
-import { DEFAULT_GLOBAL_SETTINGS } from '@/types/subtitle';
+import { DEFAULT_GLOBAL_SETTINGS, TrackStyle } from '@/types/subtitle';
 import '@testing-library/jest-dom';
 
 // Mock TrackStyleEditor to simplify tests
 jest.mock('./TrackStyleEditor', () => ({
-  TrackStyleEditor: ({ style, onChange, mode }: any) => (
+  TrackStyleEditor: ({ onChange, mode }: { style?: Partial<TrackStyle>; onChange: (updates: Partial<TrackStyle>) => void; mode?: string }) => (
     <div data-testid="track-style-editor">
       Mock Editor Mode: {mode}
       <button onClick={() => onChange({ fontSize: 7 })} data-testid="update-style-btn">

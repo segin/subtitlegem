@@ -40,8 +40,8 @@ async function getAvailableSpaceGB(dirPath: string): Promise<number> {
     try {
       const space = await checkDiskSpace(dirPath);
       return space.free / (1024 ** 3);
-    } catch (checkError: any) {
-      console.warn('[Storage] Could not check disk space:', checkError.message);
+    } catch (checkError) {
+      console.warn('[Storage] Could not check disk space:', checkError instanceof Error ? checkError.message : String(checkError));
       // Return 0 to indicate unknown space, rather than a misleading hardcoded value.
       // This allows the consumer to decide how to handle the lack of information.
       return 0;
@@ -61,12 +61,12 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
       // Try to create it
       try {
         fs.mkdirSync(dirPath, { recursive: true });
-      } catch (createError: any) {
+      } catch (createError) {
         return {
           exists: false,
           writable: false,
           availableSpaceGB: 0,
-          error: `Cannot create directory: ${createError.message}`,
+          error: `Cannot create directory: ${createError instanceof Error ? createError.message : String(createError)}`,
         };
       }
     }
@@ -79,12 +79,12 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
       fs.writeFileSync(testFile, 'test');
       fs.unlinkSync(testFile);
       writable = true;
-    } catch (writeError: any) {
+    } catch (writeError) {
       return {
         exists: true,
         writable: false,
         availableSpaceGB: 0,
-        error: `Directory not writable: ${writeError.message}`,
+        error: `Directory not writable: ${writeError instanceof Error ? writeError.message : String(writeError)}`,
       };
     }
 
@@ -97,12 +97,12 @@ export async function validateStagingDir(dirPath: string): Promise<StorageValida
       availableSpaceGB,
     };
     
-  } catch (error: any) {
+  } catch (error) {
     return {
       exists: false,
       writable: false,
       availableSpaceGB: 0,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
     };
   }
 }

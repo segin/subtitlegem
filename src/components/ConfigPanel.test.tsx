@@ -44,7 +44,7 @@ const mockConfig: SubtitleConfig = {
         audioBitrate: '192k', // legacy fields if any
         videoBitrate: '2M'
     }
-} as any; // Type casting to avoid exhaustive mock of every field if interface is huge
+} as unknown as SubtitleConfig; // Type casting to avoid exhaustive mock of every field if interface is huge
 
 describe('ConfigPanel', () => {
   const onChange = jest.fn();

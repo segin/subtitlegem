@@ -45,8 +45,8 @@ export function RenameProjectModal({
     try {
       await onRename(newName.trim());
       onClose();
-    } catch (err: any) {
-      setError(err.message || "Failed to rename project");
+    } catch (err) {
+      setError((err instanceof Error ? err.message : String(err)) || "Failed to rename project");
     } finally {
       setLoading(false);
     }

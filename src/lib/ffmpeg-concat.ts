@@ -10,7 +10,7 @@ export interface BurnOptions {
   crf?: number;
   resolution?: string; // Not typically used for multi-video export as project config defines this
   codec?: string;
-  onProgress?: (progress: number, details?: any) => void;
+  onProgress?: (progress: number, details?: { timemark: string }) => void;
 }
 
 /**

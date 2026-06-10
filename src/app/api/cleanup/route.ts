@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
                     await fsPromises.unlink(filePath);
                     deletedCount++;
                 }
-            } catch (e: any) {
+            } catch {
                 // Ignore errors during iteration (race conditions etc)
             }
         }
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
         errors: errors.length > 0 ? errors : undefined 
     });
 
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }

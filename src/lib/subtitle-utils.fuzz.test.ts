@@ -17,7 +17,7 @@ describe('subtitle-utils fuzzing', () => {
     ...s,
     endTime: s.startTime + s.duration,
     duration: undefined // Remove helper prop
-  })) as any as fc.Arbitrary<SubtitleLine>; 
+  })) as unknown as fc.Arbitrary<SubtitleLine>;
   // Cast because map type inference is tricky with interface match
 
   test('mergeSubtitles never crashes and maintains invariants', () => {

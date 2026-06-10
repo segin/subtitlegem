@@ -1,5 +1,5 @@
 import { saveDraftV1, loadDraft, saveDraftV2, renameDraft } from './draft-store';
-import { SubtitleConfig } from '@/types/subtitle';
+import { SubtitleConfig, ProjectConfig } from '@/types/subtitle';
 
 // Mock better-sqlite3
 jest.mock('better-sqlite3', () => {
@@ -31,11 +31,17 @@ jest.mock('better-sqlite3', () => {
   // const { mockGet } = require('better-sqlite3'); if we exposed it on the mock.
   
   // Let's attach them to the mock function for access
-  (mockClass as any).mGet = mGet;
-  (mockClass as any).mPrepare = mPrepare;
-  
+  const decorated = mockClass as unknown as DatabaseMockSpies;
+  decorated.mGet = mGet;
+  decorated.mPrepare = mPrepare;
+
   return mockClass;
 });
+
+interface DatabaseMockSpies {
+  mGet: jest.Mock;
+  mPrepare: jest.Mock;
+}
 
 // Mock fs and path via storage-config mock effectively (or just let them run if they use mock-fs? No, jest mock)
 // storage-config exports ensureStagingStructure. 
@@ -58,7 +64,7 @@ jest.mock('uuid', () => ({
 // Access mocks from the module
 import Database from 'better-sqlite3';
 
-const { mGet, mPrepare } = Database as any;
+const { mGet, mPrepare } = Database as unknown as DatabaseMockSpies;
 
 describe('draft-store', () => {
   beforeEach(() => {
@@ -98,8 +104,8 @@ describe('draft-store', () => {
         name: 'V2 Draft',
         clips: [],
         timeline: [],
-        projectConfig: {} as any,
-        subtitleConfig: {} as any
+        projectConfig: {} as unknown as ProjectConfig,
+        subtitleConfig: {} as unknown as SubtitleConfig
       };
 
       // Check existence

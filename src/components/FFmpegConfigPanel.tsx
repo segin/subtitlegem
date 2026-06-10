@@ -66,8 +66,8 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
       if (!res.ok) throw new Error('Failed to fetch FFmpeg capabilities');
       const data = await res.json();
       setCapabilities(data);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
@@ -144,7 +144,7 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
           </label>
           <select
             value={config.hwaccel}
-            onChange={(e) => update({ hwaccel: e.target.value as any })}
+            onChange={(e) => update({ hwaccel: e.target.value as ExportConfig['hwaccel'] })}
             disabled={loading}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >
@@ -168,7 +168,7 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
           </label>
           <select
             value={config.codec || 'libx264'}
-            onChange={(e) => update({ codec: e.target.value as any })}
+            onChange={(e) => update({ codec: e.target.value as ExportConfig['codec'] })}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >
             <option value="libx264">H.264 (Common)</option>
@@ -186,7 +186,7 @@ export function FFmpegConfigPanel({ config, onChange }: FFmpegConfigPanelProps) 
           </label>
           <select
             value={config.preset}
-            onChange={(e) => update({ preset: e.target.value as any })}
+            onChange={(e) => update({ preset: e.target.value as ExportConfig['preset'] })}
             disabled={loading}
             className="w-full bg-[#252526] border border-[#3e3e42] text-[#cccccc] text-xs p-1.5 focus:border-[#007acc] outline-none"
           >

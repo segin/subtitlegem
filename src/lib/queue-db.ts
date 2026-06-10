@@ -12,6 +12,50 @@ import { QueueItem, QueueItemStatus } from '@/types/queue';
 
 let db: Database.Database | null = null;
 
+/** Row shape of the `queue_items` table. */
+interface QueueItemRow {
+  id: string;
+  status: string;
+  progress: number;
+  file_name: string;
+  file_size: number;
+  file_type: string | null;
+  created_at: number;
+  started_at: number | null;
+  completed_at: number | null;
+  error: string | null;
+  failure_reason: string | null;
+  retry_count: number | null;
+  result_video_path: string | null;
+  result_srt_path: string | null;
+  metadata: string | null;
+}
+
+/** Maps a raw DB row to a {@link QueueItem}. */
+function rowToQueueItem(row: QueueItemRow): QueueItem {
+  return {
+    id: row.id,
+    status: row.status as QueueItemStatus,
+    progress: row.progress,
+    file: {
+      name: row.file_name,
+      size: row.file_size,
+      type: row.file_type ?? undefined,
+    },
+    createdAt: row.created_at,
+    startedAt: row.started_at || undefined,
+    completedAt: row.completed_at || undefined,
+    error: row.error || undefined,
+    failureReason: (row.failure_reason as QueueItem['failureReason']) || undefined,
+    retryCount: row.retry_count || undefined,
+    result: row.result_video_path ? {
+      videoPath: row.result_video_path,
+      srtPath: row.result_srt_path ?? undefined,
+    } : undefined,
+    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
+  };
+}
+
 /**
  * Initialize the database and create tables if needed
  */
@@ -106,29 +150,9 @@ export function loadAllItems(): QueueItem[] {
   
   const rows = database.prepare(`
     SELECT * FROM queue_items ORDER BY created_at ASC
-  `).all() as any[];
-  
-  return rows.map(row => ({
-    id: row.id,
-    status: row.status as QueueItemStatus,
-    progress: row.progress,
-    file: {
-      name: row.file_name,
-      size: row.file_size,
-      type: row.file_type,
-    },
-    createdAt: row.created_at,
-    startedAt: row.started_at || undefined,
-    completedAt: row.completed_at || undefined,
-    error: row.error || undefined,
-    failureReason: row.failure_reason || undefined,
-    retryCount: row.retry_count || undefined,
-    result: row.result_video_path ? {
-      videoPath: row.result_video_path,
-      srtPath: row.result_srt_path,
-    } : undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-  }));
+  `).all() as QueueItemRow[];
+
+  return rows.map(rowToQueueItem);
 }
 
 /**
@@ -146,7 +170,13 @@ export function deleteItem(id: string): boolean {
 export function updateStatus(id: string, status: QueueItemStatus, progress: number = 0): void {
   const database = getDb();
   
-  const updates: any = { id, status, progress };
+  const updates: {
+    id: string;
+    status: QueueItemStatus;
+    progress: number;
+    startedAt?: number;
+    completedAt?: number;
+  } = { id, status, progress };
   let sql = 'UPDATE queue_items SET status = @status, progress = @progress';
   
   if (status === 'processing') {
@@ -198,7 +228,7 @@ export function isPaused(): boolean {
   const database = getDb();
   const row = database.prepare(`
     SELECT value FROM queue_state WHERE key = 'paused'
-  `).get() as any;
+  `).get() as { value: string } | undefined;
   return row?.value === 'true';
 }
 
@@ -219,29 +249,9 @@ export function getItemsByStatus(status: QueueItemStatus): QueueItem[] {
   const database = getDb();
   const rows = database.prepare(`
     SELECT * FROM queue_items WHERE status = ? ORDER BY created_at ASC
-  `).all(status) as any[];
-  
-  return rows.map(row => ({
-    id: row.id,
-    status: row.status as QueueItemStatus,
-    progress: row.progress,
-    file: {
-      name: row.file_name,
-      size: row.file_size,
-      type: row.file_type,
-    },
-    createdAt: row.created_at,
-    startedAt: row.started_at || undefined,
-    completedAt: row.completed_at || undefined,
-    error: row.error || undefined,
-    failureReason: row.failure_reason || undefined,
-    retryCount: row.retry_count || undefined,
-    result: row.result_video_path ? {
-      videoPath: row.result_video_path,
-      srtPath: row.result_srt_path,
-    } : undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-  }));
+  `).all(status) as QueueItemRow[];
+
+  return rows.map(rowToQueueItem);
 }
 
 /**
@@ -277,31 +287,11 @@ export function getItem(id: string): QueueItem | null {
   const database = getDb();
   const row = database.prepare(`
     SELECT * FROM queue_items WHERE id = ?
-  `).get(id) as any;
-  
+  `).get(id) as QueueItemRow | undefined;
+
   if (!row) return null;
-  
-  return {
-    id: row.id,
-    status: row.status as QueueItemStatus,
-    progress: row.progress,
-    file: {
-      name: row.file_name,
-      size: row.file_size,
-      type: row.file_type,
-    },
-    createdAt: row.created_at,
-    startedAt: row.started_at || undefined,
-    completedAt: row.completed_at || undefined,
-    error: row.error || undefined,
-    failureReason: row.failure_reason || undefined,
-    retryCount: row.retry_count || undefined,
-    result: row.result_video_path ? {
-      videoPath: row.result_video_path,
-      srtPath: row.result_srt_path,
-    } : undefined,
-    metadata: row.metadata ? JSON.parse(row.metadata) : undefined,
-  };
+
+  return rowToQueueItem(row);
 }
 
 /**

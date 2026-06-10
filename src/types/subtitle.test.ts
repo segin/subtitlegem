@@ -46,10 +46,10 @@ describe('subtitle types utils', () => {
     });
 
     it('returns false for partial/invalid objects', () => {
-      expect(isMultiVideoProject({} as any)).toBe(false);
-      expect(isMultiVideoProject({ version: 2 } as any)).toBe(false);
+      expect(isMultiVideoProject({} as unknown as MultiVideoProjectState)).toBe(false);
+      expect(isMultiVideoProject({ version: 2 } as unknown as MultiVideoProjectState)).toBe(false);
       // 'clips' and 'timeline' are required keys
-      expect(isMultiVideoProject({ version: 2, clips: [] } as any)).toBe(false);
+      expect(isMultiVideoProject({ version: 2, clips: [] } as unknown as MultiVideoProjectState)).toBe(false);
     });
   });
 

@@ -7,6 +7,7 @@ import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
 import { getStagingDir } from "@/lib/storage-config";
 import { getDirectorySize } from "@/lib/storage-utils";
 import { generateProjectSummary } from "@/lib/summary-generator";
+import { SubtitleLine } from "@/types/subtitle";
 
 export const runtime = 'nodejs';
 
@@ -54,7 +55,7 @@ export async function GET(req: NextRequest) {
            
            return { ...clip, missing: false };
          }));
-         (draft as any).clips = clips; // Cast to update readonly/typed property if needed
+         (draft as DraftV2).clips = clips; // Cast to update readonly/typed property if needed
       } 
       
       return NextResponse.json(draft);
@@ -201,10 +202,10 @@ export async function POST(req: NextRequest) {
          await fs.promises.writeFile(metaPath, JSON.stringify(newMeta, null, 2));
 
          // Background: Generate Summary if missing
-         const finalSubtitles = subtitles || (draft.version === 1 ? draft.subtitles : []); // V2 might need more complex extraction if not in body
-         if (!newMeta.summary && finalSubtitles && (finalSubtitles as any[]).length > 0) {
+         const finalSubtitles: SubtitleLine[] = subtitles || (draft.version === 1 ? draft.subtitles : []); // V2 might need more complex extraction if not in body
+         if (!newMeta.summary && finalSubtitles && finalSubtitles.length > 0) {
            console.log(`[DraftAPI] Triggering summary generation for ${draft.id}`);
-           generateProjectSummary(draft.id, finalSubtitles as any[]).catch(err => {
+           generateProjectSummary(draft.id, finalSubtitles).catch(err => {
              console.error(`[DraftAPI] Summary generation failed for ${draft.id}`, err);
            });
          }
@@ -213,9 +214,9 @@ export async function POST(req: NextRequest) {
     }
     
     return NextResponse.json(draft);
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Drafts API] Error saving draft:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 
@@ -292,9 +293,9 @@ export async function PATCH(req: NextRequest) {
     }
     
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Drafts API] Error renaming draft:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }
 }
 

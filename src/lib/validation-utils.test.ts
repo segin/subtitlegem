@@ -20,8 +20,8 @@ describe('validation-utils', () => {
       });
 
       it('should reject non-arrays', () => {
-        expect(() => validateSubtitleArraySize('not an array' as any)).toThrow('must be an array');
-        expect(() => validateSubtitleArraySize({ length: 5 } as any)).toThrow('must be an array');
+        expect(() => validateSubtitleArraySize('not an array' as unknown as unknown[])).toThrow('must be an array');
+        expect(() => validateSubtitleArraySize({ length: 5 } as unknown as unknown[])).toThrow('must be an array');
       });
 
       it('should reject oversized arrays', () => {

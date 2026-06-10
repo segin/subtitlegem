@@ -8,6 +8,7 @@ import fs from 'fs';
 // Mock dependencies
 jest.mock('fs', () => ({
   existsSync: jest.fn(),
+  lstatSync: jest.fn(() => ({ isFile: () => true, isSymbolicLink: () => false })),
 }));
 
 jest.mock('@/lib/storage-config', () => ({
@@ -135,6 +136,7 @@ describe('/api/video-info', () => {
   describe('Error Cases', () => {
     it('should return 404 when file does not exist', async () => {
       mockExistsSync.mockReturnValue(false);
+      (fs.lstatSync as jest.Mock).mockImplementationOnce(() => { throw new Error('ENOENT'); });
       const validPath = '/mock/staging/videos/missing.mp4';
 
       const req = new NextRequest(

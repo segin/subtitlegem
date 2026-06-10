@@ -22,8 +22,14 @@ import { ffprobe, getAudioCodec, getVideoDimensions, extractAudio, burnSubtitles
 import * as fc from 'fast-check';
 
 // Helper to create mock process with EventEmitter
-function createMockProcess() {
-  const proc = new EventEmitter() as any;
+type MockProcess = EventEmitter & {
+  stdout: EventEmitter;
+  stderr: EventEmitter;
+  stdin: { write: jest.Mock; end: jest.Mock };
+};
+
+function createMockProcess(): MockProcess {
+  const proc = new EventEmitter() as MockProcess;
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   proc.stdin = { write: jest.fn(), end: jest.fn() };

@@ -5,6 +5,14 @@
  * Helps decide whether to stream source files directly or force transcoding.
  */
 
+/** Subset of video metadata used to decide playback support. */
+export interface SupportProbeMetadata {
+    videoCodec?: string;
+    pixFmt?: string;
+    width: number;
+    height: number;
+}
+
 export interface BrowserSupport {
     h264: boolean;
     hevc: boolean;
@@ -80,7 +88,7 @@ export async function probeBrowserSupport(): Promise<BrowserSupport> {
  * Determines if a specific video metadata is supported by the current browser.
  * Returns true if supported, false if transcoding is recommended.
  */
-export function isMetadataSupported(metadata: any, support: BrowserSupport): boolean {
+export function isMetadataSupported(metadata: SupportProbeMetadata | null | undefined, support: BrowserSupport): boolean {
     if (!metadata) return true; // Assume OK if no info yet
 
     const { videoCodec, pixFmt, width, height } = metadata;
@@ -91,7 +99,7 @@ export function isMetadataSupported(metadata: any, support: BrowserSupport): boo
     if (is10bit) {
         if (videoCodec === 'h264' && !support.h264_10bit) return false;
         if ((videoCodec === 'hevc' || videoCodec === 'h265') && !support.hevc_10bit) return false;
-        if (!['h264', 'hevc', 'h265'].includes(videoCodec)) return false; // Other 10-bit usually fail
+        if (!['h264', 'hevc', 'h265'].includes(videoCodec as string)) return false; // Other 10-bit usually fail
     }
 
     // 2. Check for even dimensions (odd dimensions often break HW decoders)

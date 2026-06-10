@@ -35,10 +35,10 @@ export async function GET(req: NextRequest) {
     }
     
     return NextResponse.json(capabilities);
-  } catch (error: any) {
+  } catch (error) {
     console.error('FFmpeg probe failed:', error);
     return NextResponse.json(
-      { error: 'Failed to probe FFmpeg capabilities', details: error.message },
+      { error: 'Failed to probe FFmpeg capabilities', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

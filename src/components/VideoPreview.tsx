@@ -4,7 +4,16 @@ import React, { useRef, useEffect, useState } from "react";
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
 import { REFERENCE_WIDTH } from "@/types/constants";
 import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
-import { probeBrowserSupport, isMetadataSupported, BrowserSupport } from "@/lib/browser-support";
+import { probeBrowserSupport, isMetadataSupported, BrowserSupport, SupportProbeMetadata } from "@/lib/browser-support";
+
+// Minimal shape of the probed metadata actually consumed by the preview. Both the
+// VideoProperties prop and the /api/video-info response satisfy this.
+type PreviewMetadata = {
+  width?: number;
+  height?: number;
+  videoCodec?: string;
+  pixFmt?: string;
+};
 
 interface PreviewProps {
   // Legacy support for single video
@@ -22,7 +31,7 @@ interface PreviewProps {
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
-  videoProperties?: any; // Added to pass probed metadata
+  videoProperties?: PreviewMetadata | null; // Added to pass probed metadata
 }
 
 export function VideoPreview({ 
@@ -48,7 +57,7 @@ export function VideoPreview({
   const isMultiVideo = timelineClips.length > 0 || timelineImages.length > 0;
   const [activeVideoUrl, setActiveVideoUrl] = useState<string | null>(videoUrl || null);
   const [activeImageUrl, setActiveImageUrl] = useState<string | null>(null);
-  const [activeMetadata, setActiveMetadata] = useState<any>(null);
+  const [activeMetadata, setActiveMetadata] = useState<PreviewMetadata | null>(null);
   
   // Browser Support & Transcoding State
   const [browserSupport, setBrowserSupport] = useState<BrowserSupport | null>(null);
@@ -74,7 +83,7 @@ export function VideoPreview({
   useEffect(() => {
     if (!isMultiVideo) {
       if (videoUrl !== activeVideoUrl) setActiveVideoUrl(videoUrl || null);
-      setActiveMetadata(videoProperties);
+      setActiveMetadata(videoProperties ?? null);
       return;
     }
 
@@ -158,7 +167,7 @@ export function VideoPreview({
                     console.log(`[Preview] HEVC detected, browser doesn't support. Using transcoding.`);
                     needsTranscoding = true;
                 } else {
-                    const supported = isMetadataSupported(metadata, browserSupport);
+                    const supported = isMetadataSupported(metadata as SupportProbeMetadata, browserSupport);
                     if (!supported) {
                         console.log(`[Preview] Unsupported format (${metadata.videoCodec}/${metadata.pixFmt}). Using transcoding.`);
                         needsTranscoding = true;

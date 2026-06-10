@@ -23,7 +23,7 @@ jest.mock('@/lib/storage-config', () => ({
 describe('/api/download', () => {
   const mockExistsSync = fs.existsSync as jest.Mock;
   const mockStatSync = fs.statSync as jest.Mock;
-  const mockLstatSync = (fs as any).lstatSync as jest.Mock;
+  const mockLstatSync = fs.lstatSync as unknown as jest.Mock;
   const mockCreateReadStream = fs.createReadStream as jest.Mock;
 
   beforeEach(() => {

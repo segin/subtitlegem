@@ -103,7 +103,7 @@ export async function processJob(
        srtPath: undefined 
      };
 
-  } catch (error: any) {
+  } catch (error) {
     console.error(`[${new Date().toISOString()}] [JobProcessor] Job ${item.id} failed:`, error);
     throw error;
   }

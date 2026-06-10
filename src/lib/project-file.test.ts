@@ -6,7 +6,7 @@ global.URL.revokeObjectURL = jest.fn();
 
 describe('project-file', () => {
     test('saveProjectFile downloads file', () => {
-        const project = { version: 1, subtitles: [], config: {}, secondaryLanguage: 'en' } as any;
+        const project = { version: 1, subtitles: [], config: {}, secondaryLanguage: 'en' } as unknown as Parameters<typeof saveProjectFile>[0];
         
         // Mock DOM
         const link = {
@@ -14,7 +14,7 @@ describe('project-file', () => {
             href: '',
             download: ''
         };
-        const spyCreate = jest.spyOn(document, 'createElement').mockReturnValue(link as any);
+        const spyCreate = jest.spyOn(document, 'createElement').mockReturnValue(link as unknown as HTMLAnchorElement);
         const spyAppend = jest.spyOn(document.body, 'appendChild').mockImplementation();
         const spyRemove = jest.spyOn(document.body, 'removeChild').mockImplementation();
 

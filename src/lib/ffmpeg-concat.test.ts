@@ -15,15 +15,20 @@ jest.mock('fs', () => ({
 
 import { spawn } from 'child_process';
 import { generateFilterComplex, exportMultiVideo } from './ffmpeg-concat';
-import { ProjectConfig, TimelineClip, TimelineImage, MultiVideoProjectState } from '@/types/subtitle';
+import { ProjectConfig, TimelineClip, TimelineImage, MultiVideoProjectState, SubtitleConfig } from '@/types/subtitle';
+import type { ChildProcess } from 'child_process';
 
 // Helper to create mock process
-function createMockProcess() {
-  const proc = new EventEmitter() as any;
+function createMockProcess(): ChildProcess {
+  const proc = new EventEmitter() as EventEmitter & {
+    stdout: EventEmitter;
+    stderr: EventEmitter;
+    stdin: { write: jest.Mock; end: jest.Mock };
+  };
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
   proc.stdin = { write: jest.fn(), end: jest.fn() };
-  return proc;
+  return proc as unknown as ChildProcess;
 }
 
 describe('ffmpeg-concat', () => {
@@ -153,7 +158,7 @@ describe('ffmpeg-concat', () => {
     const project: MultiVideoProjectState = {
         version: 2,
         timestamp: Date.now(),
-        subtitleConfig: {} as any,
+        subtitleConfig: {} as unknown as SubtitleConfig,
         clips: [{
           id: 'v1',
           filePath: '/path/to/video1.mp4',
