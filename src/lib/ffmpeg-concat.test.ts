@@ -146,8 +146,8 @@ describe('ffmpeg-concat', () => {
         { id: 'c1', videoClipId: 'non-existent', projectStartTime: 0, sourceInPoint: 0, clipDuration: 10 }
       ];
 
-      const { filterGraph } = generateFilterComplex(inputs, timeline, config);
-      
+      generateFilterComplex(inputs, timeline, config);
+
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Could not find input'));
       
       consoleSpy.mockRestore();

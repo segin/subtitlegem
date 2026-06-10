@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { promises as fsPromises } from 'fs';
 import crypto from 'crypto';
 
@@ -100,7 +99,7 @@ export async function secureDelete(filePath: string, forceSecure = false): Promi
     // Attempt standard unlink as fallback
     try {
         await fsPromises.unlink(filePath).catch(() => {});
-    } catch (e) {
+    } catch {
         // Ignore fallback error
     }
   }

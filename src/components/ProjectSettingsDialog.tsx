@@ -33,8 +33,6 @@ export function ProjectSettingsDialog({
   onUpdateConfig,
   onReprocess,
   onRetranslate,
-  onResetToOriginal,
-  canReset,
   projectConfig,
   onUpdateProjectConfig,
 }: ProjectSettingsDialogProps) {

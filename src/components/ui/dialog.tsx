@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
-import { X } from "lucide-react";
+import React from "react";
 
 interface DialogProps {
   open: boolean;

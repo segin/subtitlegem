@@ -24,10 +24,6 @@ describe('ai-provider', () => {
     id: '1', provider: 'gemini', modelName: 'gemini-pro', enabled: true
   };
 
-  const openaiConfig: ModelConfig = {
-    id: '2', provider: 'openai', modelName: 'whisper-1', enabled: true
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
   });

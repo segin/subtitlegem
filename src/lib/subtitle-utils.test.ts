@@ -1,6 +1,5 @@
 import { mergeSubtitles, getRangeSelectionIds } from './subtitle-utils';
 import { SubtitleLine } from '@/types/subtitle';
-import { v4 as uuidv4 } from 'uuid';
 
 // Mock UUID to be consistent if needed, but not strictly necessary here
 // We'll just generate them

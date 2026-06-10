@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveDraft, loadDraft, listDrafts, deleteDraft, Draft, DraftV1, DraftV2, DraftSummary } from "@/lib/draft-store";
-import { generateSummary, deleteFileFromGemini } from "@/lib/gemini";
+import { saveDraft, loadDraft, listDrafts, deleteDraft, DraftV2, DraftSummary } from "@/lib/draft-store";
+import { deleteFileFromGemini } from "@/lib/gemini";
 import fs from 'fs';
-import path from 'path';
 import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
-import { getStagingDir } from "@/lib/storage-config";
-import { getDirectorySize } from "@/lib/storage-utils";
 import { generateProjectSummary } from "@/lib/summary-generator";
 import { SubtitleLine } from "@/types/subtitle";
 
@@ -43,7 +40,7 @@ export async function GET(req: NextRequest) {
            try {
              const stats = await fs.promises.stat(clip.filePath);
              measuredSize = stats.size;
-           } catch (e) { }
+           } catch { }
 
            const status = checkClipIntegrity(clip, measuredSize);
            

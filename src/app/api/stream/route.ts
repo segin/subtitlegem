@@ -2,8 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { spawn } from 'child_process';
 import path from 'path';
-import fs from 'fs';
-import { getStorageConfig } from '@/lib/storage-config';
 
 // GET /api/stream?path=/path/to/video.mkv
 export async function GET(req: NextRequest) {
@@ -67,23 +65,23 @@ export async function GET(req: NextRequest) {
       ffmpegProcess.stdout.on('data', (chunk) => {
         try {
             controller.enqueue(chunk);
-        } catch (e) {
+        } catch {
             // Stream closed
             ffmpegProcess.kill();
         }
       });
-      
+
       ffmpegProcess.stdout.on('end', () => {
-        try { controller.close(); } catch(e) {}
+        try { controller.close(); } catch {}
       });
 
-      ffmpegProcess.stderr.on('data', (data) => {
+      ffmpegProcess.stderr.on('data', () => {
         // Log stderr but don't fail stream unless exit code is bad
       });
-      
+
       ffmpegProcess.on('error', (err) => {
           console.error('[Stream] FFmpeg Process Error:', err);
-          try { controller.error(err); } catch(e) {}
+          try { controller.error(err); } catch {}
       });
     },
     cancel() {

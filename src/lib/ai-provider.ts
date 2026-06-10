@@ -3,7 +3,7 @@ import {
   ModelConfig, 
   AIProvider 
 } from "@/types/subtitle";
-import { generateSubtitles, translateSubtitles } from "./gemini";
+import { translateSubtitles } from "./gemini";
 import { validateSubtitleArraySize, MAX_SUBTITLES } from "./validation-utils";
 
 // Re-export for backwards compatibility
@@ -307,7 +307,7 @@ async function callOpenAICompatible(config: ModelConfig, params: AIParams) {
     if (Array.isArray(result)) return { subtitles: result };
     if (result.subtitles) return { subtitles: result.subtitles };
     return { subtitles: result };
-  } catch (e) {
+  } catch {
     console.error("[AI-Provider] Failed to parse OpenAI response:", content);
     throw new Error("Invalid JSON returned from AI provider.");
   }

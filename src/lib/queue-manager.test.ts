@@ -49,7 +49,7 @@ jest.mock('./storage-config', () => ({
   ensureStagingStructure: jest.fn(),
 }));
 
-import { queueManager, QueueItem } from './queue-manager';
+import { queueManager } from './queue-manager';
 import * as queueDb from './queue-db';
 
 describe('queueManager', () => {
@@ -126,9 +126,9 @@ describe('queueManager', () => {
   // ============================================================================
   describe('getAllItems', () => {
     it('should return all items sorted by createdAt', () => {
-      const item1 = queueManager.addItem({ file: { name: 'a.mp4', size: 100 }, model: 'test' });
-      const item2 = queueManager.addItem({ file: { name: 'b.mp4', size: 200 }, model: 'test' });
-      const item3 = queueManager.addItem({ file: { name: 'c.mp4', size: 300 }, model: 'test' });
+      queueManager.addItem({ file: { name: 'a.mp4', size: 100 }, model: 'test' });
+      queueManager.addItem({ file: { name: 'b.mp4', size: 200 }, model: 'test' });
+      queueManager.addItem({ file: { name: 'c.mp4', size: 300 }, model: 'test' });
 
       const all = queueManager.getAllItems();
       

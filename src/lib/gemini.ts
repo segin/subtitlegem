@@ -1,5 +1,4 @@
 import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold, Part } from "@google/genai";
-import fs from "fs";
 import { SubtitleLine } from "@/types/subtitle";
 import { subtitleSchema, translationSchema } from "./gemini-schemas";
 

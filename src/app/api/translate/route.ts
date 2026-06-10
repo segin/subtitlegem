@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const { text, targetLanguage, contextBefore, contextAfter } = await req.json();
+    const { text, targetLanguage } = await req.json();
 
     if (!text || !targetLanguage) {
       return NextResponse.json({ error: "Missing text or targetLanguage" }, { status: 400 });

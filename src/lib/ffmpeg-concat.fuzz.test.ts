@@ -7,7 +7,7 @@
 
 import * as fc from 'fast-check';
 import { generateFilterComplex } from './ffmpeg-concat';
-import { ProjectConfig, TimelineClip } from '@/types/subtitle';
+import { TimelineClip } from '@/types/subtitle';
 
 describe('ffmpeg-concat (fuzzing)', () => {
   
@@ -69,7 +69,7 @@ describe('ffmpeg-concat (fuzzing)', () => {
             expect(result.filterGraph).toContain('concat=');
             
             // 4. Input labels should be referenced
-            inputs.forEach((_, idx) => {
+            inputs.forEach(() => {
                 // Not guaranteed to be used if we skipped it? 
                 // Wait, we forced usage via modulo. 
                 // But complex filter might optimize? No.

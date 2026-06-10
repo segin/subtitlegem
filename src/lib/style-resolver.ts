@@ -1,4 +1,4 @@
-import { TrackStyle, GlobalSettings, SubtitleConfig } from "@/types/subtitle";
+import { TrackStyle } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 
 /**

@@ -90,7 +90,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   // Normalize props to new interface
   const subtitles = props.subtitles;
   const onSubtitlesUpdate = isLegacyProps(props) ? props.onUpdate : props.onSubtitlesUpdate;
-  const { duration, currentTime, onSeek, selectedIds, onSelect, onSplit } = props;
+  const { duration, currentTime, onSeek, selectedIds, onSelect } = props;
   
   // V2 multi-video props
   const videoClips = isLegacyProps(props) ? undefined : props.videoClips;
@@ -105,9 +105,6 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const selectedImageId = isLegacyProps(props) ? null : props.selectedImageId;
   const onImageSelect = isLegacyProps(props) ? undefined : props.onImageSelect;
 
-  const onDuplicateClip = isLegacyProps(props) ? undefined : props.onDuplicateClip;
-  const onSplitClip = isLegacyProps(props) ? undefined : props.onSplitClip;
-  const onRemoveTimelineItem = isLegacyProps(props) ? undefined : props.onRemoveTimelineItem;
   const onAddClip = isLegacyProps(props) ? undefined : props.onAddClip;
   const showSecondaryTracks = isLegacyProps(props) ? false : props.showSecondaryTracks;
   const isSplitMode = isLegacyProps(props) ? false : props.isSplitMode;
@@ -131,13 +128,13 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     transitionTimeoutRef.current = setTimeout(() => setIsTransitioning(false), 300);
   }, []);
 
-  const [contextMenu, setContextMenu] = useState<{
+  const [, setContextMenu] = useState<{
     x: number;
     y: number;
     targetId: string;
     targetType: 'video' | 'image';
   } | null>(null);
-  const [snappingEnabled, setSnappingEnabled] = useState(true);
+  const [snappingEnabled] = useState(true);
 
   // Virtualization State
   const [visibleTimeRange, setVisibleTimeRange] = useState({ start: 0, end: 60 });
@@ -478,6 +475,9 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // handleZoomIn/handleZoomOut use functional state updates, so the listener
+    // does not need re-subscribing on every render when their identity changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handleFitToView]);
   
   // Auto-scroll to keep playhead visible
@@ -497,7 +497,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
         container.scrollTo({ left: playheadX - visibleWidth / 3, behavior: 'smooth' });
       }
     }
-  }, [currentTime, pixelsPerSecond, followPlayhead, isScrubbing]);
+  }, [currentTime, pixelsPerSecond, followPlayhead, isScrubbing, isTransitioning]);
   
   const handleContextMenu = (e: React.MouseEvent, id: string, type: 'video' | 'image') => {
     e.preventDefault();
@@ -1099,56 +1099,6 @@ function ImageClipBlock({ item, asset, pixelsPerSecond, selected, onDrag, onDrop
         className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize hover:bg-white/20 z-20 opacity-0 group-hover:opacity-100 transition-opacity" 
         onMouseDown={(e) => handleMouseDown(e, 'right')}
       />
-    </div>
-  );
-}
-
-// ============================================================================
-// Timeline Context Menu
-// ============================================================================
-
-function TimelineContextMenu({ x, y, onDuplicate, onSplit, onRemove, onClose }: {
-  x: number;
-  y: number;
-  onDuplicate?: () => void;
-  onSplit?: () => void;
-  onRemove?: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div 
-      className="fixed z-[100] bg-[#252526] border border-[#454545] rounded shadow-xl py-1 min-w-[140px] text-sm text-[#cccccc]"
-      style={{ top: y, left: x }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {onDuplicate && (
-        <button 
-          className="w-full text-left px-3 py-1.5 hover:bg-[#094771] hover:text-white flex items-center"
-          onClick={() => { onDuplicate(); onClose(); }}
-        >
-          <span className="flex-1">Duplicate</span>
-          <span className="text-[10px] opacity-50 ml-2">Ctrl+D</span>
-        </button>
-      )}
-      {onSplit && (
-        <button 
-          className="w-full text-left px-3 py-1.5 hover:bg-[#094771] hover:text-white flex items-center"
-          onClick={() => { onSplit(); onClose(); }}
-        >
-          <span className="flex-1">Split at Playhead</span>
-          <span className="text-[10px] opacity-50 ml-2">S</span>
-        </button>
-      )}
-      <div className="h-px bg-[#454545] my-1" />
-      {onRemove && (
-        <button 
-          className="w-full text-left px-3 py-1.5 hover:bg-red-900/50 hover:text-red-200 flex items-center text-red-400"
-          onClick={() => { onRemove(); onClose(); }}
-        >
-          <span className="flex-1">Remove</span>
-          <span className="text-[10px] opacity-50 ml-2">Del</span>
-        </button>
-      )}
     </div>
   );
 }

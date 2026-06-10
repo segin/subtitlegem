@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { VideoUpload, UploadMode } from "@/components/VideoUpload";
-import { SubtitleTimeline, TimelineRef } from "@/components/SubtitleTimeline";
+import { VideoUpload } from "@/components/VideoUpload";
+import { SubtitleTimeline } from "@/components/SubtitleTimeline";
 import { VideoPreview } from "@/components/VideoPreview";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { SubtitleList } from "@/components/SubtitleList";
@@ -10,43 +10,32 @@ import { QueueDrawer } from "@/components/QueueDrawer";
 import { ExportControls } from "@/components/ExportControls";
 import { MenuBar } from "@/components/MenuBar";
 import { DraftsSidebar } from "@/components/DraftsSidebar";
-import { GlobalSettingsDialog, TabId } from "@/components/GlobalSettingsDialog";
-import { AboutDialog } from "@/components/AboutDialog";
-import { VideoPropertiesDialog, VideoProperties } from "@/components/VideoPropertiesDialog";
-import { VideoLibrary } from "@/components/VideoLibrary";
+import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
+import { VideoPropertiesDialog } from "@/components/VideoPropertiesDialog";
 import { AssetLibrary } from "@/components/AssetLibrary";
 import { TimelineToolbar } from "@/components/TimelineToolbar";
-import { KeyboardShortcutsDialog } from "@/components/KeyboardShortcutsDialog";
-import { ShiftTimingsDialog } from "@/components/ShiftTimingsDialog";
 import { FindReplaceDialog, FindOptions, FindResult } from "@/components/FindReplaceDialog";
 import { 
-  SubtitleLine, 
-  SubtitleConfig, 
-  DEFAULT_CONFIG, 
-  DEFAULT_GLOBAL_SETTINGS,
+  SubtitleLine,
+  DEFAULT_CONFIG,
   VideoClip,
   TimelineClip,
   TimelineImage,
-  ImageAsset,
   DEFAULT_PROJECT_CONFIG,
-  ProjectConfig,
   DraftData,
   RawSubtitleItem,
   DraftItem,
 } from "@/types/subtitle";
 import { QueueItem } from "@/types/queue";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
-import { formatTimestamp } from "@/lib/time-utils";
 import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useHomeState } from "@/hooks/useHomeState";
 import { getProjectDuration } from "@/lib/timeline-utils";
-import { checkClipIntegrity, canRelinkClip } from "@/lib/integrity-utils";
 import { v4 as uuidv4 } from "uuid";
-import { Upload, X, Download, Play, Pause, Save, RotateCcw, RotateCw, Plus, Trash2, Edit2, Check, Sparkles, AlertCircle, FileText, Settings, Code, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
+import { Settings, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
 
 import { ProjectSettingsDialog } from "@/components/ProjectSettingsDialog";
-import { ReprocessDialog, ReprocessOptions } from "@/components/ReprocessDialog";
 
 export default function Home() {
   const homeState = useHomeState();
@@ -63,15 +52,15 @@ export default function Home() {
     queuePaused,
     currentDraftId, setCurrentDraftId,
     showRestoreOption, setShowRestoreOption,
-    loading, setLoading,
+    loading,
     initialSubtitles, setInitialSubtitles,
     selectedSubtitleIds, setSelectedSubtitleIds,
     lastSelectedIdRef,
     showGlobalSettings, setShowGlobalSettings,
-    globalSettingsTab, setGlobalSettingsTab,
-    showShortcuts, setShowShortcuts,
-    showAbout, setShowAbout,
-    showShiftTimings, setShowShiftTimings,
+    setGlobalSettingsTab,
+    setShowShortcuts,
+    setShowAbout,
+    setShowShiftTimings,
     showFindReplace, setShowFindReplace,
     clipboardSubtitles, setClipboardSubtitles,
     showQueue, setShowQueue,
@@ -86,22 +75,20 @@ export default function Home() {
     uploadMode, setUploadMode,
     selectedClipId, setSelectedClipId,
     showVideoLibrary, setShowVideoLibrary,
-    isLibraryCollapsed, setIsLibraryCollapsed,
+    isLibraryCollapsed,
     showSecondaryTracks, setShowSecondaryTracks,
     imageAssets, setImageAssets,
     timelineImages, setTimelineImages,
     selectedImageId, setSelectedImageId,
     timelineRef,
-    drafts, setDrafts,
+    drafts,
     draftsLoading,
     fetchDrafts,
     handleDeleteDraft,
     fetchVideoProperties,
     handleQueueWidthChange,
     toggleQueuePause,
-    fetchQueue,
     isMultiVideoMode,
-    setQueuePaused,
   } = homeState;
 
   // Shift key tracking for Open Project
@@ -111,7 +98,7 @@ export default function Home() {
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
   
   // Reprocess dialog state
-  const [showReprocessDialog, setShowReprocessDialog] = useState(false);
+  const [, setShowReprocessDialog] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
 
   // Check if we're in multi-video mode
@@ -254,7 +241,7 @@ export default function Home() {
     }, 5000); // 5 second debounce for auto-save
 
     return () => clearTimeout(timeoutId);
-  }, [subtitles, videoPath, videoUrl, config, currentDraftId]);
+  }, [subtitles, videoPath, videoUrl, config, currentDraftId, fetchDrafts, setCurrentDraftId]);
   
 
 
@@ -262,21 +249,6 @@ export default function Home() {
   // Multi-video handlers
   const handleToggleVideoLibrary = () => setShowVideoLibrary(prev => !prev);
   
-  const handleAddToTimeline = (clipId: string) => {
-    const clip = videoClips.find(c => c.id === clipId);
-    if (!clip) return;
-
-    const newTimelineClip: TimelineClip = {
-      id: uuidv4(),
-      videoClipId: clipId,
-      projectStartTime: duration, // Append at the end (sum of all clip durations)
-      sourceInPoint: 0,
-      clipDuration: clip.duration,
-    };
-
-    setTimelineClips(prev => [...prev, newTimelineClip]);
-  };
-
   const handleRemoveClip = (clipId: string) => {
     const isUsed = timelineClips.some(c => c.videoClipId === clipId);
     if (isUsed && !confirm('This clip is used on the timeline. Removing it will also remove it from the timeline. Continue?')) {
@@ -296,73 +268,6 @@ export default function Home() {
     setImageAssets(prev => prev.filter(a => a.id !== assetId));
     setTimelineImages(prev => prev.filter(i => i.imageAssetId !== assetId));
   };
-
-  const handleRelinkClip = async (clipId: string, file: File) => {
-    const clip = videoClips.find(c => c.id === clipId);
-    if (!clip) return;
-
-    // 1. Validate file (strict check for now)
-    // We allow different filename if user insists? For now stick to requirements.
-    // Actually canRelinkClip checks filename/size.
-    // If strict match fails, we might want to warn user.
-    // For this MVP implementation, we'll try to match name. If not match, we'll ask confirmation.
-    
-    const isStrictMatch = canRelinkClip(clip, file.name, file.size);
-    if (!isStrictMatch) {
-       // Just a size/name warning, but we allow it if user really wants?
-       // Requirement said "Allow re-upload with same filename/size"
-       // We'll enforce it for now to be safe, or just log it.
-       // Let's enforce name match at least to avoid accidents.
-       if (clip.originalFilename !== file.name) {
-          if (!confirm(`Filename mismatch. Original: ${clip.originalFilename}, New: ${file.name}. Continue relink?`)) return;
-       }
-    }
-
-    setLoading(true);
-    try {
-      // 2. Upload file
-      const formData = new FormData();
-      formData.append("video", file);
-      // We don't need to generate subtitles, just upload.
-      // But /api/process generates subtitles.
-      // We should probably add a flag to /api/process to SKIP generation if we just want upload?
-      // Or use a lightweight upload.
-      // For now, let's use /api/process but ignore the subtitles result.
-      // Ideally we'd have an ?uploadOnly=true flag.
-      formData.append("model", "gemini-2.5-flash"); // dummy
-      
-      const res = await fetch('/api/process', {
-          method: 'POST',
-          body: formData
-      });
-      
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      
-      // 3. Update clip
-      setVideoClips(prev => prev.map(c => {
-         if (c.id === clipId) {
-             return {
-                 ...c,
-                 filePath: data.videoPath,
-                 fileSize: file.size,
-                 missing: false // Clear missing flag
-             };
-         }
-         return c;
-      }));
-      
-      alert("Relink successful!");
-    } catch (err: unknown) {
-      console.error(err);
-      alert(`Relink failed: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
 
   const handleUploadComplete = async (rawSubtitles: RawSubtitleItem[], url: string, lang: string, serverPath: string, detectedLanguage?: string, originalFilename?: string, fileSize?: number) => {
     // Check if we can auto-repair a missing clip
@@ -455,41 +360,7 @@ export default function Home() {
      }
   };
   
-  const handleEditFromQueue = async (item: QueueItem) => {
-    // Load the queue item back into the editor
-    // User wants to edit before processing
-    
-    // Remove from queue
-    await fetch(`/api/queue?id=${item.id}`, { method: 'DELETE' });
-    
-    // If it has results, load them
-    if (item.result?.subtitles && item.result?.videoPath) {
-      setSubtitles(item.result.subtitles);
-      setVideoUrl(URL.createObjectURL(new File([], item.file.name)));
-      setVideoPath(item.result.videoPath);
-    }
-    
-    // Refresh queue
-    const res = await fetch('/api/queue');
-    if (res.ok) {
-      const data = await res.json();
-      setQueueItems(data.items);
-    }
-  };
-  
-  const handleRemoveFromQueue = async (id: string) => {
-    await fetch(`/api/queue?id=${id}`, { method: 'DELETE' });
-    
-    // Refresh queue
-    const res = await fetch('/api/queue');
-    if (res.ok) {
-      const data = await res.json();
-      setQueueItems(data.items);
-    }
-  };
-  
-
-  const handleExport = (format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
+  const handleExport =(format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
     let content = "";
     let fileName = "subtitles";
     const mimeType = "text/plain";
@@ -570,146 +441,6 @@ export default function Home() {
     openShiftKeyRef.current = false;
   };
 
-  // Project Settings Handlers
-  const handleUpdateConfig = useCallback((newConfig: Partial<SubtitleConfig>) => {
-    setConfig(prev => ({ ...prev, ...newConfig }));
-  }, []);
-
-  const handleReprocessVideo = async (language: string, model: string) => {
-    if (!videoPath) throw new Error("No video loaded");
-    
-    // Call API to reprocess
-    const response = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            filePath: videoPath,
-            fileName: videoUrl?.split('/').pop() || "video.mp4",
-            fileSize: 0, // Not needed for reprocess
-            fileType: "video/mp4", // generic
-            model: model,
-            secondaryLanguage: config.secondaryLanguage || "None", 
-            reprocess: true,
-            primaryLanguage: language,
-            existingFileUri: config.geminiFileUri
-        })
-    });
-    
-    if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Reprocessing failed");
-    }
-    
-    const data = await response.json();
-    if (data.subtitles) {
-        setSubtitles(data.subtitles);
-        // Add unique IDs if missing
-        const processed = (data.subtitles as SubtitleLine[]).map((s) => ({
-            ...s,
-            id: s.id || uuidv4()
-        }));
-        setSubtitles(processed);
-        resetHistory(processed);
-    }
-  };
-
-  // Reprocess handler for the new ReprocessDialog
-  const handleReprocessWithOptions = useCallback(async (options: ReprocessOptions): Promise<SubtitleLine[]> => {
-    if (!videoPath) throw new Error("No video loaded");
-    
-    const response = await fetch('/api/process', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        filePath: videoPath,
-        fileName: videoUrl?.split('/').pop() || "video.mp4",
-        fileSize: 0,
-        fileType: "video/mp4",
-        model: options.model,
-        secondaryLanguage: options.secondaryLanguage || "None",
-        reprocess: true,
-        primaryLanguage: config.primaryLanguage || "auto",
-        existingFileUri: config.geminiFileUri,
-        sampleDuration: options.sampleDuration,
-        promptHints: options.promptHints,
-      })
-    });
-    
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.error || "Reprocessing failed");
-    }
-    
-    const data = await response.json();
-    if (!data.subtitles) throw new Error("No subtitles returned");
-    
-    // Add unique IDs if missing
-    const newSubtitles: SubtitleLine[] = (data.subtitles as SubtitleLine[]).map((s) => ({
-      ...s,
-      id: s.id || uuidv4()
-    }));
-    
-    if (options.mode === 'merge' && subtitles.length > 0) {
-      // Merge mode: keep existing timing, update text
-      // Match by index (simple approach) or could match by time overlap
-      const merged = subtitles.map((existing, idx) => {
-        const newSub = newSubtitles[idx];
-        if (newSub) {
-          return {
-            ...existing,
-            text: newSub.text,
-            secondaryText: newSub.secondaryText,
-          };
-        }
-        return existing;
-      });
-      setSubtitles(merged);
-      return merged;
-    } else {
-      // Replace mode
-      setSubtitles(newSubtitles);
-      return newSubtitles;
-    }
-  }, [videoPath, videoUrl, config.primaryLanguage, config.geminiFileUri, subtitles, setSubtitles]);
-
-  const handleRetranslate = async (language: string, model: string) => {
-     if (subtitles.length === 0) throw new Error("No subtitles to translate");
-
-     const response = await fetch('/api/translate', {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-             subtitles,
-             targetLanguage: language,
-             model: model
-         })
-     });
-
-     if (!response.ok) {
-         const err = await response.json();
-         throw new Error(err.error || "Translation failed");
-     }
-
-     const data = await response.json();
-     if (data.subtitles) {
-         setSubtitles(data.subtitles);
-         resetHistory(data.subtitles);
-     }
-  };
-  
-  // Ref for project loading
-  const projectState = useRef<{videoPath: string} | null>(null);
-  
-  const loadProject = (path: string) => {
-      // Placeholder for actual project reloading logic if needed
-      // Currently just resets subtitles which effectively "reloads" if we kept the video
-      if (!path) return;
-      if (initialSubtitles) {
-          setSubtitles(initialSubtitles);
-          resetHistory(initialSubtitles);
-      }
-  };
-
   // Consolidate reset logic
   const closeProject = useCallback(() => {
     // Reset all core state
@@ -757,7 +488,7 @@ export default function Home() {
     if (selectedSubtitleIds.length === 0) return;
     const toCopy = subtitles.filter(s => selectedSubtitleIds.includes(s.id));
     setClipboardSubtitles(toCopy);
-  }, [selectedSubtitleIds, subtitles]);
+  }, [selectedSubtitleIds, subtitles, setClipboardSubtitles]);
 
   const handleCutSubtitles = useCallback(() => {
     if (selectedSubtitleIds.length === 0) return;
@@ -766,7 +497,7 @@ export default function Home() {
     const remaining = subtitles.filter(s => !selectedSubtitleIds.includes(s.id));
     setSubtitles(remaining);
     setSelectedSubtitleIds([]);
-  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles, setClipboardSubtitles, setSelectedSubtitleIds]);
 
   const handlePasteSubtitles = useCallback(() => {
     if (clipboardSubtitles.length === 0) return;
@@ -804,7 +535,7 @@ export default function Home() {
       .map(s => s.id === merged.id ? merged : s);
     setSubtitles(newSubtitles);
     setSelectedSubtitleIds([merged.id]);
-  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles, setSelectedSubtitleIds]);
 
   const handleSplitSubtitle = useCallback(() => {
     if (selectedSubtitleIds.length !== 1) return;
@@ -840,7 +571,7 @@ export default function Home() {
     ];
     setSubtitles(newSubtitles);
     setSelectedSubtitleIds([first.id, second.id]);
-  }, [selectedSubtitleIds, subtitles, setSubtitles]);
+  }, [selectedSubtitleIds, subtitles, setSubtitles, setSelectedSubtitleIds]);
 
   // Keyboard shortcuts for Undo/Redo & New Project
   useEffect(() => {
@@ -926,7 +657,7 @@ export default function Home() {
     const results: FindResult[] = [];
     const lowerQuery = options.caseSensitive ? query : query.toLowerCase();
 
-    subtitles.forEach((sub, index) => {
+    subtitles.forEach((sub) => {
       // Check Primary
       if (options.searchPrimary && sub.text) {
         const text = options.caseSensitive ? sub.text : sub.text.toLowerCase();

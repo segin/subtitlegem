@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, fireEvent, act, queryByText } from '@testing-library/react';
+import { render, fireEvent, queryByText } from '@testing-library/react';
 import { SubtitleTimeline } from './SubtitleTimeline';
 import { SubtitleLine } from '@/types/subtitle';
 
@@ -42,7 +42,7 @@ describe('SubtitleTimeline Virtualization', () => {
     // Default pixelsPerSecond is 100.
     // Container width will be mocked.
     
-    const { container, rerender } = render(
+    const { container } = render(
       <SubtitleTimeline 
         {...defaultProps} 
         subtitles={subtitles} 
@@ -94,9 +94,6 @@ describe('SubtitleTimeline Virtualization', () => {
     // Should render subs around 40s - 70s.
     // Sub 45 should be visible. Sub 5 should NOT be visible.
 
-    const subText5 = container.textContent?.includes('Subtitle 5');
-    const subText45 = container.textContent?.includes('Subtitle 45'); // 45s
-    
     // Subtitle 5 (5s-5.9s) should be out of view (range starts at 40s)
     // Subtitle 5 (5s-5.9s) should be out of view (range starts at 40s)
     // We use queryByText which matches full string by default, ensuring we don't match "Subtitle 50"

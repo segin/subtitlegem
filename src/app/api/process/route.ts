@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { uploadToGemini, generateSubtitles, generateSubtitlesInline, translateSubtitles } from "@/lib/gemini";
+import { uploadToGemini } from "@/lib/gemini";
 import { extractAudio, getAudioCodec, createSampleClip } from "@/lib/ffmpeg-utils"; // Added createSampleClip
 import fs from "fs";
 import path from "path";
@@ -8,7 +8,6 @@ import { getStorageConfig, isPathSafe } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
-import { pipeline } from "stream/promises";
 import { secureDelete } from "@/lib/security";
 import { validateAuth } from "@/lib/auth";
 import { SubtitleLine } from "@/types/subtitle";
@@ -86,7 +85,7 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
       }
 
-      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model, clipId, sampleDuration, promptHints } = validation.data as {
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, clipId, sampleDuration, promptHints } = validation.data as {
         mode: 'reprocess' | 'translate';
         fileUri?: string;
         filePath?: string;
@@ -98,7 +97,6 @@ export async function POST(req: NextRequest) {
         sampleDuration?: number;
         promptHints?: string;
       };
-      const modelName = model || "gemini-2.5-flash";
 
       if (mode === 'reprocess') {
          // We need either a Gemini URI or a local File Path
@@ -275,7 +273,7 @@ export async function POST(req: NextRequest) {
          );
          
          if (cleanupPath && fs.existsSync(cleanupPath)) {
-            try { fs.unlinkSync(cleanupPath); } catch (e) { /* ignore */ }
+            try { fs.unlinkSync(cleanupPath); } catch { /* ignore */ }
          }
          
          return NextResponse.json({ 
@@ -497,7 +495,6 @@ export async function POST(req: NextRequest) {
           const { getGlobalSettings } = await import("@/lib/global-settings-store");
           const { processWithFallback } = await import("@/lib/ai-provider");
           const settings = getGlobalSettings();
-          const targetModel = modelName || "gemini-2.0-flash"; // Favoring 2.0/3.1 flash per user hint
 
           try {
             if (useInlineData) {

@@ -5,7 +5,6 @@ import {
   toProjectTime, 
   toSourceTime,
 } from './timeline-utils';
-import { TimelineClip } from '@/types/subtitle';
 
 describe('timeline-utils properties', () => {
 

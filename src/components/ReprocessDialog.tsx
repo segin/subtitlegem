@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { AlertCircle, RefreshCw, X, Settings, Play, ChevronDown, Check, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { RefreshCw, X, Settings, Play, ChevronDown, Check, AlertTriangle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { loadModels } from "@/lib/model-cache";
 import { PreviewDialog } from './PreviewDialog';
@@ -55,7 +55,7 @@ export function ReprocessDialog({
   const [showDurationMenu, setShowDurationMenu] = useState(false);
   const [previewSubtitles, setPreviewSubtitles] = useState<SubtitleLine[]>([]);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewVideoPath, setPreviewVideoPath] = useState<string | undefined>(undefined);
+  const [previewVideoPath] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (isOpen) {

@@ -1,6 +1,5 @@
 import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
-import { formatTimestamp } from "@/lib/time-utils";
 import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
 
 // Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)
@@ -120,13 +119,6 @@ export function generateAss(
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
         ...subtitles.map(sub => {
-            // For per-line overrides, resolve style: Global -> Project -> Line
-            const lineStyle = resolveTrackStyle(
-                DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle,
-                config.primary,
-                sub.styleOverrides
-            );
-            
             // If line has custom color, use it; otherwise use resolved style
             const customColor = sub.styleOverrides?.color || sub.primaryColor;
             const colorTag = customColor ? `{\\c${hexToAssColor(customColor)}}` : '';

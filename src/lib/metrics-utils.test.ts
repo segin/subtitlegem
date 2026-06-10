@@ -1,6 +1,5 @@
 
 import fs from 'fs';
-import path from 'path';
 import * as fc from 'fast-check';
 import { computeMetrics } from './metrics-utils';
 import { DraftV1, DraftV2 } from './draft-store';

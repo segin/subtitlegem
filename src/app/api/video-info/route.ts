@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
 import { ffprobe } from '@/lib/ffmpeg-utils';
-import { getStorageConfig } from '@/lib/storage-config';
 
 export async function GET(req: NextRequest) {
   try {

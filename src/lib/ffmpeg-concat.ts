@@ -1,8 +1,6 @@
 import { spawn } from 'child_process';
-import path from 'path';
-import fs from 'fs';
-import { MultiVideoProjectState, ProjectConfig, TimelineClip, TimelineImage, VideoClip, ImageAsset } from '@/types/subtitle';
-import { getClipEndTime, getProjectDuration, toProjectTime } from './timeline-utils';
+import { MultiVideoProjectState, ProjectConfig, TimelineClip, TimelineImage } from '@/types/subtitle';
+import { getProjectDuration } from './timeline-utils';
 
 export interface BurnOptions {
   hwaccel?: 'nvenc' | 'amf' | 'qsv' | 'videotoolbox' | 'vaapi' | 'v4l2m2m' | 'rkmpp' | 'omx' | 'none';
@@ -109,7 +107,6 @@ export function generateFilterComplex(
         // Actually, for image inputs we usually use -loop 1 -t <duration> in input args or trim filter
         // We handle input args separately. Assuming infinite loop input, we trim here.
         // But better: use trim on the filter
-        const duration = (item as TimelineImage).duration;
         // Also need to set fps to match project
         // scale first, then setsar, then fps
         // BUT: Images don't have timebases like videos.
@@ -238,7 +235,7 @@ export async function exportMultiVideo(
         ];
         
         // Generate Filter Complex
-        const { filterGraph, map } = generateFilterComplex(inputs, timelineItems, project.projectConfig);
+        const { filterGraph } = generateFilterComplex(inputs, timelineItems, project.projectConfig);
         
         // Append subtitle burn to the video stream of the concat result
         // We take [vconcat], burn subtitles, output to [vfinal]

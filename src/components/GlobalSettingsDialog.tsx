@@ -5,7 +5,7 @@ import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS, AIProvider } from "@/types/sub
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette, Lock, LogOut } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
-import { normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
+import { getMarginPreviewStyle } from "@/lib/style-resolver";
 
 interface GlobalSettingsDialogProps {
   isOpen: boolean;
@@ -43,7 +43,6 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [models, setModels] = useState<string[]>([]);
 
   // Auth State
   const [authEnabled, setAuthEnabled] = useState(false);
@@ -87,7 +86,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
       } else {
         setLoginStatus('error');
       }
-    } catch (err) {
+    } catch {
       setLoginStatus('error');
     }
   };
@@ -121,11 +120,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
 
   const loadModels = async () => {
     try {
-      const res = await fetch('/api/models');
-      if (res.ok) {
-        const data = await res.json();
-        setModels(data.models?.map((m: { name: string }) => m.name) || []);
-      }
+      await fetch('/api/models');
     } catch (err) {
       console.error('Failed to load models:', err);
     }

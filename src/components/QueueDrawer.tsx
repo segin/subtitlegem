@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useSyncExternalStore } from "react";
 import { QueueItem } from "@/types/queue";
-import { X, Layers, Download, Trash2, ChevronLeft, ChevronRight, Play, Pause, RefreshCw, CheckCircle, Eye } from "lucide-react";
+import { X, Layers, Download, Trash2, Play, Pause, RefreshCw, Eye } from "lucide-react";
 
 interface QueueDrawerProps {
   items: QueueItem[];
@@ -75,6 +75,8 @@ export function QueueDrawer({
     };
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
+    // setIsOpen is behavior-stable; only isDesktop should re-bind this listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isDesktop]);
 
   // Separate items: queue (pending/processing/failed) vs completed

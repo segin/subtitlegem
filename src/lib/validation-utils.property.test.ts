@@ -15,9 +15,7 @@ describe('validation-utils properties', () => {
 
   // We manually test the failure case because fuzzing 10001 items is slow
   test('validateSubtitleArraySize throws for array > MAX_SUBTITLES', () => {
-     // Mock array with length property to simulate huge array without allocating
-     const hugeArray = { length: MAX_SUBTITLES + 1, [Symbol.iterator]: function*() {} } as unknown as unknown[];
-     // IsArray check might fail on fake object. 
+     // IsArray check might fail on fake object.
      // The utility checks `Array.isArray`.
      // So we must use real array. We can use `new Array(MAX_SUBTITLES + 1)` which is sparse/fast?
      const sparseArray = new Array(MAX_SUBTITLES + 1);

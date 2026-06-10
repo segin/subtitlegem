@@ -1,4 +1,4 @@
-import { saveDraftV1, loadDraft, saveDraftV2, renameDraft } from './draft-store';
+import { saveDraftV1, saveDraftV2, renameDraft } from './draft-store';
 import { SubtitleConfig, ProjectConfig } from '@/types/subtitle';
 
 // Mock better-sqlite3

@@ -1,5 +1,4 @@
 import { formatBytes, estimateH264Size } from './video-estimate-utils';
-import { REFERENCE_PIXELS } from '@/types/constants';
 
 describe('video-estimate-utils', () => {
   
@@ -34,8 +33,6 @@ describe('video-estimate-utils', () => {
     // Total Bits: 4692 * 1000 * 60 = 281,520,000 bits
     // Total Bytes: 35,190,000 bytes (~33.5 MB)
     
-    const BASE_1080P_PIXELS = 1920 * 1080; // Should match REFERENCE_PIXELS if using 1080p base
-
     it('calculates estimation for base 1080p params', () => {
       const size = estimateH264Size({
         duration: 60,

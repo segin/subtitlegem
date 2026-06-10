@@ -36,7 +36,7 @@ export const loadProjectFile = (file: File): Promise<ProjectFile> => {
                 } else {
                     reject(new Error("Invalid project file structure."));
                 }
-            } catch (e) {
+            } catch {
                 reject(new Error("Failed to parse project file."));
             }
         };

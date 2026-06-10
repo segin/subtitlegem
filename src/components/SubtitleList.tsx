@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { SubtitleLine } from "@/types/subtitle";
-import { Plus, Trash2, Wand2, Clock, Trash, FileText, Code, Settings, List, MonitorPlay, LogOut, Check, Move, Type, Palette, Layout, Upload, FileVideo, AlertCircle, Film, Cpu, Languages, Loader2, Scissors } from "lucide-react";
+import { Plus, Trash2, Wand2, Clock, Check, Move, Scissors } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
 import { formatTimestamp } from "@/lib/time-utils";
 
@@ -19,7 +19,7 @@ interface SubtitleListProps {
 }
 
 export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, secondaryLanguage, selectedIds, onSelect, onSplit }: SubtitleListProps) {
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [, setEditingId] = useState<string | null>(null);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
 
   const handleTextChange = (id: string, field: 'text' | 'secondaryText', value: string) => {
