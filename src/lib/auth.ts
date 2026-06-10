@@ -1,12 +1,26 @@
 import { NextRequest } from "next/server";
+import crypto from "crypto";
 import { validateSessionToken } from "./session";
+
+/**
+ * Constant-time string comparison to avoid leaking the password via timing.
+ * Returns false (without short-circuiting on content) when lengths differ.
+ */
+function safeEqual(candidate: string | null | undefined, secret: string): boolean {
+  if (typeof candidate !== "string") return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
 
 /**
  * Validates if the request is authorized.
  *
- * Authentication is only enforced if the API_PASSWORD environment variable is set.
- * This allows the app to remain "zero-config" for local/trusted usage while
- * providing security for remote/public deployments.
+ * Authentication is only enforced when the API_PASSWORD environment variable
+ * is set. If it is unset/empty, the app runs in open ("promiscuous") mode and
+ * all requests are allowed — keeping it zero-config for local/trusted use.
+ * When set, credentials are accepted via any of the methods below.
  *
  * Supports:
  * 1. Authorization: Bearer <password>
@@ -16,27 +30,27 @@ import { validateSessionToken } from "./session";
 export function validateAuth(req: NextRequest): boolean {
   const apiPassword = process.env.API_PASSWORD;
 
-  // Authentication is REQUIRED. If no password is set, all requests are denied.
+  // If no password is set, authentication is disabled (open/trusted mode).
   if (!apiPassword || apiPassword.trim() === "") {
-    return false;
+    return true;
   }
 
   // 1. Check Authorization Header (Bearer)
   const authHeader = req.headers.get("authorization");
   if (authHeader) {
     const [type, token] = authHeader.split(" ");
-    if (type.toLowerCase() === "bearer" && token === apiPassword) {
+    if (type.toLowerCase() === "bearer" && safeEqual(token, apiPassword)) {
       return true;
     }
     // Fallback if no "Bearer" prefix
-    if (authHeader === apiPassword) {
+    if (safeEqual(authHeader, apiPassword)) {
       return true;
     }
   }
 
   // 2. Check X-API-Key Header
   const apiKeyHeader = req.headers.get("x-api-key");
-  if (apiKeyHeader === apiPassword) {
+  if (safeEqual(apiKeyHeader, apiPassword)) {
     return true;
   }
 
@@ -47,7 +61,7 @@ export function validateAuth(req: NextRequest): boolean {
   }
   // Legacy: old sb_api_key cookie containing the raw password (pre-session-token)
   const legacyCookie = req.cookies.get("sb_api_key")?.value;
-  if (legacyCookie === apiPassword) {
+  if (safeEqual(legacyCookie, apiPassword)) {
     return true;
   }
 

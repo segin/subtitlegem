@@ -13,8 +13,9 @@ services:
     environment:
       - NODE_ENV=production
       - STAGING_DIR=/app/storage
-      # Pass your API key here or in an .env file
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      # Pass your Gemini API key here or in an .env file.
+      # GEMINI_API_KEY is accepted as an alias for GOOGLE_GENERATIVE_AI_API_KEY.
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-${GEMINI_API_KEY}}
     restart: unless-stopped
 
 volumes:

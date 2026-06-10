@@ -19,10 +19,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
     }
     
-    // The path is now guaranteed to be safe by isPathSafe, so we can resolve it without further checks.
     const resolvedPath = path.resolve(filePath);
 
-    if (!fs.existsSync(resolvedPath)) {
+    // Reject symlinks so they can't point outside the staging jail.
+    const { isRegularNonSymlinkFile } = await import("@/lib/path-utils");
+    if (!isRegularNonSymlinkFile(resolvedPath)) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 

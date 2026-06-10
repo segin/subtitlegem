@@ -90,7 +90,7 @@ src/
 > [!CAUTION]
 > This application is designed for single-user/trusted network deployment. Do NOT expose to public internet without additional security measures.
 
-- **Authentication REQUIRED** - The `API_PASSWORD` environment variable must be set.
+- **Optional authentication** - Set `API_PASSWORD` to require credentials on API routes. If unset, the app runs in open ("promiscuous") mode for trusted/local use — keep it behind a firewall/VPN.
 - **API keys** - Stored in `.env` file (never commit)
 - **File access** - Restricted to `STAGING_DIR` path
 - **Path validation** - Always sanitize file paths to prevent traversal attacks
@@ -99,9 +99,11 @@ src/
 
 | Variable | Purpose | Required |
 |----------|---------|----------|
-| `GEMINI_API_KEY` | Google Gemini API authentication | Yes |
-| `API_PASSWORD` | Application authentication password | Yes |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Google Gemini API authentication (canonical name). `GEMINI_API_KEY` is accepted as an alias. | Yes |
+| `API_PASSWORD` | Enables API authentication when set; leave unset for open/trusted local use | No |
 | `STAGING_DIR` | Root directory for file storage | No (defaults to `./storage`) |
+| `SECURE_COOKIES` | Set to `false` to allow session cookies over plain HTTP (local dev) | No |
+| `SECURE_ERASE` | Set to `true`/`1` to overwrite files before deletion | No |
 
 ## Global Settings (via `/api/settings`)
 

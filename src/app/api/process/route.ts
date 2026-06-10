@@ -320,7 +320,15 @@ export async function POST(req: NextRequest) {
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-2.5-flash";
     let originalFilename = "";
-    
+
+    // Resolve the per-file size limit up front so we can abort mid-stream
+    // rather than writing the entire (potentially huge) upload to disk first.
+    const { getGlobalSettings: getSettings } = await import("@/lib/global-settings-store");
+    const uploadSettings = getSettings();
+    const maxFileSizeMB = uploadSettings.maxFileSizeMB ?? 51200; // Default: 50 GB
+    const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
+    let sizeExceeded = false;
+
     // We need to wait for BOTH busboy to finish parsing AND the file write stream to finish writing.
     const fileWritePromise = new Promise<void>((resolve, reject) => {
        const bb = busboy({ headers: { "content-type": contentType } });
@@ -330,15 +338,32 @@ export async function POST(req: NextRequest) {
           const { filename, mimeType: fileMime } = info;
           mimeType = fileMime;
           originalFilename = filename;
-          
+
           const ext = filename.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || "tmp";
           videoPath = path.join(tempDir, `${uuidv4()}.${ext}`);
           console.log(`Streaming file to ${videoPath}`);
 
           const writeStream = fs.createWriteStream(videoPath);
+
+          // Enforce the size limit as bytes arrive; abort the moment it's exceeded.
+          let bytesWritten = 0;
+          file.on("data", (chunk: Buffer) => {
+            bytesWritten += chunk.length;
+            if (!sizeExceeded && bytesWritten > maxFileSizeBytes) {
+              sizeExceeded = true;
+              file.unpipe(writeStream);
+              writeStream.destroy();
+              file.resume(); // drain the rest without buffering
+              bb.destroy();
+              reject(new Error("FILE_TOO_LARGE"));
+            }
+          });
+
           file.pipe(writeStream);
 
-          writeStream.on("error", reject);
+          writeStream.on("error", (err) => {
+            if (!sizeExceeded) reject(err);
+          });
           writeStream.on("finish", () => {
              console.log("Write stream finished.");
              resolve();
@@ -362,7 +387,21 @@ export async function POST(req: NextRequest) {
       nodeStream.pipe(bb);
     });
     
-    await fileWritePromise;
+    try {
+      await fileWritePromise;
+    } catch (err: any) {
+      if (sizeExceeded || err?.message === "FILE_TOO_LARGE") {
+        console.warn(`[Process] Upload aborted: exceeded ${maxFileSizeMB} MB limit`);
+        if (videoPath && fs.existsSync(videoPath)) {
+          secureDelete(videoPath).catch(e => console.error("Cleanup error", e));
+        }
+        return NextResponse.json(
+          { error: `File too large. Maximum allowed: ${maxFileSizeMB} MB. Adjust in Global Settings.` },
+          { status: 413 }
+        );
+      }
+      throw err;
+    }
 
     if (!videoPath) {
         return NextResponse.json({ error: "No video file provided" }, { status: 400 });
@@ -383,20 +422,8 @@ export async function POST(req: NextRequest) {
     const stats = fs.statSync(videoPath);
     const fileSizeInMB = stats.size / (1024 * 1024);
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
-
-    // Enforce configurable per-file size limit
-    const { getGlobalSettings: getSettings } = await import("@/lib/global-settings-store");
-    const uploadSettings = getSettings();
-    const maxFileSizeMB = uploadSettings.maxFileSizeMB ?? 51200; // Default: 50 GB
-    if (fileSizeInMB > maxFileSizeMB) {
-      console.warn(`[Process] File exceeds max size: ${fileSizeInMB.toFixed(0)} MB > ${maxFileSizeMB} MB limit`);
-      secureDelete(videoPath).catch(e => console.error("Cleanup error", e));
-      return NextResponse.json(
-        { error: `File too large (${fileSizeInMB.toFixed(0)} MB). Maximum allowed: ${maxFileSizeMB} MB. Adjust in Global Settings.` },
-        { status: 413 }
-      );
-    }
-    const stagingDir = tempDir; 
+    // Note: the per-file size limit is enforced mid-stream above; no post-write check needed.
+    const stagingDir = tempDir;
     const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 
     // Use streaming response for progress feedback

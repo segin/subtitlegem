@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { getGlobalSettings, saveGlobalSettings, resetGlobalSettings } from "@/lib/global-settings-store";
 import { GlobalSettings } from "@/types/subtitle";
+
+const HWACCELS = ['nvenc', 'amf', 'qsv', 'videotoolbox', 'vaapi', 'v4l2m2m', 'rkmpp', 'omx', 'none'] as const;
+const PRESETS = ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow'] as const;
+
+// Validate the bounded/scalar fields; style objects are accepted as-is.
+const SettingsSchema = z.object({
+  defaultPrimaryStyle: z.unknown().optional(),
+  defaultSecondaryStyle: z.unknown().optional(),
+  defaultPrimaryLanguage: z.string().max(100).optional(),
+  defaultSecondaryLanguage: z.string().max(100).optional(),
+  subtitleStyle: z.unknown().optional(),
+  defaultHwaccel: z.enum(HWACCELS).optional(),
+  defaultPreset: z.enum(PRESETS).optional(),
+  defaultCrf: z.number().int().min(0).max(51).optional(),
+  defaultGeminiModel: z.string().max(200).optional(),
+  aiFallbackChain: z.array(z.unknown()).optional(),
+  maxFileSizeMB: z.number().positive().max(1024 * 1024).optional(),     // <= 1 PB
+  maxProjectSizeMB: z.number().positive().max(1024 * 1024).optional(),
+}).passthrough();
 
 /**
  * GET /api/settings - Get current global settings
@@ -21,7 +41,15 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
   try {
     const body = await req.json();
-    
+
+    const validation = SettingsSchema.safeParse(body);
+    if (!validation.success) {
+      return NextResponse.json(
+        { error: "Invalid settings", details: validation.error.format() },
+        { status: 400 }
+      );
+    }
+
     // Merge with existing settings to allow partial updates
     const existing = getGlobalSettings();
     const settings: GlobalSettings = {

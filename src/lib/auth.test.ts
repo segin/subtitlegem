@@ -31,16 +31,16 @@ describe("auth utility", () => {
   });
 
   describe("validateAuth", () => {
-    it("should return false when API_PASSWORD is NOT set", () => {
+    it("should return true (open mode) when API_PASSWORD is NOT set", () => {
       delete process.env.API_PASSWORD;
       const req = mockRequest();
-      expect(validateAuth(req)).toBe(false);
+      expect(validateAuth(req)).toBe(true);
     });
 
-    it("should return false when API_PASSWORD is empty string", () => {
+    it("should return true (open mode) when API_PASSWORD is empty string", () => {
       process.env.API_PASSWORD = "";
       const req = mockRequest();
-      expect(validateAuth(req)).toBe(false);
+      expect(validateAuth(req)).toBe(true);
     });
 
     it("should return false when API_PASSWORD is set but no credentials provided", () => {

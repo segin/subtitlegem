@@ -4,6 +4,7 @@
  */
 
 import path from 'path';
+import fs from 'fs';
 
 /**
  * Validate that a file path is within an allowed directory
@@ -35,4 +36,24 @@ export function validatePathWithinDir(
  */
 export function sanitizeFilename(filename: string): string {
   return filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+}
+
+/**
+ * Verify a path points to a real regular file that is NOT a symlink.
+ *
+ * Path-prefix checks (isPathSafe / validatePathWithinDir) confirm the *link*
+ * lives inside the staging jail, but a symlink could still point outside it.
+ * Use this before reading/serving/transcoding a file to keep symlinks from
+ * escaping the jail. Mirrors the lstat guard already used by /api/download.
+ *
+ * @param resolvedPath - An absolute, already path-validated file path
+ * @returns true only if the entry exists, is a regular file, and is not a symlink
+ */
+export function isRegularNonSymlinkFile(resolvedPath: string): boolean {
+  try {
+    const stats = fs.lstatSync(resolvedPath);
+    return stats.isFile() && !stats.isSymbolicLink();
+  } catch {
+    return false;
+  }
 }

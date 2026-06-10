@@ -58,7 +58,20 @@ export async function processJob(
          if (!item.metadata.projectState) {
              throw new Error('Missing projectState for multi-export job');
          }
-         
+
+         // Re-validate every source path from the persisted project state before
+         // it reaches FFmpeg (defense-in-depth against tampered queue metadata).
+         const projectState = item.metadata.projectState;
+         const sourcePaths: string[] = [
+             ...(projectState.clips || []).map((c: { filePath: string }) => c.filePath),
+             ...(projectState.imageAssets || []).map((a: { filePath: string }) => a.filePath),
+         ];
+         for (const p of sourcePaths) {
+             if (!p || !isPathSafe(p)) {
+                 throw new Error('Unauthorized path in project state');
+             }
+         }
+
          resultPath = await exportMultiVideo(
              item.metadata.projectState,
              assPath || '',

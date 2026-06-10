@@ -237,6 +237,8 @@ export async function GET(req: NextRequest) {
   const stat = await fsPromises.stat(filePath);
   const fileStream = fs.createReadStream(filePath);
   const fileName = path.basename(filePath);
+  const asciiName = fileName.replace(/["\\\r\n]/g, "_");
+  const encodedName = encodeURIComponent(fileName);
 
   const stream = new ReadableStream({
     start(controller) {
@@ -252,7 +254,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(stream as any, {
     headers: {
       "Content-Type": "video/mp4",
-      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
       "Content-Length": stat.size.toString(),
     },
   });

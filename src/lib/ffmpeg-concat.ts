@@ -38,7 +38,19 @@ export function generateFilterComplex(
   const concatVideoSegments: string[] = [];
   const concatAudioSegments: string[] = [];
 
-  const { width: masterWidth, height: masterHeight } = projectConfig;
+  // Validate config numerics that get interpolated into the filter graph so
+  // malformed/attacker-controlled values can't inject extra filters.
+  const masterWidth = Math.trunc(Number(projectConfig.width));
+  const masterHeight = Math.trunc(Number(projectConfig.height));
+  const fps = Number(projectConfig.fps);
+  if (!Number.isInteger(masterWidth) || !Number.isInteger(masterHeight) ||
+      masterWidth <= 0 || masterHeight <= 0 ||
+      masterWidth > 16384 || masterHeight > 16384) {
+    throw new Error(`Invalid project dimensions: ${projectConfig.width}x${projectConfig.height}`);
+  }
+  if (!Number.isFinite(fps) || fps <= 0 || fps > 1000) {
+    throw new Error(`Invalid project fps: ${projectConfig.fps}`);
+  }
 
   // sort timeline items by start time to ensure correct concat order
   // although timeline.sort() might be enough, let's be safe
@@ -104,9 +116,15 @@ export function generateFilterComplex(
         // We will scale first.
     } else {
         const clip = item as TimelineClip;
-        vChain += `trim=start=${clip.sourceInPoint}:duration=${clip.clipDuration},setpts=PTS-STARTPTS`;
+        // Coerce timing values to finite numbers before interpolation.
+        const start = Number(clip.sourceInPoint);
+        const duration = Number(clip.clipDuration);
+        if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) {
+            throw new Error(`Invalid clip timing for ${clip.id}`);
+        }
+        vChain += `trim=start=${start}:duration=${duration},setpts=PTS-STARTPTS`;
         if (aChain) {
-            aChain += `atrim=start=${clip.sourceInPoint}:duration=${clip.clipDuration},asetpts=PTS-STARTPTS`;
+            aChain += `atrim=start=${start}:duration=${duration},asetpts=PTS-STARTPTS`;
         }
     }
 
@@ -121,7 +139,7 @@ export function generateFilterComplex(
     vChain += `,${scaleFilter}`;
     
     // 3. Frame rate compliance
-    vChain += `,fps=${projectConfig.fps}`;
+    vChain += `,fps=${fps}`;
     
     vChain += `[${videoOutLabel}]`;
     filters.push(vChain);
