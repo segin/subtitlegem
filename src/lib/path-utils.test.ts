@@ -2,7 +2,7 @@
  * path-utils.test.ts - Unit, Property, and Fuzz tests for path validation
  */
 
-import { validatePathWithinDir, sanitizeFilename } from './path-utils';
+import { validatePathWithinDir, sanitizeFilename, isSafeId } from './path-utils';
 import * as fc from 'fast-check';
 import path from 'path';
 
@@ -127,5 +127,20 @@ describe('path-utils', () => {
         );
       });
     });
+  });
+});
+
+describe('isSafeId', () => {
+  it('accepts UUIDs and simple identifiers', () => {
+    expect(isSafeId('3f2b8c1e-9a4d-4e2f-8b1a-0c9d8e7f6a5b')).toBe(true);
+    expect(isSafeId('draft_123')).toBe(true);
+  });
+
+  it('rejects traversal, separators, and non-strings', () => {
+    for (const bad of ['../../../home/user', '..', 'a/b', 'a\\b', '', 'x.json', 'a b', 'x'.repeat(129)]) {
+      expect(isSafeId(bad)).toBe(false);
+    }
+    expect(isSafeId(undefined)).toBe(false);
+    expect(isSafeId(42)).toBe(false);
   });
 });

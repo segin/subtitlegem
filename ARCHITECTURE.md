@@ -304,7 +304,10 @@ The application includes a production-ready `Dockerfile` and `docker-compose.yml
 ```bash
 docker-compose up --build
 ```
-This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes.
+This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes. The container runs as the unprivileged `node` user, and Compose publishes the port on `127.0.0.1` only; set `API_PASSWORD` before exposing it more widely.
+
+> **Upgrading an existing volume:** volumes created by older (root) images are root-owned. Fix ownership once with
+> `docker run --rm -v subtitlegem_storage:/s alpine chown -R 1000:1000 /s`.
 
 ---
 
@@ -312,12 +315,13 @@ This automatically handles system dependencies (FFmpeg, Node 20) and persistent 
 
 | Aspect | Implementation |
 |--------|---------------|
-| **Authentication** | None (designed for single-user/trusted network) |
-| **Authorization** | None |
-| **API Key Storage** | `.env` file (`GOOGLE_GENERATIVE_AI_API_KEY`) |
-| **File Access** | Strict path validation using `isPathSafe` utility (Staging only) |
-| **Input Validation** | Zod schemas in `/api/process`, `/api/cleanup`, `/api/export`, `/api/queue` |
-| **Command Safety** | All external calls (FFmpeg/FFprobe) use `spawn` with array arguments to prevent injection. |
+| **Authentication** | Optional: enforced in `src/proxy.ts` for all `/api/*` routes when `API_PASSWORD` is set; open mode otherwise |
+| **Authorization** | None (single user) |
+| **CSRF** | `src/proxy.ts` rejects state-changing `/api/*` requests whose `Origin` doesn't match the host (or that browsers mark `Sec-Fetch-Site: cross-site`), in both open and authenticated modes |
+| **API Key Storage** | `.env` file (`GOOGLE_GENERATIVE_AI_API_KEY`). Per-provider keys in the AI fallback chain are stored in `settings.db` and redacted (`__stored__`) in `/api/settings` responses. Server env keys (`OPENAI_API_KEY`, `DEEPSEEK_API_KEY`) are only sent to the provider's default endpoint, never to a custom `endpoint` |
+| **File Access** | Strict path validation using `isPathSafe` utility (Staging only). Draft/project IDs used as path segments must pass `isSafeId` (`[A-Za-z0-9_-]{1,128}`) |
+| **Input Validation** | Zod schemas in `/api/process`, `/api/cleanup`, `/api/settings` (incl. fallback chain) |
+| **Command Safety** | All external calls (FFmpeg/FFprobe) use `spawn` with array arguments. Every value interpolated into an FFmpeg filter graph is coerced to a finite number first (`ffmpeg-concat.ts`, `ffmpeg-utils.ts`). |
 
 ⚠️ **Warning:** This application is NOT designed for public internet exposure. Use behind firewall or VPN.
 
@@ -402,7 +406,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-02-12 |
+| **Date of Last Update** | 2026-10-14 |
 
 ---
 

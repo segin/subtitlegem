@@ -5,6 +5,7 @@ import { Draft, DraftSummary } from "@/lib/draft-store";
 import { SubtitleLine } from "@/types/subtitle";
 import { getStagingDir } from "@/lib/storage-config";
 import { getDirectorySizeAsync } from "@/lib/storage-utils";
+import { isSafeId } from "@/lib/path-utils";
 
 export interface DraftMetrics {
   sourceSize: number;
@@ -26,6 +27,9 @@ export interface ProjectMetadata {
  * @param draftId Project ID
  */
 export function getMetadataPath(draftId: string): string {
+  if (!isSafeId(draftId)) {
+    throw new Error("Invalid draft ID");
+  }
   const stagingDir = getStagingDir();
   const metadataDir = path.join(stagingDir, 'metadata');
   if (!fs.existsSync(metadataDir)) {

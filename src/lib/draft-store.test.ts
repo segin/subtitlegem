@@ -1,4 +1,5 @@
-import { saveDraftV1, saveDraftV2, renameDraft } from './draft-store';
+import { saveDraftV1, saveDraftV2, renameDraft, deleteDraft } from './draft-store';
+import fs from 'fs';
 import { SubtitleConfig, ProjectConfig } from '@/types/subtitle';
 
 // Mock better-sqlite3
@@ -155,6 +156,32 @@ describe('draft-store', () => {
 
         const result = renameDraft('non-existent', 'New Name');
         expect(result).toBe(false);
+    });
+  });
+
+  describe('draft ID validation', () => {
+    it('refuses to save a draft with a path-traversal ID', () => {
+      expect(() => saveDraftV1({ id: '../../../home/user', name: 'x' })).toThrow('Invalid draft ID');
+      expect(mPrepare).not.toHaveBeenCalledWith(expect.stringContaining('INSERT INTO drafts'));
+    });
+
+    it('deletes a legacy row with an unsafe ID without touching the filesystem', () => {
+      mGet.mockReturnValueOnce({
+        id: '../../../home/user',
+        name: 'evil',
+        version: 1,
+        video_path: '/mock/staging/temp/video.mp4',
+        created_at: Date.now(),
+        updated_at: Date.now(),
+      });
+      (fs.existsSync as jest.Mock).mockReturnValue(true);
+
+      expect(deleteDraft('../../../home/user')).toBe(true);
+      expect(fs.rmSync).not.toHaveBeenCalled();
+      expect(fs.unlinkSync).not.toHaveBeenCalled();
+      expect(mPrepare).toHaveBeenCalledWith('DELETE FROM drafts WHERE id = ?');
+
+      (fs.existsSync as jest.Mock).mockReturnValue(false);
     });
   });
 });

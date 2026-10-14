@@ -100,7 +100,7 @@ describe('ffmpeg-concat', () => {
       // Check for silent audio gap
       expect(filterGraph).toContain('anullsrc=cl=stereo:r=44100:d=5[gapa0]');
       // Verify gap is in concat
-      expect(filterGraph).toContain('[gapv0][v1][gapa0][a1]concat=n=2');
+      expect(filterGraph).toContain('[gapv0][gapa0][v1][a1]concat=n=2');
     });
 
     test('handles different scaling modes', () => {
@@ -134,10 +134,30 @@ describe('ffmpeg-concat', () => {
 
       const { filterGraph } = generateFilterComplex(inputs, timeline, config);
 
+      // Verify the looped image input is trimmed to its display duration
+      expect(filterGraph).toContain('[2:v]trim=duration=5,setpts=PTS-STARTPTS,scale=');
       // Verify silent audio for image
       expect(filterGraph).toContain('anullsrc=cl=stereo:r=44100:d=5[a0]');
       // Verify image scaling and fps
       expect(filterGraph).toContain('fps=30[v0]');
+    });
+
+    test('rejects non-numeric image duration (filter injection)', () => {
+      const timeline = [{
+        id: 'img1', type: 'image', imageAssetId: 'i1', projectStartTime: 0,
+        duration: '1[a0];color=black,drawtext=textfile=/proc/self/environ[vX]',
+      }] as unknown as TimelineImage[];
+
+      expect(() => generateFilterComplex(inputs, timeline, config)).toThrow('Invalid timing');
+    });
+
+    test('rejects non-numeric projectStartTime (filter injection via gap)', () => {
+      const timeline = [{
+        id: 'c1', videoClipId: 'v1', sourceInPoint: 0, clipDuration: 10,
+        projectStartTime: '5[gapv0];movie=/etc/passwd',
+      }] as unknown as TimelineClip[];
+
+      expect(() => generateFilterComplex(inputs, timeline, config)).toThrow('Invalid timing');
     });
 
     test('warns and skips if input ID is missing', () => {

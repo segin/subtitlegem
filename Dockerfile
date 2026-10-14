@@ -9,7 +9,7 @@ WORKDIR /app
 
 # Install dependencies first for caching
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -20,7 +20,11 @@ RUN npm run build
 # Cleanup build tools to reduce image size (optional, but good practice)
 # We keep python3 as some runtime native bindings might rely on it, but usually not needed after build.
 # We definitely need ffmpeg at runtime.
-RUN apk del make g++
+RUN npm prune --omit=dev && apk del make g++
+
+# Run as the unprivileged "node" user that ships with the base image
+RUN mkdir -p /app/storage && chown -R node:node /app/storage /app/.next
+USER node
 
 # Expose the configured port
 EXPOSE 3050
