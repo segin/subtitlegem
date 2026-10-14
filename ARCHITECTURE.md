@@ -292,11 +292,11 @@ interface ProjectMetadata {
 2. **Start the server**:
    ```bash
    # Runs on port 3050, accessible from all network interfaces
-   npm run start -- -p 3050 -H 0.0.0.0
+   npm run start -- -H 0.0.0.0
    ```
 3. **Process Management**: Use PM2 to keep the service running in the background.
    ```bash
-   pm2 start npm --name "subtitlegem" -- start -- -p 3050
+   pm2 start npm --name "subtitlegem" -- start
    ```
 
 #### 2. Docker (Recommended)

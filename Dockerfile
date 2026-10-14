@@ -35,4 +35,4 @@ ENV PORT=3050
 
 # Start the application
 # Binds to 0.0.0.0 to be accessible outside the container
-CMD ["npm", "start", "--", "-p", "3050", "-H", "0.0.0.0"]
+CMD ["npm", "start", "--", "-H", "0.0.0.0"]
