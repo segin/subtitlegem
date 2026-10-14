@@ -8,6 +8,7 @@ const fsPromises = fs.promises;
 import * as path from "path";
 import { getStagingDir } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
+import { isSafeId } from "@/lib/path-utils";
 
 export const runtime = 'nodejs';
 
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
        const jobId = uuidv4();
        // Use project ID if available, otherwise fall back to job ID
        const draftId = project.id || body.draftId;
+       if (draftId && !isSafeId(draftId)) {
+         return NextResponse.json({ error: 'Invalid project ID' }, { status: 400 });
+       }
        const exportDir = draftId 
          ? path.join(stagingDir, "exports", draftId)
          : path.join(stagingDir, "exports", jobId);
@@ -137,6 +141,10 @@ export async function POST(req: NextRequest) {
       await fsPromises.access(resolvedPath);
     } catch {
       return NextResponse.json({ error: "Video file not found" }, { status: 404 });
+    }
+
+    if (draftId && !isSafeId(draftId)) {
+      return NextResponse.json({ error: 'Invalid draft ID' }, { status: 400 });
     }
 
     // Generate unique ID and determine export directory

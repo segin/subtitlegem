@@ -150,9 +150,18 @@ async function callGenerate(config: ModelConfig, params: AIParams): Promise<Part
   throw new Error(`Provider ${config.provider} does not support 'generate' task yet.`);
 }
 
+/**
+ * Pick the API key for a provider call. Server-side env keys are only sent to
+ * the provider's default endpoint, never to a custom endpoint from settings.
+ */
+function resolveApiKey(config: ModelConfig, envKey: string | undefined): string | undefined {
+  if (config.apiKey) return config.apiKey;
+  return config.endpoint ? undefined : envKey;
+}
+
 async function callOpenAIGenerate(config: ModelConfig, params: AIParams): Promise<Partial<AIResult>> {
     const endpoint = config.endpoint || 'https://api.openai.com/v1';
-    const apiKey = config.apiKey || process.env.OPENAI_API_KEY;
+    const apiKey = resolveApiKey(config, process.env.OPENAI_API_KEY);
 
     if (!apiKey) throw new Error(`API Key missing for ${config.provider}`);
 
@@ -251,7 +260,7 @@ async function callTranslate(config: ModelConfig, params: AIParams) {
 
 async function callOpenAICompatible(config: ModelConfig, params: AIParams) {
   const endpoint = config.endpoint || (config.provider === 'deepseek' ? 'https://api.deepseek.com/v1' : 'https://api.openai.com/v1');
-  const apiKey = config.apiKey || (config.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY);
+  const apiKey = resolveApiKey(config, config.provider === 'deepseek' ? process.env.DEEPSEEK_API_KEY : process.env.OPENAI_API_KEY);
 
   if (!apiKey && config.provider !== 'ollama' && config.provider !== 'local') {
     throw new Error(`API Key missing for ${config.provider}`);

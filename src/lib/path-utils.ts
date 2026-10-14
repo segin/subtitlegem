@@ -30,6 +30,16 @@ export function validatePathWithinDir(
   return { isValid, resolvedPath };
 }
 
+const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+/**
+ * Check that an identifier (draft/project ID) is safe to use as a single path
+ * segment: no separators, dots, or other characters that could escape a directory.
+ */
+export function isSafeId(id: unknown): id is string {
+  return typeof id === 'string' && SAFE_ID_PATTERN.test(id);
+}
+
 /**
  * Sanitize a filename by removing unsafe characters
  * Keeps alphanumeric, dots, hyphens, underscores only

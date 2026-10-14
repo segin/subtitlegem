@@ -4,7 +4,9 @@ services:
     image: subtitlegem:latest
     container_name: subtitlegem
     ports:
-      - "3050:3050"
+      # Published on localhost only. To reach it from other machines, set
+      # API_PASSWORD below and change this to "3050:3050" (or use a reverse proxy).
+      - "127.0.0.1:3050:3050"
     volumes:
       # Persistent storage for uploads, database, and exports
       - subtitlegem_storage:/app/storage
@@ -16,6 +18,11 @@ services:
       # Pass your Gemini API key here or in an .env file.
       # GEMINI_API_KEY is accepted as an alias for GOOGLE_GENERATIVE_AI_API_KEY.
       - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY:-${GEMINI_API_KEY}}
+      # Require a password for the API. Strongly recommended if the port is
+      # reachable from anything other than this machine.
+      - API_PASSWORD=${API_PASSWORD:-}
+      # Session cookies are Secure by default; set to false when serving over plain HTTP.
+      # - SECURE_COOKIES=false
     restart: unless-stopped
 
 volumes:

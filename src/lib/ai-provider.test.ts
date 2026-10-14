@@ -73,3 +73,44 @@ describe('ai-provider', () => {
     });
   });
 });
+
+describe('ai-provider API key scoping', () => {
+  const originalEnv = process.env;
+  const fetchMock = jest.fn();
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, OPENAI_API_KEY: 'env-secret' };
+    fetchMock.mockReset().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ subtitles: [] }) } }] }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  const translateWith = (config: Partial<ModelConfig>) =>
+    processWithFallback('translate', { subtitles: [], targetLanguage: 'French' }, [
+      { id: 'oa', provider: 'openai', modelName: 'gpt-4o', enabled: true, ...config },
+    ]).catch(() => undefined);
+
+  const sentAuthHeader = () => fetchMock.mock.calls[0]?.[1]?.headers?.Authorization;
+
+  test('sends the env key to the default endpoint', async () => {
+    await translateWith({});
+    expect(fetchMock.mock.calls[0][0]).toContain('https://api.openai.com/v1');
+    expect(sentAuthHeader()).toBe('Bearer env-secret');
+  });
+
+  test('never sends the env key to a custom endpoint', async () => {
+    await translateWith({ endpoint: 'https://attacker.example/v1' });
+    expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('env-secret');
+  });
+
+  test('uses an explicitly configured key with a custom endpoint', async () => {
+    await translateWith({ endpoint: 'https://proxy.example/v1', apiKey: 'own-key' });
+    expect(sentAuthHeader()).toBe('Bearer own-key');
+  });
+});

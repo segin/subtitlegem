@@ -60,3 +60,71 @@ describe('proxy auth enforcement', () => {
     expect(res.status).not.toBe(401);
   });
 });
+
+describe('proxy cross-origin protection', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, API_PASSWORD: '' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('blocks state-changing requests from another origin, even in open mode', () => {
+    const req = new NextRequest('http://localhost:3050/api/drafts?id=x', {
+      method: 'DELETE',
+      headers: { origin: 'https://evil.example', host: 'localhost:3050' },
+    });
+    expect(proxy(req).status).toBe(403);
+  });
+
+  it('blocks requests the browser marks as cross-site', () => {
+    const req = new NextRequest('http://localhost:3050/api/drafts', {
+      method: 'POST',
+      headers: { 'sec-fetch-site': 'cross-site', host: 'localhost:3050' },
+    });
+    expect(proxy(req).status).toBe(403);
+  });
+
+  it('blocks an opaque "null" origin', () => {
+    const req = new NextRequest('http://localhost:3050/api/export', {
+      method: 'POST',
+      headers: { origin: 'null', host: 'localhost:3050' },
+    });
+    expect(proxy(req).status).toBe(403);
+  });
+
+  it('allows same-origin state-changing requests', () => {
+    const req = new NextRequest('http://localhost:3050/api/drafts', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:3050', host: 'localhost:3050' },
+    });
+    expect(proxy(req).status).not.toBe(403);
+  });
+
+  it('uses X-Forwarded-Host behind a reverse proxy', () => {
+    const req = new NextRequest('http://127.0.0.1:3050/api/drafts', {
+      method: 'POST',
+      headers: {
+        origin: 'https://subs.example.lan',
+        host: '127.0.0.1:3050',
+        'x-forwarded-host': 'subs.example.lan',
+      },
+    });
+    expect(proxy(req).status).not.toBe(403);
+  });
+
+  it('allows non-browser clients that send no Origin', () => {
+    const req = new NextRequest('http://localhost:3050/api/drafts', { method: 'POST' });
+    expect(proxy(req).status).not.toBe(403);
+  });
+
+  it('does not apply to safe methods', () => {
+    const req = new NextRequest('http://localhost:3050/api/drafts', {
+      headers: { origin: 'https://evil.example', host: 'localhost:3050' },
+    });
+    expect(proxy(req).status).not.toBe(403);
+  });
+});

@@ -5,6 +5,7 @@ import fs from 'fs';
 import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
 import { generateProjectSummary } from "@/lib/summary-generator";
 import { SubtitleLine } from "@/types/subtitle";
+import { isSafeId } from "@/lib/path-utils";
 
 export const runtime = 'nodejs';
 
@@ -131,6 +132,10 @@ export async function POST(req: NextRequest) {
     
     if (!name) {
       return NextResponse.json({ error: "Draft name is required" }, { status: 400 });
+    }
+
+    if (id !== undefined && id !== null && !isSafeId(id)) {
+      return NextResponse.json({ error: "Invalid draft ID" }, { status: 400 });
     }
 
     let draft;

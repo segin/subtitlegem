@@ -127,3 +127,46 @@ describe("/api/settings", () => {
     });
   });
 });
+
+describe("/api/settings AI fallback chain", () => {
+  const storedChain = [
+    { id: "oa", provider: "openai" as const, modelName: "gpt-4o", apiKey: "sk-secret", enabled: true },
+  ];
+
+  beforeEach(() => {
+    mockSaveGlobalSettings.mockClear();
+    mockGetGlobalSettings.mockImplementation(() => ({ ...DEFAULT_GLOBAL_SETTINGS, aiFallbackChain: storedChain }));
+  });
+
+  const put = (body: unknown) => PUT({ json: async () => body } as unknown as NextRequest);
+
+  it("redacts stored API keys on GET", async () => {
+    const data = (await (await GET()).json()) as GlobalSettings;
+    expect(JSON.stringify(data)).not.toContain("sk-secret");
+    expect(data.aiFallbackChain[0].apiKey).toBe("__stored__");
+  });
+
+  it("keeps the stored key when the redacted entry is saved back unchanged", async () => {
+    const res = await put({ aiFallbackChain: [{ ...storedChain[0], apiKey: "__stored__" }] });
+    expect(res.status).toBe(200);
+    expect(mockSaveGlobalSettings.mock.calls[0][0].aiFallbackChain[0].apiKey).toBe("sk-secret");
+    expect(JSON.stringify(await res.json())).not.toContain("sk-secret");
+  });
+
+  it("drops the stored key if the entry is pointed at a new endpoint", async () => {
+    await put({ aiFallbackChain: [{ ...storedChain[0], apiKey: "__stored__", endpoint: "https://attacker.example/v1" }] });
+    expect(mockSaveGlobalSettings.mock.calls[0][0].aiFallbackChain[0].apiKey).toBeUndefined();
+  });
+
+  it("rejects malformed chain entries", async () => {
+    const bad = [
+      [{ id: "x", provider: "openai", modelName: "m", enabled: true, endpoint: "file:///etc/passwd" }],
+      [{ id: "x", provider: "evil", modelName: "m", enabled: true }],
+      ["not-an-object"],
+    ];
+    for (const chain of bad) {
+      expect((await put({ aiFallbackChain: chain })).status).toBe(400);
+    }
+    expect(mockSaveGlobalSettings).not.toHaveBeenCalled();
+  });
+});

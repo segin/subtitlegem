@@ -50,19 +50,34 @@ export function generateFilterComplex(
     throw new Error(`Invalid project fps: ${projectConfig.fps}`);
   }
 
+  // Coerce every timing value that reaches the filter graph to a finite number
+  // up front, so a string like "1[a0];drawtext=..." can't inject filters.
+  const timedItems = timelineClips.map((item) => {
+    const isImage = !('videoClipId' in item);
+    const projectStart = Number(item.projectStartTime);
+    const rawDuration = isImage ? (item as TimelineImage).duration : (item as TimelineClip).clipDuration;
+    const duration = Number(rawDuration);
+    const sourceIn = isImage ? 0 : Number((item as TimelineClip).sourceInPoint);
+    if (!Number.isFinite(projectStart) || projectStart < 0 ||
+        !Number.isFinite(duration) || duration <= 0 ||
+        !Number.isFinite(sourceIn) || sourceIn < 0) {
+      throw new Error(`Invalid timing for timeline item ${item.id}`);
+    }
+    return { item, isImage, projectStart, duration, sourceIn };
+  });
+
   // sort timeline items by start time to ensure correct concat order
-  // although timeline.sort() might be enough, let's be safe
-  const sortedItems = [...timelineClips].sort((a, b) => a.projectStartTime - b.projectStartTime);
-  
+  const sortedItems = timedItems.sort((a, b) => a.projectStart - b.projectStart);
+
   // Fill gaps with black/silent
   let currentTime = 0;
   let segmentIndex = 0;
-  
+
   // Filter chains for each segment
-  sortedItems.forEach((item) => {
+  sortedItems.forEach(({ item, isImage, projectStart, duration, sourceIn }) => {
     // Check for gap
-    if (item.projectStartTime > currentTime) {
-      const gapDuration = item.projectStartTime - currentTime;
+    if (projectStart > currentTime) {
+      const gapDuration = projectStart - currentTime;
       // Add black video gap
       filters.push(`color=s=${masterWidth}x${masterHeight}:c=black:d=${gapDuration}[gapv${segmentIndex}]`);
       // Add silent audio gap
@@ -75,9 +90,8 @@ export function generateFilterComplex(
     
     // Find input index
     let inputIndex = -1;
-    let isImage = false;
-    
-    if ('videoClipId' in item) {
+
+    if (!isImage) {
        // Video Clip
        const clip = item as TimelineClip;
        inputIndex = inputs.findIndex(i => i.id === clip.videoClipId && i.type === 'video');
@@ -85,7 +99,6 @@ export function generateFilterComplex(
        // Image
        const img = item as TimelineImage;
        inputIndex = inputs.findIndex(i => i.id === img.imageAssetId && i.type === 'image');
-       isImage = true;
     }
     
     if (inputIndex === -1) {
@@ -101,27 +114,13 @@ export function generateFilterComplex(
     let vChain = `[${inputLabel}:v]`;
     let aChain = !isImage ? `[${inputLabel}:a]` : null;
 
-    // 1. Trim (if video) or loop/trim (if image)
+    // 1. Trim. Image inputs are looped (-loop 1), so trim them to their display duration.
     if (isImage) {
-        // Images are looped inputs usually, but we need to trim the duration we want
-        // Actually, for image inputs we usually use -loop 1 -t <duration> in input args or trim filter
-        // We handle input args separately. Assuming infinite loop input, we trim here.
-        // But better: use trim on the filter
-        // Also need to set fps to match project
-        // scale first, then setsar, then fps
-        // BUT: Images don't have timebases like videos.
-        // We will scale first.
+        vChain += `trim=duration=${duration},setpts=PTS-STARTPTS`;
     } else {
-        const clip = item as TimelineClip;
-        // Coerce timing values to finite numbers before interpolation.
-        const start = Number(clip.sourceInPoint);
-        const duration = Number(clip.clipDuration);
-        if (!Number.isFinite(start) || start < 0 || !Number.isFinite(duration) || duration <= 0) {
-            throw new Error(`Invalid clip timing for ${clip.id}`);
-        }
-        vChain += `trim=start=${start}:duration=${duration},setpts=PTS-STARTPTS`;
+        vChain += `trim=start=${sourceIn}:duration=${duration},setpts=PTS-STARTPTS`;
         if (aChain) {
-            aChain += `atrim=start=${start}:duration=${duration},asetpts=PTS-STARTPTS`;
+            aChain += `atrim=start=${sourceIn}:duration=${duration},asetpts=PTS-STARTPTS`;
         }
     }
 
@@ -145,7 +144,6 @@ export function generateFilterComplex(
     // Audio handling for Image or Video
     if (isImage) {
        // Generate silent audio for image duration
-       const duration = (item as TimelineImage).duration;
        filters.push(`anullsrc=cl=stereo:r=44100:d=${duration}[${audioOutLabel}]`);
        concatAudioSegments.push(`[${audioOutLabel}]`);
     } else {
@@ -159,19 +157,19 @@ export function generateFilterComplex(
         } else {
             // Case where video has no audio stream? 
             // Fallback to silence
-             const duration = (item as TimelineClip).clipDuration;
              filters.push(`anullsrc=cl=stereo:r=44100:d=${duration}[${audioOutLabel}]`);
              concatAudioSegments.push(`[${audioOutLabel}]`);
         }
     }
 
-    currentTime = item.projectStartTime + (('clipDuration' in item) ? (item as TimelineClip).clipDuration : (item as TimelineImage).duration);
+    currentTime = projectStart + duration;
     segmentIndex++;
   });
 
-  // Concat everything
+  // Concat everything. The concat filter expects inputs grouped per segment: [v0][a0][v1][a1]...
   const n = concatVideoSegments.length;
-  filters.push(`${concatVideoSegments.join('')}${concatAudioSegments.join('')}concat=n=${n}:v=1:a=1[vconcat][aconcat]`);
+  const concatInputs = concatVideoSegments.map((v, i) => `${v}${concatAudioSegments[i]}`).join('');
+  filters.push(`${concatInputs}concat=n=${n}:v=1:a=1[vconcat][aconcat]`);
   
   return {
     filterGraph: filters.join(';'),

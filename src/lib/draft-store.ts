@@ -12,6 +12,7 @@ import { z } from "zod";
 import path from "path";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
+import { isSafeId } from "@/lib/path-utils";
 import { 
   SubtitleLine, 
   SubtitleConfig, 
@@ -136,6 +137,9 @@ export function saveDraftV1(draft: {
 }): DraftV1 {
   const now = Date.now();
   const id = draft.id || uuidv4();
+  if (!isSafeId(id)) {
+    throw new Error("Invalid draft ID");
+  }
   
   const existing = db.prepare("SELECT id FROM drafts WHERE id = ?").get(id);
   
@@ -191,6 +195,9 @@ export function saveDraftV2(draft: {
 }): DraftV2 {
   const now = Date.now();
   const id = draft.id || uuidv4();
+  if (!isSafeId(id)) {
+    throw new Error("Invalid draft ID");
+  }
   
   const existing = db.prepare("SELECT id FROM drafts WHERE id = ?").get(id);
   
@@ -387,6 +394,13 @@ export function deleteDraft(id: string): boolean {
   
   if (!draft) return false;
   
+  // An unsafe ID can only come from a row written before IDs were validated.
+  // Remove the row, but never build filesystem paths from it.
+  if (!isSafeId(id)) {
+    const result = db.prepare("DELETE FROM drafts WHERE id = ?").run(id);
+    return result.changes > 0;
+  }
+
   // Delete associated video files
   if (draft.version === 1 && draft.videoPath && fs.existsSync(draft.videoPath)) {
     try {
