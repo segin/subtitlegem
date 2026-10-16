@@ -4,7 +4,8 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, ArrowUpFromLine, Lock } from "lucide-react";
 import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
 import { checkModelAvailability } from "@/lib/model-cache";
-import { RawSubtitleItem, ProcessResponse } from "@/types/subtitle";
+import { RawSubtitleItem, ProcessResponse, SubtitleLine } from "@/types/subtitle";
+import { createNdjsonReader, describeIncompleteStream } from "@/lib/ndjson-utils";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -31,7 +32,7 @@ export interface UploadedClip {
   originalFilename: string;
   filePath: string;
   geminiFileUri?: string;
-  subtitles: RawSubtitleItem[];
+  subtitles: SubtitleLine[];
   duration?: number;
   width?: number;
   height?: number;
@@ -45,6 +46,15 @@ export interface FileProgress {
   stage?: string;
   percent?: number;
   warning?: string;
+}
+
+/** A message in the NDJSON stream returned by POST /api/process */
+interface StreamMessage {
+  type?: 'progress' | 'complete' | 'error';
+  stage?: string;
+  percent?: number;
+  message?: string;
+  data?: ProcessResponse & { subtitleGenerationFailed?: boolean };
 }
 
 interface VideoUploadProps {
@@ -374,65 +384,71 @@ export function VideoUpload({
       setLoading(false);
     });
 
-    let lastIndex = 0;
+    let finished = false;
+    let lastMessage: unknown = null;
+    const reader = createNdjsonReader((message) => {
+      lastMessage = message;
+      const part = message as StreamMessage;
+      if (part.type === "progress") {
+        // Update UI with server progress
+        setServerStage(part.stage ?? null);
+        if (part.stage === "extracting_audio") {
+          setError(null);
+          setProgress(part.percent ?? 0);
+        } else if (part.stage === "uploading_to_gemini") {
+          setProgress(part.percent ?? 100);
+        } else if (part.stage === "gemini_processing") {
+          setProgress(part.percent ?? 100);
+        } else if (part.stage === "generating_subtitles") {
+          setProgress(100);
+        }
+      } else if (part.type === "complete" && part.data) {
+        finished = true;
+        setServerStage(null);
+        const data = part.data;
+        // Handle completion
+        if (pendingProjectFile) {
+          const fileReader = new FileReader();
+          fileReader.onload = (e) => {
+            try {
+              const projectData = JSON.parse(e.target?.result as string);
+              onUploadComplete(
+                projectData.subtitles || data.subtitles,
+                URL.createObjectURL(file),
+                secondaryLanguage,
+                data.videoPath,
+                data.detectedLanguage,
+                data.originalFilename,
+                data.fileSize
+              );
+            } catch {
+              onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
+            }
+          };
+          fileReader.readAsText(pendingProjectFile);
+        } else {
+          onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
+        }
+      } else if (part.type === "error") {
+        finished = true;
+        setError(part.message ?? "Processing failed");
+        setLoading(false);
+      }
+    });
+
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 3 || xhr.readyState === 4) {
-        // Read new chunks
-        const newText = xhr.responseText.substring(lastIndex);
-        const lines = newText.split('\n');
-        
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const part = JSON.parse(line);
-            if (part.type === "progress") {
-               // Update UI with server progress
-               setServerStage(part.stage);
-               if (part.stage === "extracting_audio") {
-                 setError(null); 
-                 setProgress(part.percent ?? 0);
-               } else if (part.stage === "uploading_to_gemini") {
-                 setProgress(part.percent ?? 100);
-               } else if (part.stage === "gemini_processing") {
-                 setProgress(part.percent ?? 100);
-               } else if (part.stage === "generating_subtitles") {
-                 setProgress(100);
-               }
-            } else if (part.type === "complete") {
-              setServerStage(null);
-              const data = part.data;
-              // Handle completion
-              if (pendingProjectFile) {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                  try {
-                    const projectData = JSON.parse(e.target?.result as string);
-                    onUploadComplete(
-                      projectData.subtitles || data.subtitles,
-                      URL.createObjectURL(file),
-                      secondaryLanguage,
-                      data.videoPath,
-                      data.detectedLanguage,
-                      data.originalFilename,
-                      data.fileSize
-                    );
-                  } catch {
-                    onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
-                  }
-                };
-                reader.readAsText(pendingProjectFile);
-              } else {
-                 onUploadComplete(data.subtitles, URL.createObjectURL(file), secondaryLanguage, data.videoPath, data.detectedLanguage, data.originalFilename, data.fileSize);
-              }
-            } else if (part.type === "error") {
-              setError(part.message);
-              setLoading(false);
-            }
-          } catch {
-            // Partial JSON, wait for next chunk
-          }
+        reader.push(xhr.responseText);
+      }
+      if (xhr.readyState === 4) {
+        reader.end();
+        activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+        // status 0 is a network error/abort, reported by the "error" listener or the cancel action
+        if (!finished && xhr.status !== 0) {
+          setServerStage(null);
+          setError(describeIncompleteStream(xhr.status, lastMessage));
+          setLoading(false);
         }
-        lastIndex = xhr.responseText.length;
       }
     };
 
@@ -1119,40 +1135,49 @@ export function VideoUpload({
                               }
                           };
 
-                          let batchLastIndex = 0;
+                          let finished = false;
+                          let lastMessage: unknown = null;
+                          const reader = createNdjsonReader((message) => {
+                            lastMessage = message;
+                            const part = message as StreamMessage;
+                            if (part.type === "progress") {
+                              setFileProgressMap(prev => ({
+                                ...prev,
+                                [key]: { ...prev[key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[key].total }
+                              }));
+                            } else if (part.type === "complete" && part.data) {
+                              finished = true;
+                              setFileProgressMap(prev => ({
+                                ...prev,
+                                [key]: {
+                                  ...prev[key],
+                                  status: 'complete',
+                                  stage: undefined,
+                                  percent: undefined,
+                                  warning: part.data?.subtitleGenerationFailed
+                                    ? 'Subtitle generation failed — video added without subtitles'
+                                    : undefined,
+                                }
+                              }));
+                              resolve(part.data);
+                            } else if (part.type === "error") {
+                              finished = true;
+                              reject(new Error(part.message ?? 'Processing failed'));
+                            }
+                          });
+
                           xhr.onreadystatechange = () => {
                             if (xhr.readyState === 3 || xhr.readyState === 4) {
-                              const newText = xhr.responseText.substring(batchLastIndex);
-                              const lines = newText.split('\n');
-                              for (const line of lines) {
-                                if (!line.trim()) continue;
-                                try {
-                                  const part = JSON.parse(line);
-                                  if (part.type === "progress") {
-                                    setFileProgressMap(prev => ({
-                                      ...prev,
-                                      [key]: { ...prev[key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[key].total }
-                                    }));
-                                  } else if (part.type === "complete") {
-                                    setFileProgressMap(prev => ({
-                                      ...prev,
-                                      [key]: {
-                                        ...prev[key],
-                                        status: 'complete',
-                                        stage: undefined,
-                                        percent: undefined,
-                                        warning: part.data?.subtitleGenerationFailed
-                                          ? 'Subtitle generation failed — video added without subtitles'
-                                          : undefined,
-                                      }
-                                    }));
-                                    resolve(part.data);
-                                  } else if (part.type === "error") {
-                                    reject(new Error(part.message));
-                                  }
-                                } catch { }
+                              reader.push(xhr.responseText);
+                            }
+                            if (xhr.readyState === 4) {
+                              reader.end();
+                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+                              if (!finished) {
+                                reject(new Error(xhr.status === 0
+                                  ? 'Upload cancelled or network error'
+                                  : describeIncompleteStream(xhr.status, lastMessage)));
                               }
-                              batchLastIndex = xhr.responseText.length;
                             }
                           };
 
@@ -1181,16 +1206,13 @@ export function VideoUpload({
 
                   // 3. Create Draft for Project
                   if (uploadedClips.length > 0) {
-                      await fetch('/api/drafts', {
+                      const draftRes = await fetch('/api/drafts', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                               name: project.name || 'Untitled Project',
                               version: 2,
-                              clips: uploadedClips.map(c => ({
-                                  ...c,
-                                  subtitles: [], // Clipped subtitles will be managed by project
-                              })),
+                              clips: uploadedClips,
                               timeline: uploadedClips.map((c, i) => ({
                                   id: `timeline-${c.id}`,
                                   videoClipId: c.id,
@@ -1200,10 +1222,12 @@ export function VideoUpload({
                               })),
                               subtitleConfig: {
                                   primaryLanguage: 'English',
-                                  // Store raw subtitles in clips for now
                               }
                           })
                       });
+                      if (!draftRes.ok) {
+                          throw new Error(`Failed to save project "${project.name || 'Untitled Project'}" (HTTP ${draftRes.status})`);
+                      }
                   }
                 }
 
@@ -1481,12 +1505,39 @@ export function VideoUpload({
                   });
                 });
 
-                const projectResults: Record<string, UploadedClip[]> = {};
+                // Results are collected in completion order; `order` restores the user's file order
+                const projectResults: Record<string, { order: number; clip: UploadedClip }[]> = {};
                 let nextToUpload = 0;
                 let activeUploads = 0;
                 let completedCount = 0;
 
-                return new Promise<void>((resolve, reject) => {
+                const saveProjectDraft = async (project: UploadProject) => {
+                  const clips = [...projectResults[project.id]]
+                    .sort((a, b) => a.order - b.order)
+                    .map(r => r.clip);
+                  const res = await fetch('/api/drafts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      name: project.name,
+                      version: 2,
+                      clips,
+                      timeline: clips.map((c, i) => ({
+                        id: `timeline-${c.id}`,
+                        videoClipId: c.id,
+                        projectStartTime: i * 10,
+                        sourceInPoint: 0,
+                        clipDuration: 0
+                      })),
+                      subtitleConfig: { primaryLanguage: 'English' }
+                    })
+                  });
+                  if (!res.ok) {
+                    throw new Error(`Failed to save project "${project.name}" (HTTP ${res.status})`);
+                  }
+                };
+
+                await new Promise<void>((resolve, reject) => {
                   const checkCompletion = () => {
                     if (completedCount === uploadQueue.length) {
                       onUploadComplete([], '', '', '', '', '', 0);
@@ -1531,84 +1582,79 @@ export function VideoUpload({
                       }
                     };
 
-                    let batchLastIndex = 0;
-                    xhr.onreadystatechange = async () => {
-                      if (xhr.readyState === 3 || xhr.readyState === 4) {
-                        const newText = xhr.responseText.substring(batchLastIndex);
-                        const lines = newText.split('\n');
-                        for (const line of lines) {
-                          if (!line.trim()) continue;
-                          try {
-                            const part = JSON.parse(line);
-                            if (part.type === "progress") {
-                              setFileProgressMap(prev => ({
-                                ...prev,
-                                [item.key]: { ...prev[item.key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[item.key].total }
-                              }));
-                            } else if (part.type === "complete") {
-                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                              const data = part.data;
-                              if (!projectResults[item.project.id]) projectResults[item.project.id] = [];
-                              
-                              if (data.videoPath) {
-                                projectResults[item.project.id].push({
-                                  id: generateClipId(),
-                                  originalFilename: item.file.name,
-                                  filePath: data.videoPath,
-                                  geminiFileUri: data.geminiFileUri,
-                                  subtitles: data.subtitles || []
-                                });
-                              }
+                    const handleComplete = async (data: NonNullable<StreamMessage['data']>) => {
+                      if (!projectResults[item.project.id]) projectResults[item.project.id] = [];
 
-                              setFileProgressMap(prev => ({
-                                ...prev,
-                                [item.key]: {
-                                  ...prev[item.key],
-                                  status: 'complete',
-                                  stage: undefined,
-                                  percent: undefined,
-                                  warning: data.subtitleGenerationFailed
-                                    ? 'Subtitle generation failed — video added without subtitles'
-                                    : undefined,
-                                }
-                              }));
-
-                              // If all files for THIS project are done, create draft
-                              if (projectResults[item.project.id].length === item.project.files.length) {
-                                 await fetch('/api/drafts', {
-                                   method: 'POST',
-                                   headers: { 'Content-Type': 'application/json' },
-                                   body: JSON.stringify({
-                                     name: item.project.name,
-                                     version: 2,
-                                     clips: projectResults[item.project.id].map(c => ({ ...c, subtitles: [] })),
-                                     timeline: projectResults[item.project.id].map((c, i) => ({
-                                       id: `timeline-${c.id}`,
-                                       videoClipId: c.id,
-                                       projectStartTime: i * 10,
-                                       sourceInPoint: 0,
-                                       clipDuration: 0
-                                     })),
-                                     subtitleConfig: { primaryLanguage: 'English' }
-                                   })
-                                 });
-                              }
-
-                              completedCount++;
-                              activeUploads--;
-                              if (nextToUpload < uploadQueue.length && activeUploads === 0) {
-                                 startUpload(nextToUpload);
-                              }
-                              checkCompletion();
-                            } else if (part.type === "error") {
-                               activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                               reject(new Error(part.message));
-                            }
-                          } catch {
-                            // Partial JSON
+                      if (data.videoPath) {
+                        projectResults[item.project.id].push({
+                          order: index,
+                          clip: {
+                            id: generateClipId(),
+                            originalFilename: item.file.name,
+                            filePath: data.videoPath,
+                            geminiFileUri: data.geminiFileUri,
+                            subtitles: data.subtitles || []
                           }
+                        });
+                      }
+
+                      setFileProgressMap(prev => ({
+                        ...prev,
+                        [item.key]: {
+                          ...prev[item.key],
+                          status: 'complete',
+                          stage: undefined,
+                          percent: undefined,
+                          warning: data.subtitleGenerationFailed
+                            ? 'Subtitle generation failed — video added without subtitles'
+                            : undefined,
                         }
-                        batchLastIndex = xhr.responseText.length;
+                      }));
+
+                      // If all files for THIS project are done, create draft
+                      if (projectResults[item.project.id].length === item.project.files.length) {
+                        await saveProjectDraft(item.project);
+                      }
+
+                      completedCount++;
+                      activeUploads--;
+                      if (nextToUpload < uploadQueue.length && activeUploads === 0) {
+                         startUpload(nextToUpload);
+                      }
+                      checkCompletion();
+                    };
+
+                    let finished = false;
+                    let lastMessage: unknown = null;
+                    const reader = createNdjsonReader((message) => {
+                      lastMessage = message;
+                      const part = message as StreamMessage;
+                      if (part.type === "progress") {
+                        setFileProgressMap(prev => ({
+                          ...prev,
+                          [item.key]: { ...prev[item.key], status: 'processing', stage: part.stage, percent: part.percent, loaded: prev[item.key].total }
+                        }));
+                      } else if (part.type === "complete" && part.data) {
+                        finished = true;
+                        handleComplete(part.data).catch(reject);
+                      } else if (part.type === "error") {
+                        finished = true;
+                        reject(new Error(part.message ?? 'Processing failed'));
+                      }
+                    });
+
+                    xhr.onreadystatechange = () => {
+                      if (xhr.readyState === 3 || xhr.readyState === 4) {
+                        reader.push(xhr.responseText);
+                      }
+                      if (xhr.readyState === 4) {
+                        reader.end();
+                        activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
+                        if (!finished) {
+                          reject(new Error(xhr.status === 0
+                            ? 'Upload cancelled or network error'
+                            : describeIncompleteStream(xhr.status, lastMessage)));
+                        }
                       }
                     };
 

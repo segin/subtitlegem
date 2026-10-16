@@ -15,7 +15,9 @@ export const formatTimestamp = (seconds: number): string => {
   return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}:${ss.toString().padStart(2, '0')},${ms.toString().padStart(3, '0')}`;
 };
 
-export const parseTimestamp = (timeStr: string): number => {
+export const parseTimestamp = (timeStr: string | number): number => {
+  // Already in seconds (normalized server output, .sgproj files)
+  if (typeof timeStr === 'number') return Number.isFinite(timeStr) ? timeStr : 0;
   if (!timeStr) return 0;
   
   // Normalize separators: replace dot with comma for standard processing if needed, 

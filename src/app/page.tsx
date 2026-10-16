@@ -32,6 +32,7 @@ import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useHomeState } from "@/hooks/useHomeState";
 import { getProjectDuration } from "@/lib/timeline-utils";
+import { buildDraftSaveBody } from "@/lib/draft-payload";
 import { v4 as uuidv4 } from "uuid";
 import { Settings, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
 
@@ -125,8 +126,6 @@ export default function Home() {
       const data: DraftData = await res.json();
       
       if (data.id) {
-        setCurrentDraftId(data.id);
-        
         // Handle V2 drafts (multi-video format)
         if (data.version === 2 && data.clips && data.clips.length > 0) {
           
@@ -166,7 +165,9 @@ export default function Home() {
             return tc;
           });
           setTimelineClips(fixedTimelineClips);
-          
+          setImageAssets(data.imageAssets || []);
+          setTimelineImages(data.timelineImages || []);
+
           if (data.projectConfig) setProjectConfig(data.projectConfig);
           if (data.subtitleConfig) setConfig({ ...DEFAULT_CONFIG, ...data.subtitleConfig, ffmpeg: { ...DEFAULT_CONFIG.ffmpeg, ...(data.subtitleConfig.ffmpeg || {}) } });
           
@@ -197,13 +198,22 @@ export default function Home() {
             setDuration(firstClip.duration);
           }
         } else {
-          // Handle V1 drafts (legacy single-video format)
+          // Handle V1 drafts (legacy single-video format).
+          // Clear multi-video state so autosave can't write the previous project's clips into this draft.
+          setVideoClips([]);
+          setTimelineClips([]);
+          setImageAssets([]);
+          setTimelineImages([]);
           resetHistory(data.subtitles || []);
           setVideoPath(data.videoPath || null);
           const url = data.videoPath ? `/api/storage?path=${encodeURIComponent(data.videoPath)}` : null;
           setVideoUrl(url);
           if (data.config) setConfig(data.config);
         }
+
+        // Set last: the ID is applied in the same render as the loaded state,
+        // so autosave can't pair this draft's ID with the previous project.
+        setCurrentDraftId(data.id);
       }
     } catch (err) {
       console.error("Failed to load draft:", err);
@@ -212,25 +222,35 @@ export default function Home() {
 
   // Auto-save debounced
   useEffect(() => {
-    if (!videoUrl || !videoPath || subtitles.length === 0) return;
+    if (!videoUrl || !videoPath) return;
+    if (subtitles.length === 0 && videoClips.length === 0) return;
 
     const timeoutId = setTimeout(async () => {
       try {
-        const body = {
-          id: currentDraftId || undefined,
-          name: config.originalFilename || videoPath.split('/').pop() || "Untitled Project",
+        const body = buildDraftSaveBody({
+          draftId: currentDraftId,
+          newDraftName: config.originalFilename || videoPath.split('/').pop() || "Untitled Project",
           videoPath,
           subtitles,
           config,
-        };
-        
+          videoClips,
+          timelineClips,
+          projectConfig,
+          imageAssets,
+          timelineImages,
+        });
+
         const res = await fetch('/api/drafts', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
         });
-        
+
         const data = await res.json();
+        if (!res.ok) {
+          console.error("Auto-save rejected:", data.error || res.status);
+          return;
+        }
         if (data.id && !currentDraftId) {
           setCurrentDraftId(data.id);
         }
@@ -241,7 +261,8 @@ export default function Home() {
     }, 5000); // 5 second debounce for auto-save
 
     return () => clearTimeout(timeoutId);
-  }, [subtitles, videoPath, videoUrl, config, currentDraftId, fetchDrafts, setCurrentDraftId]);
+  }, [subtitles, videoPath, videoUrl, config, currentDraftId, fetchDrafts, setCurrentDraftId,
+      videoClips, timelineClips, projectConfig, imageAssets, timelineImages]);
   
 
 
@@ -1586,7 +1607,14 @@ export default function Home() {
             });
             const data = await res.json();
             if (data.error) throw new Error(data.error);
-            setSubtitles(data.subtitles);
+            // Apply only the translations, by ID, onto the current lines so edits
+            // made while the request was in flight aren't reverted.
+            const translated = new Map<string, string | undefined>(
+              (data.subtitles as SubtitleLine[]).map(s => [s.id, s.secondaryText])
+            );
+            setSubtitles(prev => prev.map(s =>
+              translated.has(s.id) ? { ...s, secondaryText: translated.get(s.id) } : s
+            ));
         }}
         onResetToOriginal={() => {
           if (initialSubtitles) {

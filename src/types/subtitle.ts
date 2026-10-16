@@ -131,15 +131,20 @@ export interface DraftItem {
   };
 }
 
+/**
+ * A subtitle line from an external source (.sgproj file, older API clients).
+ * Times may be "HH:MM:SS,mmm" strings or seconds.
+ */
 export interface RawSubtitleItem {
-  startTime: string;
-  endTime: string;
+  startTime: string | number;
+  endTime: string | number;
   text: string;
   secondaryText?: string;
 }
 
 export interface ProcessResponse {
-  subtitles: RawSubtitleItem[];
+  /** Normalized server-side: numeric seconds, with IDs */
+  subtitles: SubtitleLine[];
   videoPath: string;
   detectedLanguage?: string;
   originalFilename?: string;

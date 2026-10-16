@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveDraft, loadDraft, listDrafts, deleteDraft, DraftV2, DraftSummary } from "@/lib/draft-store";
+import { saveDraftV1, loadDraft, listDrafts, deleteDraft, DraftV2, DraftSummary, DraftVersionConflictError } from "@/lib/draft-store";
 import { deleteFileFromGemini } from "@/lib/gemini";
 import fs from 'fs';
 import { checkClipIntegrity, IntegrityStatus } from "@/lib/integrity-utils";
@@ -128,9 +128,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { isPathSafe } = await import("@/lib/storage-config");
     
-    const { id, name, videoPath, subtitles, config, version, clips, timeline, projectConfig, subtitleConfig } = body;
-    
-    if (!name) {
+    const { id, name, videoPath, subtitles, config, version, clips, timeline, projectConfig, subtitleConfig, imageAssets, timelineImages } = body;
+
+    // Updates may omit the name (keeps the stored one, so autosave can't undo a rename)
+    if (!name && !id) {
       return NextResponse.json({ error: "Draft name is required" }, { status: 400 });
     }
 
@@ -154,6 +155,15 @@ export async function POST(req: NextRequest) {
             }
         }
 
+        if (imageAssets) {
+            for (const img of imageAssets) {
+                if (!isPathSafe(img.filePath)) {
+                    console.warn(`[DraftAPI] Blocked unauthorized image path: ${img.filePath}`);
+                    return NextResponse.json({ error: "Unauthorized path in images" }, { status: 403 });
+                }
+            }
+        }
+
         draft = saveDraftV2({
             id,
             name,
@@ -161,6 +171,8 @@ export async function POST(req: NextRequest) {
             timeline: timeline || [],
             projectConfig: projectConfig || {},
             subtitleConfig: subtitleConfig || config || {},
+            imageAssets: imageAssets || [],
+            timelineImages: timelineImages || [],
         });
     } else {
         // Handle V1 Draft
@@ -169,13 +181,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized video path" }, { status: 403 });
         }
 
-        draft = saveDraft({
-            id,
-            name,
-            videoPath,
-            subtitles,
-            config,
-        });
+        try {
+            draft = saveDraftV1({
+                id,
+                name,
+                videoPath,
+                subtitles,
+                config,
+            });
+        } catch (err) {
+            if (err instanceof DraftVersionConflictError) {
+                return NextResponse.json({ error: err.message }, { status: 409 });
+            }
+            throw err;
+        }
     }
     
     // Invalidate/Update metadata on save

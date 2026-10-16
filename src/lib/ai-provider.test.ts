@@ -114,3 +114,34 @@ describe('ai-provider API key scoping', () => {
     expect(sentAuthHeader()).toBe('Bearer own-key');
   });
 });
+
+describe('ai-provider output normalization', () => {
+  const geminiConfig: ModelConfig = { id: '1', provider: 'gemini', modelName: 'gemini-pro', enabled: true };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('generate returns numeric times and IDs instead of raw Gemini strings', async () => {
+    (gemini.generateSubtitles as jest.Mock).mockResolvedValue({
+      detectedLanguage: 'en',
+      subtitles: [{ startTime: '00:00:01,500', endTime: '00:00:03,000', text: 'hi' }],
+    });
+
+    const result = await processWithFallback('generate', { fileUri: 'f', mimeType: 'video/mp4' }, [geminiConfig]);
+
+    expect(result.subtitles[0]).toMatchObject({ startTime: 1.5, endTime: 3, text: 'hi' });
+    expect(typeof result.subtitles[0].id).toBe('string');
+  });
+
+  test('translate keeps the input lines and only fills in secondaryText', async () => {
+    const input = [{ id: 'keep-me', startTime: 4, endTime: 5, text: 'hello', clipId: 'tl-1' }];
+    (gemini.translateSubtitles as jest.Mock).mockResolvedValue([
+      { startTime: '00:00:04,000', endTime: '00:00:05,000', text: 'hello', secondaryText: 'hola' },
+    ]);
+
+    const result = await processWithFallback('translate', { subtitles: input, targetLanguage: 'Spanish' }, [geminiConfig]);
+
+    expect(result.subtitles).toEqual([{ ...input[0], secondaryText: 'hola' }]);
+  });
+});
