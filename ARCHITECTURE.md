@@ -304,7 +304,7 @@ The application includes a production-ready `Dockerfile` and `docker-compose.yml
 ```bash
 docker-compose up --build
 ```
-This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes. The container runs as the unprivileged `node` user, and Compose publishes the port on `127.0.0.1` only; set `API_PASSWORD` before exposing it more widely.
+This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes. The container runs as the unprivileged `node` user, and Compose publishes port 3050 on all interfaces so LAN devices (including phones) can reach it.
 
 > **Upgrading an existing volume:** volumes created by older (root) images are root-owned. Fix ownership once with
 > `docker run --rm -v subtitlegem_storage:/s alpine chown -R 1000:1000 /s`.
