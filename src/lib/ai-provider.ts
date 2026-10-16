@@ -5,6 +5,7 @@ import {
 } from "@/types/subtitle";
 import { translateSubtitles } from "./gemini";
 import { validateSubtitleArraySize, MAX_SUBTITLES } from "./validation-utils";
+import { normalizeGeneratedSubtitles, mergeTranslatedSubtitles } from "./ai-output";
 
 // Re-export for backwards compatibility
 export { validateSubtitleArraySize, MAX_SUBTITLES };
@@ -84,9 +85,15 @@ export async function processWithFallback(
         throw new Error("AI provider returned no subtitles.");
       }
 
+      // Providers return loosely-typed lines (string timestamps, no IDs).
+      // Normalize here so every caller gets editor-ready SubtitleLines.
+      const subtitles = task === 'translate'
+        ? mergeTranslatedSubtitles(params.subtitles || [], result.subtitles)
+        : normalizeGeneratedSubtitles(result.subtitles);
+
       return {
         detectedLanguage: result.detectedLanguage,
-        subtitles: result.subtitles,
+        subtitles,
         provider: config.provider,
         modelName: config.modelName
       };

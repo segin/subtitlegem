@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { SubtitleLine } from "@/types/subtitle";
 import { Plus, Trash2, Wand2, Clock, Check, Move, Scissors } from "lucide-react";
 import { v4 as uuidv4 } from "uuid";
@@ -8,7 +8,7 @@ import { formatTimestamp } from "@/lib/time-utils";
 
 interface SubtitleListProps {
   subtitles: SubtitleLine[];
-  onUpdate: (subtitles: SubtitleLine[]) => void;
+  onUpdate: (subtitles: SubtitleLine[] | ((prev: SubtitleLine[]) => SubtitleLine[])) => void;
   currentTime: number;
   onSeek: (time: number) => void;
   secondaryLanguage: string;
@@ -21,6 +21,8 @@ interface SubtitleListProps {
 export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, secondaryLanguage, selectedIds, onSelect, onSplit }: SubtitleListProps) {
   const [, setEditingId] = useState<string | null>(null);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
+  // Primary text of each line when its textarea gained focus
+  const textOnFocusRef = useRef<Record<string, string>>({});
 
   const handleTextChange = (id: string, field: 'text' | 'secondaryText', value: string) => {
     const updated = subtitles.map(s => s.id === id ? { ...s, [field]: value } : s);
@@ -49,7 +51,9 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
       });
       const data = await res.json();
       if (data.translation) {
-        handleTextChange(sub.id, 'secondaryText', data.translation);
+        // Functional update: apply to the latest list, not the one captured
+        // when the request started, so edits made meanwhile aren't reverted.
+        onUpdate(prev => prev.map(s => s.id === sub.id ? { ...s, secondaryText: data.translation } : s));
       } else if (data.error) {
         console.error("Translation API error:", data.error);
         // Optionally show error to user
@@ -225,7 +229,15 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
                     rows={2}
                     value={sub.text}
                     onChange={(e) => handleTextChange(sub.id, 'text', e.target.value)}
-                    onBlur={() => handleTranslate(index)}
+                    onFocus={() => { textOnFocusRef.current[sub.id] = sub.text; }}
+                    onBlur={() => {
+                      // Only auto-translate when the primary text was actually edited
+                      const before = textOnFocusRef.current[sub.id];
+                      delete textOnFocusRef.current[sub.id];
+                      if (before !== undefined && before !== sub.text && secondaryLanguage !== "None") {
+                        handleTranslate(index);
+                      }
+                    }}
                     placeholder="Primary Text..."
                   />
                   <div className="absolute top-1 right-1 flex space-x-1 opacity-0 group-hover/textarea:opacity-100 transition-opacity">

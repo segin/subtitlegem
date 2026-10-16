@@ -54,7 +54,10 @@ subtitlegem/
 │   │
 │   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation
+│   │   ├── ai-output.ts        # Normalizes AI provider output into SubtitleLines (server-only)
+│   │   ├── draft-payload.ts    # Builds the autosave body (V1/V2) from editor state
 │   │   ├── draft-store.ts      # SQLite draft persistence
+│   │   ├── ndjson-utils.ts     # Buffered reader for streamed NDJSON responses
 │   │   ├── ffmpeg-probe.ts     # FFmpeg capability detection
 │   │   ├── ffmpeg-utils.ts     # Video processing (child_process)
 │   │   ├── gemini.ts           # Google Gemini AI integration
@@ -199,7 +202,12 @@ subtitlegem/
 **Type:** SQLite  
 **Purpose:** Auto-saved project drafts  
 **Tables:**
-- `drafts` - Project JSON, video path, metadata
+- `drafts` - One row per project. `version` 1 (single video: `video_path`, `subtitles`, `config`) or 2 (multi-video: `clips` with per-clip subtitles in source time, `timeline`, `project_config`, `image_assets`, `timeline_images`, `config`). `GET /api/drafts?id=` migrates V1 rows to V2 on load.
+
+**Save rules** (`draft-store.ts`, `src/lib/draft-payload.ts`):
+- The editor autosaves 5 s after the last change. Multi-video projects are saved as V2; the flat editor subtitle list is redistributed to clips via each line's timeline `clipId` (`distributeSubtitlesToClips`).
+- A V1 save targeting a V2 row is rejected with HTTP 409 (`DraftVersionConflictError`), so a stale client can't wipe a project's clips and timeline.
+- Updates may omit `name`; the stored name is kept (renames are done via `PATCH /api/drafts`).
 
 ### 4.3. Settings Database
 **File:** `{STAGING_DIR}/settings.db`  
@@ -366,8 +374,11 @@ User uploads video
     → If >400MB: Extract audio only
     → If <95MB: Send inline to Gemini
     → Otherwise: Upload to Gemini Files API
-    → Gemini returns JSON subtitles
-    → Response sent to frontend
+    → Gemini returns JSON subtitles ("HH:MM:SS,mmm" strings, no IDs)
+    → processWithFallback() normalizes them (src/lib/ai-output.ts):
+      numeric seconds + IDs; translations merged onto the input lines by index
+    → Streamed to the frontend as NDJSON (progress…, then complete/error),
+      read with createNdjsonReader() (src/lib/ndjson-utils.ts)
     → Auto-saved as draft
 ```
 
@@ -406,7 +417,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-10-14 |
+| **Date of Last Update** | 2026-10-15 |
 
 ---
 

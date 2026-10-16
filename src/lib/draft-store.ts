@@ -17,7 +17,9 @@ import {
   SubtitleLine, 
   SubtitleConfig, 
   VideoClip, 
-  TimelineClip, 
+  TimelineClip,
+  ImageAsset,
+  TimelineImage,
   ProjectConfig,
   DEFAULT_PROJECT_CONFIG,
   migrateToMultiVideo,
@@ -73,6 +75,18 @@ try {
   // Column already exists
 }
 
+try {
+  db.exec(`ALTER TABLE drafts ADD COLUMN image_assets TEXT`);
+} catch {
+  // Column already exists
+}
+
+try {
+  db.exec(`ALTER TABLE drafts ADD COLUMN timeline_images TEXT`);
+} catch {
+  // Column already exists
+}
+
 // V1 Draft (single video - legacy)
 export interface DraftV1 {
   id: string;
@@ -94,6 +108,8 @@ export interface DraftV2 {
   timeline: TimelineClip[];
   projectConfig: ProjectConfig;
   subtitleConfig: SubtitleConfig;
+  imageAssets?: ImageAsset[];
+  timelineImages?: TimelineImage[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -121,16 +137,32 @@ interface DraftRow {
   clips: string | null;
   timeline: string | null;
   project_config: string | null;
+  image_assets: string | null;
+  timeline_images: string | null;
   created_at: number;
   updated_at: number;
 }
 
 /**
+ * Thrown when a single-video (V1) save targets a draft stored as multi-video
+ * (V2). Saving would wipe the draft's clips and timeline.
+ */
+export class DraftVersionConflictError extends Error {
+  constructor(id: string) {
+    super(`Draft ${id} is a multi-video project and cannot be overwritten with single-video data`);
+    this.name = "DraftVersionConflictError";
+  }
+}
+
+const DEFAULT_DRAFT_NAME = "Untitled Project";
+
+/**
  * Save or update a V1 draft (legacy single-video)
+ * On update, an omitted name keeps the stored name.
  */
 export function saveDraftV1(draft: {
   id?: string;
-  name: string;
+  name?: string;
   videoPath?: string;
   subtitles?: SubtitleLine[];
   config?: SubtitleConfig;
@@ -140,13 +172,16 @@ export function saveDraftV1(draft: {
   if (!isSafeId(id)) {
     throw new Error("Invalid draft ID");
   }
-  
-  const existing = db.prepare("SELECT id FROM drafts WHERE id = ?").get(id);
-  
+
+  const existing = db.prepare("SELECT id, version FROM drafts WHERE id = ?").get(id) as { version: number | null } | undefined;
+
   if (existing) {
+    if (existing.version === 2) {
+      throw new DraftVersionConflictError(id);
+    }
     db.prepare(`
       UPDATE drafts SET
-        name = ?,
+        name = COALESCE(?, name),
         version = 1,
         video_path = ?,
         subtitles = ?,
@@ -157,7 +192,7 @@ export function saveDraftV1(draft: {
         updated_at = ?
       WHERE id = ?
     `).run(
-      draft.name,
+      draft.name ?? null,
       draft.videoPath || null,
       draft.subtitles ? JSON.stringify(draft.subtitles) : null,
       draft.config ? JSON.stringify(draft.config) : null,
@@ -170,7 +205,7 @@ export function saveDraftV1(draft: {
       VALUES (?, ?, 1, ?, ?, ?, ?, ?)
     `).run(
       id,
-      draft.name,
+      draft.name || DEFAULT_DRAFT_NAME,
       draft.videoPath || null,
       draft.subtitles ? JSON.stringify(draft.subtitles) : null,
       draft.config ? JSON.stringify(draft.config) : null,
@@ -184,14 +219,17 @@ export function saveDraftV1(draft: {
 
 /**
  * Save or update a V2 draft (multi-video)
+ * On update, an omitted name keeps the stored name.
  */
 export function saveDraftV2(draft: {
   id?: string;
-  name: string;
+  name?: string;
   clips: VideoClip[];
   timeline: TimelineClip[];
   projectConfig: ProjectConfig;
   subtitleConfig: SubtitleConfig;
+  imageAssets?: ImageAsset[];
+  timelineImages?: TimelineImage[];
 }): DraftV2 {
   const now = Date.now();
   const id = draft.id || uuidv4();
@@ -204,7 +242,7 @@ export function saveDraftV2(draft: {
   if (existing) {
     db.prepare(`
       UPDATE drafts SET
-        name = ?,
+        name = COALESCE(?, name),
         version = 2,
         video_path = NULL,
         subtitles = NULL,
@@ -212,28 +250,34 @@ export function saveDraftV2(draft: {
         clips = ?,
         timeline = ?,
         project_config = ?,
+        image_assets = ?,
+        timeline_images = ?,
         updated_at = ?
       WHERE id = ?
     `).run(
-      draft.name,
+      draft.name ?? null,
       JSON.stringify(draft.subtitleConfig),
       JSON.stringify(draft.clips),
       JSON.stringify(draft.timeline),
       JSON.stringify(draft.projectConfig),
+      JSON.stringify(draft.imageAssets ?? []),
+      JSON.stringify(draft.timelineImages ?? []),
       now,
       id
     );
   } else {
     db.prepare(`
-      INSERT INTO drafts (id, name, version, config, clips, timeline, project_config, created_at, updated_at)
-      VALUES (?, ?, 2, ?, ?, ?, ?, ?, ?)
+      INSERT INTO drafts (id, name, version, config, clips, timeline, project_config, image_assets, timeline_images, created_at, updated_at)
+      VALUES (?, ?, 2, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      draft.name,
+      draft.name || DEFAULT_DRAFT_NAME,
       JSON.stringify(draft.subtitleConfig),
       JSON.stringify(draft.clips),
       JSON.stringify(draft.timeline),
       JSON.stringify(draft.projectConfig),
+      JSON.stringify(draft.imageAssets ?? []),
+      JSON.stringify(draft.timelineImages ?? []),
       now,
       now
     );
@@ -312,6 +356,8 @@ function rowToDraft(row: DraftRow): Draft {
       timeline: safeJsonParse(row.timeline, [] as TimelineClip[]),
       projectConfig: safeJsonParse(row.project_config, DEFAULT_PROJECT_CONFIG),
       subtitleConfig: safeJsonParse(row.config, {} as SubtitleConfig),
+      imageAssets: safeJsonParse(row.image_assets, [] as ImageAsset[]),
+      timelineImages: safeJsonParse(row.timeline_images, [] as TimelineImage[]),
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };

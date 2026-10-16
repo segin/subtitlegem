@@ -1,4 +1,4 @@
-import { saveDraftV1, saveDraftV2, renameDraft, deleteDraft } from './draft-store';
+import { saveDraftV1, saveDraftV2, renameDraft, deleteDraft, DraftVersionConflictError } from './draft-store';
 import fs from 'fs';
 import { SubtitleConfig, ProjectConfig } from '@/types/subtitle';
 
@@ -182,6 +182,54 @@ describe('draft-store', () => {
       expect(mPrepare).toHaveBeenCalledWith('DELETE FROM drafts WHERE id = ?');
 
       (fs.existsSync as jest.Mock).mockReturnValue(false);
+    });
+  });
+
+  describe('autosave data-loss guards', () => {
+    // All prepared statements share one run() spy
+    const runCalls = () => (mPrepare.mock.results[0].value.run as jest.Mock).mock.calls;
+
+    it('refuses a single-video save over a multi-video draft', () => {
+      mGet.mockReturnValueOnce({ id: 'multi', version: 2 });
+
+      expect(() => saveDraftV1({ id: 'multi', subtitles: [] })).toThrow(DraftVersionConflictError);
+      expect(mPrepare).not.toHaveBeenCalledWith(expect.stringContaining('UPDATE drafts SET'));
+    });
+
+    it('keeps the stored name when an update omits it', () => {
+      mGet.mockReturnValueOnce({ id: 'd1', version: 1 });
+      mGet.mockReturnValueOnce({ id: 'd1', name: 'Renamed', version: 1, created_at: 0, updated_at: 0 });
+
+      saveDraftV1({ id: 'd1', subtitles: [] });
+
+      expect(mPrepare).toHaveBeenCalledWith(expect.stringContaining('name = COALESCE(?, name)'));
+      const update = runCalls().find(args => args[args.length - 1] === 'd1');
+      expect(update?.[0]).toBeNull();
+    });
+
+    it('persists and reloads timeline images on V2 drafts', () => {
+      const imageAssets = [{ id: 'img', filePath: '/mock/staging/i.png', originalFilename: 'i.png', width: 10, height: 10 }];
+      const timelineImages = [{ id: 'ti', type: 'image' as const, imageAssetId: 'img', projectStartTime: 5, duration: 3 }];
+
+      mGet.mockReturnValueOnce(null);
+      mGet.mockReturnValueOnce({
+        id: 'test-uuid-v4', name: 'P', version: 2, clips: '[]', timeline: '[]',
+        image_assets: JSON.stringify(imageAssets), timeline_images: JSON.stringify(timelineImages),
+        created_at: 0, updated_at: 0,
+      });
+
+      const draft = saveDraftV2({
+        name: 'P', clips: [], timeline: [],
+        projectConfig: {} as unknown as ProjectConfig,
+        subtitleConfig: {} as unknown as SubtitleConfig,
+        imageAssets, timelineImages,
+      });
+
+      const insert = runCalls().find(args => args[0] === 'test-uuid-v4');
+      expect(insert).toContain(JSON.stringify(imageAssets));
+      expect(insert).toContain(JSON.stringify(timelineImages));
+      expect(draft.imageAssets).toEqual(imageAssets);
+      expect(draft.timelineImages).toEqual(timelineImages);
     });
   });
 });

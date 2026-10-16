@@ -96,6 +96,13 @@ describe('parseTimestamp', () => {
       expect(parseTimestamp('01:00:00,000')).toBe(3600);
     });
 
+    test('passes through times already in seconds (e.g. .sgproj files)', () => {
+      expect(parseTimestamp(90.5)).toBe(90.5);
+      expect(parseTimestamp(0)).toBe(0);
+      expect(parseTimestamp(Number.NaN)).toBe(0);
+      expect(parseTimestamp(Infinity)).toBe(0);
+    });
+
     test('parses milliseconds', () => {
       expect(parseTimestamp('00:00:01,500')).toBe(1.5);
       expect(parseTimestamp('00:00:00,001')).toBe(0.001);
