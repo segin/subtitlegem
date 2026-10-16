@@ -297,7 +297,8 @@ export function VideoPreview({
   };
 
   const handleLoadedMetadata = () => {
-    if (videoRef.current) {
+    // In multi-video mode the project duration comes from the timeline, not the active clip
+    if (videoRef.current && !isMultiVideo) {
       onDurationChange(videoRef.current.duration);
     }
   };

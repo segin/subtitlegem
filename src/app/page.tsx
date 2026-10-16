@@ -31,7 +31,7 @@ import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
 import { useHomeState } from "@/hooks/useHomeState";
-import { getProjectDuration } from "@/lib/timeline-utils";
+import { getProjectDuration, repairPlaceholderTimeline } from "@/lib/timeline-utils";
 import { buildDraftSaveBody } from "@/lib/draft-payload";
 import { v4 as uuidv4 } from "uuid";
 import { Settings, Layers, FileVideo, LogOut, MonitorPlay, List } from "lucide-react";
@@ -154,16 +154,8 @@ export default function Home() {
           // Set V2 state with corrected clips
           setVideoClips(clipsWithDuration);
           
-          // Fix timeline clips with duration 0 - use the video clip's full duration
-          const fixedTimelineClips: TimelineClip[] = (data.timeline || []).map((tc: TimelineClip) => {
-            if (tc.clipDuration <= 0) {
-              const videoClip = clipsWithDuration.find((c: VideoClip) => c.id === tc.videoClipId);
-              if (videoClip && videoClip.duration > 0) {
-                return { ...tc, clipDuration: videoClip.duration };
-              }
-            }
-            return tc;
-          });
+          // Placeholder clips (duration 0) get their full length, laid out back to back if they'd overlap
+          const fixedTimelineClips = repairPlaceholderTimeline(data.timeline || [], clipsWithDuration);
           setTimelineClips(fixedTimelineClips);
           setImageAssets(data.imageAssets || []);
           setTimelineImages(data.timelineImages || []);
@@ -192,11 +184,7 @@ export default function Home() {
           setVideoPath(firstVideoPath || null);
           const url = firstVideoPath ? `/api/storage?path=${encodeURIComponent(firstVideoPath)}` : null;
           setVideoUrl(url);
-          
-          // Set duration from first clip
-          if (firstClip.duration > 0) {
-            setDuration(firstClip.duration);
-          }
+          // Project duration is derived from the timeline by the multi-video sync effect
         } else {
           // Handle V1 drafts (legacy single-video format).
           // Clear multi-video state so autosave can't write the previous project's clips into this draft.

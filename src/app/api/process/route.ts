@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { uploadToGemini } from "@/lib/gemini";
-import { extractAudio, getAudioCodec, createSampleClip } from "@/lib/ffmpeg-utils"; // Added createSampleClip
+import { extractAudio, getAudioCodec, createSampleClip, ffprobe } from "@/lib/ffmpeg-utils"; // Added createSampleClip
 import fs from "fs";
 import path from "path";
 import { getStorageConfig, isPathSafe } from "@/lib/storage-config";
@@ -558,6 +558,12 @@ export async function POST(req: NextRequest) {
               }
           } catch (e) { console.error("Cleanup error", e); }
 
+          // Lets multi-video uploads lay clips out on the timeline without overlap
+          const videoInfo = await ffprobe(videoPath).catch(e => {
+            console.warn("[Process] ffprobe failed; clip duration unknown:", e instanceof Error ? e.message : e);
+            return null;
+          });
+
           controller.enqueue(encoder.encode(JSON.stringify({
             type: "complete",
             data: {
@@ -569,6 +575,7 @@ export async function POST(req: NextRequest) {
               fileId,
               fileSize: fs.statSync(videoPath).size,
               originalFilename,
+              ...(videoInfo && { duration: videoInfo.duration, width: videoInfo.width, height: videoInfo.height }),
               ...(subtitleGenerationFailed && { subtitleGenerationFailed: true })
             }
           }) + "\n"));

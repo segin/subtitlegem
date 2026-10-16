@@ -6,6 +6,7 @@ import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/
 import { checkModelAvailability } from "@/lib/model-cache";
 import { RawSubtitleItem, ProcessResponse, SubtitleLine } from "@/types/subtitle";
 import { createNdjsonReader, describeIncompleteStream } from "@/lib/ndjson-utils";
+import { buildSequentialTimeline } from "@/lib/timeline-utils";
 
 // Upload modes for multi-video support
 export type UploadMode = 
@@ -1195,9 +1196,9 @@ export function VideoUpload({
                               id: generateClipId(),
                               originalFilename: file.name,
                               filePath: result.videoPath,
-                              duration: 0, // Will be filled by integrity check or metadata
-                              width: 0,
-                              height: 0,
+                              duration: result.duration,
+                              width: result.width,
+                              height: result.height,
                               geminiFileUri: result.geminiFileUri,
                               subtitles: result.subtitles || []
                           });
@@ -1213,13 +1214,7 @@ export function VideoUpload({
                               name: project.name || 'Untitled Project',
                               version: 2,
                               clips: uploadedClips,
-                              timeline: uploadedClips.map((c, i) => ({
-                                  id: `timeline-${c.id}`,
-                                  videoClipId: c.id,
-                                  projectStartTime: i * 10, // Placeholder stagger
-                                  sourceInPoint: 0,
-                                  clipDuration: 0 // Will auto expand
-                              })),
+                              timeline: buildSequentialTimeline(uploadedClips),
                               subtitleConfig: {
                                   primaryLanguage: 'English',
                               }
@@ -1522,13 +1517,7 @@ export function VideoUpload({
                       name: project.name,
                       version: 2,
                       clips,
-                      timeline: clips.map((c, i) => ({
-                        id: `timeline-${c.id}`,
-                        videoClipId: c.id,
-                        projectStartTime: i * 10,
-                        sourceInPoint: 0,
-                        clipDuration: 0
-                      })),
+                      timeline: buildSequentialTimeline(clips),
                       subtitleConfig: { primaryLanguage: 'English' }
                     })
                   });
@@ -1592,6 +1581,9 @@ export function VideoUpload({
                             id: generateClipId(),
                             originalFilename: item.file.name,
                             filePath: data.videoPath,
+                            duration: data.duration,
+                            width: data.width,
+                            height: data.height,
                             geminiFileUri: data.geminiFileUri,
                             subtitles: data.subtitles || []
                           }

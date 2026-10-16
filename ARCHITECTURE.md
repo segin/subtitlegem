@@ -377,9 +377,13 @@ User uploads video
     → Gemini returns JSON subtitles ("HH:MM:SS,mmm" strings, no IDs)
     → processWithFallback() normalizes them (src/lib/ai-output.ts):
       numeric seconds + IDs; translations merged onto the input lines by index
+    → ffprobe adds duration/width/height to the complete message
     → Streamed to the frontend as NDJSON (progress…, then complete/error),
       read with createNdjsonReader() (src/lib/ndjson-utils.ts)
+    → Multi-video/batch: clips laid out back to back with buildSequentialTimeline()
     → Auto-saved as draft
+    → On load, repairPlaceholderTimeline() fixes older drafts whose clips were saved
+      with clipDuration 0 (staggered 10s apart) so they no longer overlap
 ```
 
 ### 9.2. Export → Rendered Video
@@ -417,7 +421,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-10-15 |
+| **Date of Last Update** | 2026-10-16 |
 
 ---
 

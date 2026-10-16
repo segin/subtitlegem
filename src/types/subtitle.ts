@@ -149,6 +149,10 @@ export interface ProcessResponse {
   detectedLanguage?: string;
   originalFilename?: string;
   fileSize?: number;
+  /** From ffprobe; absent if probing failed */
+  duration?: number;
+  width?: number;
+  height?: number;
   error?: string;
   geminiFileUri?: string;
 }

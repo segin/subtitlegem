@@ -216,3 +216,39 @@ export function arrangeSequentially(timeline: TimelineClip[]): TimelineClip[] {
     return arranged;
   });
 }
+
+/**
+ * Build a timeline that plays each clip in full, back to back, in array order.
+ * Used when a project is created from uploads.
+ */
+export function buildSequentialTimeline(clips: Array<Pick<VideoClip, 'id'> & { duration?: number }>): TimelineClip[] {
+  return arrangeSequentially(clips.map(clip => ({
+    id: `timeline-${clip.id}`,
+    videoClipId: clip.id,
+    projectStartTime: 0,
+    sourceInPoint: 0,
+    clipDuration: clip.duration && clip.duration > 0 ? clip.duration : 0,
+  })));
+}
+
+/**
+ * Repair a timeline saved with placeholder clips (clipDuration 0, e.g. by older
+ * upload flows that staggered clips 10s apart). Placeholder clips get their
+ * source clip's full duration; if that makes clips overlap, the timeline is laid
+ * out back to back in its current order. Timelines without placeholders are
+ * returned unchanged so user arrangements are never moved.
+ */
+export function repairPlaceholderTimeline(timeline: TimelineClip[], clips: VideoClip[]): TimelineClip[] {
+  if (!timeline.some(tc => tc.clipDuration <= 0)) return timeline;
+
+  const filled = timeline.map(tc => {
+    if (tc.clipDuration > 0) return tc;
+    const source = clips.find(c => c.id === tc.videoClipId);
+    return source && source.duration > 0
+      ? { ...tc, clipDuration: Math.max(0, source.duration - tc.sourceInPoint) }
+      : tc;
+  });
+
+  if (findOverlappingClips(filled).length === 0) return filled;
+  return arrangeSequentially([...filled].sort((a, b) => a.projectStartTime - b.projectStartTime));
+}
