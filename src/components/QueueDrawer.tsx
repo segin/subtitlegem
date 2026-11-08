@@ -49,6 +49,10 @@ export function QueueDrawer({
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const [previewItem, setPreviewItem] = useState<QueueItem | null>(null);
+  // Play the finished file directly (seekable, real duration); fall back to the live
+  // transcode only if the browser can't decode it. The transcode is a fragmented MP4
+  // with no known length, so players show a wrong duration (e.g. 0:08) and may stop there.
+  const [previewTranscode, setPreviewTranscode] = useState(false);
   const isDesktop = useIsDesktop();
 
   // Snapshot of the current time used for ETA calculations. It is refreshed
@@ -205,7 +209,7 @@ export function QueueDrawer({
             {/* Preview for completed */}
             {hasResult && (
               <button
-                onClick={() => setPreviewItem(item)}
+                onClick={() => { setPreviewTranscode(false); setPreviewItem(item); }}
                 className="p-1 rounded-sm bg-[#007acc] hover:bg-[#0099ff] text-white transition-colors"
                 title="Preview Video"
               >
@@ -433,8 +437,10 @@ export function QueueDrawer({
                 </button>
             </div>
             <div className="aspect-video bg-black relative flex items-center justify-center">
-              <video 
-                src={`/api/stream?path=${encodeURIComponent(previewItem.result.videoPath)}`} 
+              <video
+                key={previewTranscode ? 'transcode' : 'direct'}
+                src={`/api/${previewTranscode ? 'stream' : 'storage'}?path=${encodeURIComponent(previewItem.result.videoPath)}`}
+                onError={() => setPreviewTranscode(true)}
                 className="w-full h-full object-contain max-h-[80vh]"
                 controls 
                 autoPlay 
