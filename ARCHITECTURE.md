@@ -293,6 +293,9 @@ interface ProjectMetadata {
 ### Deployment Options
 
 #### 1. Local / PM2 (Bare Metal)
+**Quick start:** `./start.sh` installs dependencies (and builds the native `better-sqlite3` module, which npm 12+ skips), rebuilds only when the code changed since the last build, warns if no Gemini key is set, and serves on port 3050 on all interfaces. `PORT=…` overrides the port; `--rebuild` forces a build.
+
+Or step by step:
 1. **Build the application**:
    ```bash
    npm run build
@@ -421,7 +424,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-10-16 |
+| **Date of Last Update** | 2026-11-08 |
 
 ---
 
