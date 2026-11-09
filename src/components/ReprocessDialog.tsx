@@ -35,7 +35,7 @@ export function ReprocessDialog({
   videoPath,
 }: ReprocessDialogProps) {
   // Form state
-  const [model, setModel] = useState(currentModel || "gemini-2.5-flash");
+  const [model, setModel] = useState(currentModel || "gemini-3.8-flash");
   const [secondaryLanguage, setSecondaryLanguage] = useState(currentSecondaryLanguage || "");
   const [mode, setMode] = useState<'replace' | 'merge'>('replace');
   
@@ -172,7 +172,7 @@ export function ReprocessDialog({
                             <option key={m.name} value={m.name}>{m.displayName}</option>
                         ))
                     ) : (
-                        <option value="gemini-2.5-flash">Gemini 2.5 Flash (Default)</option>
+                        <option value="gemini-3.8-flash">Gemini 3.8 Flash (Default)</option>
                     )
                 }
              </select>

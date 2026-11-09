@@ -143,8 +143,30 @@ describe('Gemini Integration', () => {
             });
 
             const result = await translateSubtitles([], 'es');
-            
+
             expect(result).toEqual([{ text: "Hello" }]);
+        });
+
+        it('sends only the text and asks Gemini 3 models for low thinking', async () => {
+            mockGenerateContent.mockResolvedValue({ text: '{"subtitles": []}' });
+            const lines = [{ id: 'a', startTime: 12.5, endTime: 14, text: 'See you next week.' }];
+
+            await translateSubtitles(lines, 'Simplified Chinese', 'gemini-3.8-flash');
+            const request = mockGenerateContent.mock.calls[0][0];
+            const prompt: string = request.contents[0].parts[0].text;
+
+            expect(prompt).toContain('[{"text":"See you next week."}]');
+            expect(prompt).not.toContain('12.5');
+            expect(request.config.thinkingConfig).toEqual({ thinkingLevel: 'LOW' });
+
+            // Context lines reach the prompt
+            await translateSubtitles(lines, 'Simplified Chinese', 'gemini-3.8-flash', { before: ['Previous line'], after: ['Next line'] });
+            expect(mockGenerateContent.mock.calls[1][0].contents[0].parts[0].text).toContain('["Previous line"]');
+            mockGenerateContent.mockClear();
+
+            // Older models don't accept thinkingLevel
+            await translateSubtitles(lines, 'Simplified Chinese', 'gemini-2.5-flash');
+            expect(mockGenerateContent.mock.calls[0][0].config).not.toHaveProperty('thinkingConfig');
         });
     });
 });

@@ -18,9 +18,22 @@ interface SubtitleListProps {
   onSplit: (id: string) => void;
 }
 
+// Provider errors arrive as raw JSON strings; show their message, not the JSON.
+function describeTranslateError(error: unknown, status: number): string {
+  if (typeof error !== "string" || !error) return `Server returned HTTP ${status}.`;
+  try {
+    const message = JSON.parse(error)?.error?.message;
+    if (typeof message === "string") return message;
+  } catch {
+    // Not JSON; use as-is
+  }
+  return error.length > 300 ? `${error.slice(0, 300)}…` : error;
+}
+
 export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, secondaryLanguage, selectedIds, onSelect, onSplit }: SubtitleListProps) {
   const [, setEditingId] = useState<string | null>(null);
   const [translatingId, setTranslatingId] = useState<string | null>(null);
+  const [translateError, setTranslateError] = useState<{ id: string; message: string } | null>(null);
   // Primary text of each line when its textarea gained focus
   const textOnFocusRef = useRef<Record<string, string>>({});
 
@@ -32,11 +45,16 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
   const handleTranslate = async (index: number) => {
     const sub = subtitles[index];
     if (!sub.text) return;
+    if (secondaryLanguage === "None") {
+      setTranslateError({ id: sub.id, message: "No secondary language is set for this project." });
+      return;
+    }
 
     setTranslatingId(sub.id);
+    setTranslateError(null);
     
-    const contextBefore = subtitles.slice(Math.max(0, index - 7), index).map(s => s.text).join('\n');
-    const contextAfter = subtitles.slice(index + 1, index + 8).map(s => s.text).join('\n');
+    const contextBefore = subtitles.slice(Math.max(0, index - 7), index).map(s => s.text);
+    const contextAfter = subtitles.slice(index + 1, index + 8).map(s => s.text);
 
     try {
       const res = await fetch("/api/translate", {
@@ -44,7 +62,7 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: sub.text,
-          targetLanguage: secondaryLanguage === "None" ? "" : secondaryLanguage, // Pass empty if None
+          targetLanguage: secondaryLanguage,
           contextBefore,
           contextAfter
         })
@@ -54,12 +72,13 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
         // Functional update: apply to the latest list, not the one captured
         // when the request started, so edits made meanwhile aren't reverted.
         onUpdate(prev => prev.map(s => s.id === sub.id ? { ...s, secondaryText: data.translation } : s));
-      } else if (data.error) {
+      } else {
         console.error("Translation API error:", data.error);
-        // Optionally show error to user
+        setTranslateError({ id: sub.id, message: describeTranslateError(data.error, res.status) });
       }
     } catch (e) {
       console.error("Translation failed", e);
+      setTranslateError({ id: sub.id, message: "Could not reach the server." });
     } finally {
       setTranslatingId(null);
     }
@@ -300,6 +319,11 @@ export function SubtitleList({ subtitles, onUpdate, currentTime, onSeek, seconda
                     )}
                   </div>
                 </div>
+                {translateError?.id === sub.id && (
+                  <p className="text-[10px] text-red-400 break-words" role="alert">
+                    Translation failed: {translateError.message}
+                  </p>
+                )}
               </div>
             </div>
           );

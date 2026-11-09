@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Settings, X, RefreshCw, Type, Languages } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_AI_MODEL } from "@/types/constants";
 import { resolveTrackStyle, normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
 import { getCachedModelResult } from "@/lib/model-cache";
 
@@ -39,7 +39,7 @@ export function ProjectSettingsDialog({
   // Config state
   const [primaryLang, setPrimaryLang] = useState(config.primaryLanguage || "English");
   const [secondaryLang, setSecondaryLang] = useState(config.secondaryLanguage || "Secondary");
-  const [model, setModel] = useState(config.geminiModel || "gemini-2.0-flash");
+  const [model, setModel] = useState(config.geminiModel || DEFAULT_AI_MODEL);
   
   // Project Config state
   const [width, setWidth] = useState(projectConfig.width);
@@ -296,7 +296,7 @@ export function ProjectSettingsDialog({
                                     <option key={m.name} value={m.name}>{m.displayName}</option>
                                 ))
                             ) : (
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Default)</option>
+                                <option value={DEFAULT_AI_MODEL}>Gemini 3.8 Flash (Default)</option>
                             )}
                         </select>
                         <p className="text-[10px] text-[#666]">

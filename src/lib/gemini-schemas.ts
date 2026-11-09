@@ -46,15 +46,9 @@ export const translationSchema = {
       type: "ARRAY",
       items: {
         type: "OBJECT",
+        // No timestamps: lines are matched back by position, and asking the model to
+        // echo them (in a format that differs from the input) made it think for 15-130s.
         properties: {
-          startTime: {
-            type: "STRING",
-            description: "Timestamp in HH:MM:SS,mmm format",
-          },
-          endTime: {
-            type: "STRING",
-            description: "Timestamp in HH:MM:SS,mmm format",
-          },
           text: {
             type: "STRING",
             description: "Original text to be translated",
@@ -64,7 +58,7 @@ export const translationSchema = {
             description: "The translated text",
           },
         },
-        required: ["startTime", "endTime", "text", "secondaryText"],
+        required: ["text", "secondaryText"],
       },
     },
   },

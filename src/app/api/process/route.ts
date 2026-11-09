@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
     // videoPath declared outside try block
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";
-    let modelName = "gemini-2.5-flash";
+    let modelName = "gemini-3.8-flash";
     let originalFilename = "";
 
     // Resolve the per-file size limit up front so we can abort mid-stream

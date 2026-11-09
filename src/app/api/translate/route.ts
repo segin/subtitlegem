@@ -1,14 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 export const runtime = 'nodejs';
 
+// Neighbouring lines that give the model context for a single line
+const ContextLines = z.array(z.string().max(1000)).max(20).optional();
+
+const TranslateRequestSchema = z.object({
+  text: z.string().min(1).max(5000),
+  targetLanguage: z.string().min(1).max(100),
+  contextBefore: ContextLines,
+  contextAfter: ContextLines,
+});
+
 export async function POST(req: NextRequest) {
   try {
-    const { text, targetLanguage } = await req.json();
-
-    if (!text || !targetLanguage) {
-      return NextResponse.json({ error: "Missing text or targetLanguage" }, { status: 400 });
+    const parsed = TranslateRequestSchema.safeParse(await req.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Missing or invalid text, targetLanguage or context" }, { status: 400 });
     }
+    const { text, targetLanguage, contextBefore, contextAfter } = parsed.data;
 
     const { getGlobalSettings } = await import("@/lib/global-settings-store");
     const { processWithFallback } = await import("@/lib/ai-provider");
@@ -21,7 +32,11 @@ export async function POST(req: NextRequest) {
     if (text) {
       const result = await processWithFallback(
         'translate',
-        { subtitles: [{ id: "single", startTime: 0, endTime: 0, text }], targetLanguage },
+        {
+          subtitles: [{ id: "single", startTime: 0, endTime: 0, text }],
+          targetLanguage,
+          context: { before: contextBefore, after: contextAfter },
+        },
         settings.aiFallbackChain
       );
       

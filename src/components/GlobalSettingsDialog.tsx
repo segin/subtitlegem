@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS, AIProvider } from "@/types/subtitle";
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
+import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_AI_MODEL } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette, Lock, LogOut } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
 import { getMarginPreviewStyle } from "@/lib/style-resolver";
@@ -464,7 +464,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                         newChain.push({
                           id: Math.random().toString(36).substr(2, 9),
                           provider: 'gemini',
-                          modelName: 'gemini-1.5-flash',
+                          modelName: DEFAULT_AI_MODEL,
                           enabled: true
                         });
                         setSettings({ ...settings, aiFallbackChain: newChain });

@@ -39,7 +39,7 @@ describe('constants', () => {
     expect(DEFAULT_GLOBAL_SECONDARY_LANGUAGE).toBe('Simplified Chinese');
   });
 
-  test('DEFAULT_AI_MODEL is gemini-2.0-flash', () => {
-    expect(DEFAULT_AI_MODEL).toBe('gemini-2.0-flash');
+  test('DEFAULT_AI_MODEL is gemini-3.8-flash', () => {
+    expect(DEFAULT_AI_MODEL).toBe('gemini-3.8-flash');
   });
 });

@@ -4,7 +4,7 @@ SubtitleGem is a powerful, web-based tool built with Next.js that leverages the 
 
 ## Features
 
-- **Automated Subtitling**: Uses Gemini 1.5 Flash to generate accurate English and secondary language subtitles.
+- **Automated Subtitling**: Uses Gemini 3.8 Flash (by default) to generate accurate English and secondary language subtitles.
 - **Smart Processing**: Automatically extracts audio from videos larger than 400MB to optimize API performance.
 - **Interactive Timeline**: Fine-tune subtitle timings with a draggable timeline interface.
 - **Real-time Preview**: See how your subtitles look overlaid on the video as you edit.

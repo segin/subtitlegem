@@ -157,7 +157,7 @@ subtitlegem/
 #### 3.2.2. AI Transcription Service
 **Endpoint:** `/api/process` (POST with video)  
 **Description:** Sends audio/video to Google Gemini for automatic speech recognition and bilingual translation.  
-**Technologies:** `@google/genai` SDK, Gemini 2.0 Flash  
+**Technologies:** `@google/genai` SDK, Gemini 3.8 Flash by default (3.1 Pro selectable)  
 **Key Functions:**
 - `generateSubtitles()` - Full video transcription (Robust JSON parsing with markdown stripping)
 - `generateSubtitlesInline()` - File (<95MB) inline processing

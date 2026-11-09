@@ -1,6 +1,7 @@
-import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold, Part } from "@google/genai";
+import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold, Part, type ThinkingLevel } from "@google/genai";
 import { SubtitleLine } from "@/types/subtitle";
 import { subtitleSchema, translationSchema } from "./gemini-schemas";
+import { buildTranslationPrompt, TranslationContext } from "./translation-prompt";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -105,7 +106,7 @@ async function performSubtitleGeneration(
   mediaPart: Part,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-3.8-flash"
 ) {
   const prompt = `
     Analyze the audio in this video.
@@ -172,7 +173,7 @@ export async function generateSubtitles(
   mimeType: string,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-3.8-flash"
 ) {
   return performSubtitleGeneration(
     {
@@ -196,7 +197,7 @@ export async function generateSubtitlesInline(
   mimeType: string,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-3.8-flash"
 ) {
   return performSubtitleGeneration(
     {
@@ -214,30 +215,21 @@ export async function generateSubtitlesInline(
 export async function translateSubtitles(
   subtitles: SubtitleLine[],
   targetLanguage: string,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-3.8-flash",
+  context?: TranslationContext
 ) {
-  const prompt = `
-    You are an expert translator.
-    Translate the 'text' field of the following JSON subtitles into ${targetLanguage}.
-    Put the translated text into the 'secondaryText' field.
-    
-    Rules:
-    1. PRESERVE 'startTime' and 'endTime' EXACTLY.
-    2. PRESERVE the number of objects and their order.
-    3. Output JSON object with a 'subtitles' array.
-    
-    Input JSON:
-    ${JSON.stringify(subtitles)}
-  `;
+  const prompt = buildTranslationPrompt(subtitles, targetLanguage, context);
 
   try {
     const response = await ai.models.generateContent({
       model: modelName,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: { 
+      config: {
         responseMimeType: "application/json",
         responseSchema: translationSchema,
         safetySettings,
+        // Translation needs little reasoning; default thinking took 4-20x longer
+        ...(/^(models\/)?gemini-3/.test(modelName) && { thinkingConfig: { thinkingLevel: "LOW" as ThinkingLevel } }),
       },
     });
 
@@ -259,7 +251,7 @@ export async function translateSubtitles(
  */
 export async function generateSummary(
   prompt: string,
-  modelName: string = "gemini-2.5-flash"
+  modelName: string = "gemini-3.8-flash"
 ): Promise<string> {
   try {
     const response = await ai.models.generateContent({

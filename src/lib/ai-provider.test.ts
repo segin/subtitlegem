@@ -1,4 +1,5 @@
-import { processWithFallback } from './ai-provider';
+import { processWithFallback, replaceRetiredModel } from './ai-provider';
+import { DEFAULT_AI_MODEL } from '@/types/constants';
 import * as gemini from './gemini';
 import { ModelConfig } from '@/types/subtitle';
 
@@ -143,5 +144,44 @@ describe('ai-provider output normalization', () => {
     const result = await processWithFallback('translate', { subtitles: input, targetLanguage: 'Spanish' }, [geminiConfig]);
 
     expect(result.subtitles).toEqual([{ ...input[0], secondaryText: 'hola' }]);
+  });
+});
+
+describe('ai-provider retired models', () => {
+  const input = [{ id: 'a', startTime: 0, endTime: 1, text: 'hello' }];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(console, 'warn').mockImplementation();
+    (gemini.translateSubtitles as jest.Mock).mockResolvedValue([{ text: 'hello', secondaryText: 'hola' }]);
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  test.each(['gemini-2.0-flash', 'gemini-1.5-pro-002', 'models/gemini-1.0-pro', 'gemini-pro'])(
+    'replaces shut-down %s with the current default',
+    (name) => expect(replaceRetiredModel(name)).toBe(DEFAULT_AI_MODEL)
+  );
+
+  test.each(['gemini-2.5-flash', 'gemini-3.1-pro-preview', 'gemini-flash-latest', 'gemini-2.05-x'])(
+    'leaves %s alone',
+    (name) => expect(replaceRetiredModel(name)).toBe(name)
+  );
+
+  test('translation with a saved gemini-2.0-flash chain uses the default model', async () => {
+    const chain: ModelConfig[] = [{ id: '1', provider: 'gemini', modelName: 'gemini-2.0-flash', enabled: true }];
+
+    const result = await processWithFallback('translate', { subtitles: input, targetLanguage: 'Spanish' }, chain);
+
+    expect((gemini.translateSubtitles as jest.Mock).mock.calls[0][2]).toBe(DEFAULT_AI_MODEL);
+    expect(result.modelName).toBe(DEFAULT_AI_MODEL);
+  });
+
+  test('a retired per-request model is replaced too', async () => {
+    const chain: ModelConfig[] = [{ id: '1', provider: 'gemini', modelName: 'gemini-3.8-flash', enabled: true }];
+
+    await processWithFallback('translate', { subtitles: input, targetLanguage: 'Spanish', modelName: 'gemini-1.5-flash' }, chain);
+
+    expect((gemini.translateSubtitles as jest.Mock).mock.calls[0][2]).toBe(DEFAULT_AI_MODEL);
   });
 });

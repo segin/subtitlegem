@@ -30,4 +30,7 @@ export const DEFAULT_SECONDARY_LANGUAGE = 'Secondary';
 export const DEFAULT_GLOBAL_SECONDARY_LANGUAGE = 'Simplified Chinese';
 
 /** Default AI model for processing */
-export const DEFAULT_AI_MODEL = 'gemini-2.0-flash';
+export const DEFAULT_AI_MODEL = 'gemini-3.8-flash';
+
+/** Gemini models Google has shut down (1.0, 1.5, 2.0 families and the bare "gemini-pro" alias) */
+export const RETIRED_GEMINI_MODEL = /^(models\/)?gemini-(1\.0|1\.5|2\.0)(-|$)|^(models\/)?gemini-pro(-vision)?$/;

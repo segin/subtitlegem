@@ -6,6 +6,8 @@ import {
 import { translateSubtitles } from "./gemini";
 import { validateSubtitleArraySize, MAX_SUBTITLES } from "./validation-utils";
 import { normalizeGeneratedSubtitles, mergeTranslatedSubtitles } from "./ai-output";
+import { DEFAULT_AI_MODEL, RETIRED_GEMINI_MODEL } from "@/types/constants";
+import { buildTranslationPrompt, TranslationContext } from "./translation-prompt";
 
 // Re-export for backwards compatibility
 export { validateSubtitleArraySize, MAX_SUBTITLES };
@@ -33,6 +35,8 @@ export interface AIParams {
   // Translation
   subtitles?: SubtitleLine[];
   targetLanguage?: string;
+  /** Neighbouring lines sent as context, e.g. when translating a single line */
+  context?: TranslationContext;
 }
 
 /** A single transcription segment as returned by the OpenAI Whisper verbose_json format. */
@@ -56,6 +60,16 @@ export class AISafetyError extends Error {
 }
 
 /**
+ * Swap a shut-down Gemini model for the current default. Saved settings and
+ * projects can still name e.g. gemini-2.0-flash, which now returns 404.
+ */
+export function replaceRetiredModel(modelName: string): string {
+  if (!RETIRED_GEMINI_MODEL.test(modelName)) return modelName;
+  console.warn(`[AI-Provider] ${modelName} has been retired; using ${DEFAULT_AI_MODEL} instead`);
+  return DEFAULT_AI_MODEL;
+}
+
+/**
  * Main entry point for AI processing with safety re-route (fallback)
  */
 export async function processWithFallback(
@@ -63,9 +77,14 @@ export async function processWithFallback(
   params: AIParams,
   fallbackChain: ModelConfig[]
 ): Promise<AIResult> {
-  const enabledChain = fallbackChain.filter(c => c.enabled);
+  const enabledChain = fallbackChain
+    .filter(c => c.enabled)
+    .map(c => c.provider === 'gemini' ? { ...c, modelName: replaceRetiredModel(c.modelName) } : c);
   if (enabledChain.length === 0) {
     throw new Error("No enabled AI models in fallback chain.");
+  }
+  if (params.modelName) {
+    params = { ...params, modelName: replaceRetiredModel(params.modelName) };
   }
 
   let lastError: unknown = null;
@@ -253,7 +272,8 @@ async function callTranslate(config: ModelConfig, params: AIParams) {
     const subtitles = await translateSubtitles(
       params.subtitles!,
       params.targetLanguage!,
-      params.modelName || config.modelName
+      params.modelName || config.modelName,
+      params.context
     );
     return { subtitles };
   }
@@ -273,19 +293,8 @@ async function callOpenAICompatible(config: ModelConfig, params: AIParams) {
     throw new Error(`API Key missing for ${config.provider}`);
   }
 
-  const prompt = `
-    You are an expert translator.
-    Translate the 'text' field of the following JSON subtitles into ${params.targetLanguage}.
-    Put the translated text into the 'secondaryText' field.
-    
-    Rules:
-    1. PRESERVE 'startTime' and 'endTime' EXACTLY.
-    2. PRESERVE the number of objects and their order.
-    3. Output raw JSON ONLY. Do not include markdown formatting or explanations.
-    
-    Input JSON:
-    ${JSON.stringify(params.subtitles)}
-  `;
+  const prompt = buildTranslationPrompt(params.subtitles || [], params.targetLanguage!, params.context)
+    + "\n\nOutput raw JSON ONLY. Do not include markdown formatting or explanations.";
 
   const response = await fetch(`${endpoint}/chat/completions`, {
     method: 'POST',

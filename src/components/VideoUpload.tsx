@@ -1825,7 +1825,7 @@ export function VideoUpload({
                         <div key={category} className="space-y-1.5 mb-4">
                           <div className="text-[10px] font-bold text-[#888888] uppercase tracking-wider pl-1">{category} Models</div>
                           {categoryModels.map(m => {
-                            const isLatest = m.name.includes('gemma-4') || m.name.includes('gemini-2.5') || m.name.includes('-latest');
+                            const isLatest = m.name.includes('gemma-4') || m.name.includes('gemini-3.8') || m.name.includes('-latest');
                             
                             return (
                               <button
