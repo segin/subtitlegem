@@ -39,6 +39,18 @@ describe('MenuBar', () => {
     expect(defaultProps.onNewProject).toHaveBeenCalled();
   });
 
+  test('upload screen shows the full File menu with project actions disabled', () => {
+    render(<MenuBar {...defaultProps} isUploadScreen />);
+    fireEvent.click(screen.getByText('File'));
+
+    for (const label of ['New Project', 'Open Project...', 'Save Project', 'Save Draft',
+      'Export Project (.ass)', 'Export Subtitles (.srt)', 'Export Transcript (.txt)',
+      'Reprocess Video...', 'Close Project']) {
+      expect(screen.getByText(label).closest('button')).toBeDisabled();
+    }
+    expect(screen.getByText('Open Draft').closest('button')).not.toBeDisabled();
+  });
+
   test('handles Undo/Redo disabled state', () => {
     render(<MenuBar {...defaultProps} canUndo={false} canRedo={true} />);
     

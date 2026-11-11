@@ -142,37 +142,27 @@ export function MenuBar({
     () => [fileTriggerRef, editTriggerRef, viewTriggerRef, helpTriggerRef],
     []
   );
-  const menuCount = isUploadScreen ? 3 : 4; // File, Edit, View (if shown), Help
+  // Menu indices in display order: File, Edit, View (hidden on upload screen), Help
+  const visibleMenus = useMemo(() => (isUploadScreen ? [0, 1, 3] : [0, 1, 2, 3]), [isUploadScreen]);
 
   const isAnyMenuOpen = activeMenuIndex !== null;
 
-  const handleNavigateLeft = useCallback((currentIndex: number) => {
-    let prevIndex = (currentIndex - 1 + menuCount) % menuCount;
-    // Skip View menu if on upload screen
-    if (isUploadScreen && prevIndex === 2) {
-      prevIndex = 1; // Skip to Edit
-    }
-    setActiveMenuIndex(prevIndex);
+  const navigateBy = useCallback((currentIndex: number, step: number) => {
+    const pos = visibleMenus.indexOf(currentIndex);
+    const target = visibleMenus[(pos + step + visibleMenus.length) % visibleMenus.length];
+    setActiveMenuIndex(target);
     // Focus the adjacent trigger
     requestAnimationFrame(() => {
-      triggerRefs[prevIndex]?.current?.focus();
+      triggerRefs[target]?.current?.focus();
     });
-  }, [isUploadScreen, menuCount, triggerRefs]);
+  }, [visibleMenus, triggerRefs]);
 
-  const handleNavigateRight = useCallback((currentIndex: number) => {
-    let nextIndex = (currentIndex + 1) % menuCount;
-    // Skip View menu if on upload screen
-    if (isUploadScreen && nextIndex === 2) {
-      nextIndex = 0; // Wrap to File
-    }
-    setActiveMenuIndex(nextIndex);
-    // Focus the adjacent trigger
-    requestAnimationFrame(() => {
-      triggerRefs[nextIndex]?.current?.focus();
-    });
-  }, [isUploadScreen, menuCount, triggerRefs]);
+  const handleNavigateLeft = useCallback((currentIndex: number) => navigateBy(currentIndex, -1), [navigateBy]);
+  const handleNavigateRight = useCallback((currentIndex: number) => navigateBy(currentIndex, 1), [navigateBy]);
 
   // ========== FILE MENU ==========
+  // The landing page shows the same File menu as the editor, with the
+  // project actions disabled. Open Draft stays usable there.
   const fileItems = useMemo<MenuItem[]>(() => {
     const items: MenuItem[] = [
       { id: "new", label: "New Project", icon: <FileVideo className="w-4 h-4" />, onClick: onNewProject, shortcut: "Shift+N" },
@@ -215,8 +205,11 @@ export function MenuBar({
       { id: "close-project", label: "Close Project", icon: <X className="w-4 h-4" />, onClick: onCloseProject, showOnUploadScreen: false }
     );
 
-    return items;
-  }, [onNewProject, onOpenProject, onSaveProject, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, recentDrafts, onLoadDraft]);
+    if (!isUploadScreen) return items;
+    return items.map(item =>
+      'divider' in item || item.id === "open-draft" ? item : { ...item, disabled: true }
+    );
+  }, [onNewProject, onOpenProject, onSaveProject, onSaveDraft, onExport, onReprocessVideo, onCloseProject, hasSecondarySubtitles, primaryLanguage, secondaryLanguage, recentDrafts, onLoadDraft, isUploadScreen]);
 
   // ========== EDIT MENU ==========
   const editItems = useMemo<MenuItem[]>(() => [
@@ -263,7 +256,7 @@ export function MenuBar({
     });
   }, [isUploadScreen]);
 
-  const cleanedFileItems = useMemo(() => cleanDividers(filterForUploadScreen(fileItems)), [fileItems, filterForUploadScreen]);
+  const cleanedFileItems = useMemo(() => cleanDividers(fileItems), [fileItems]);
   const cleanedEditItems = useMemo(() => cleanDividers(filterForUploadScreen(editItems)), [editItems, filterForUploadScreen]);
   const cleanedViewItems = useMemo(() => cleanDividers(filterForUploadScreen(viewItems)), [viewItems, filterForUploadScreen]);
 
