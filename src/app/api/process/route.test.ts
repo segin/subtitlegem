@@ -49,6 +49,11 @@ jest.mock('@/lib/gemini', () => ({
 jest.mock('@/lib/ffmpeg-utils', () => ({
   extractAudio: jest.fn(),
   getAudioCodec: jest.fn(),
+  ffprobe: jest.fn(),
+}));
+
+jest.mock('@/lib/audio-transcription', () => ({
+  transcribeAudio: jest.fn(),
 }));
 
 // Mock Busboy (we won't use it in these tests, but it's initialized)
@@ -61,10 +66,14 @@ jest.mock('busboy', () => {
 import { processWithFallback } from '@/lib/ai-provider';
 import { uploadToGemini } from '@/lib/gemini';
 import { isPathSafe } from '@/lib/storage-config';
+import { ffprobe } from '@/lib/ffmpeg-utils';
+import { transcribeAudio } from '@/lib/audio-transcription';
 
 describe('/api/process (JSON modes)', () => {
   const mockProcess = processWithFallback as jest.Mock;
   const mockUpload = uploadToGemini as jest.Mock;
+  const mockFfprobe = ffprobe as jest.Mock;
+  const mockTranscribe = transcribeAudio as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -116,20 +125,13 @@ describe('/api/process (JSON modes)', () => {
       );
     });
 
-    it('should handle local file upload + processing', async () => {
-        // Mock fs exists
+    it('transcribes a local file in audio pieces with the chosen model and hints', async () => {
         (fs.existsSync as jest.Mock).mockReturnValue(true);
-        // Mock fs stats (large file > 95MB to trigger upload)
-        (fs.statSync as jest.Mock).mockReturnValue({ size: 100 * 1024 * 1024 });
-
-        mockUpload.mockResolvedValue({
-            uri: 'gs://new/upload.mp4',
-            name: 'files/123'
-        });
-
-        mockProcess.mockResolvedValue({
-            subtitles: [{ id: '1', text: 'test' }],
-            detectedLanguage: 'English'
+        mockFfprobe.mockResolvedValue({ duration: 6738.8 });
+        mockTranscribe.mockResolvedValue({
+            subtitles: [{ id: '1', startTime: 1, endTime: 2, text: 'test' }],
+            detectedLanguage: 'Russian',
+            gaps: [{ start: 2700, end: 3000, reason: 'prompt blocked: OTHER' }],
         });
 
         const req = new NextRequest('http://localhost/api/process', {
@@ -138,7 +140,9 @@ describe('/api/process (JSON modes)', () => {
             body: JSON.stringify({
                 mode: 'reprocess',
                 filePath: '/mock/staging/file.mp4',
-                language: 'English'
+                model: 'gemini-3.1-pro-preview',
+                secondaryLanguage: 'English',
+                promptHints: 'Speaker: Neptune',
             }),
         });
 
@@ -146,13 +150,45 @@ describe('/api/process (JSON modes)', () => {
         const data = await res.json();
 
         expect(res.status).toBe(200);
-        expect(mockUpload).toHaveBeenCalled();
-        expect(mockProcess).toHaveBeenCalledWith(
-            'generate',
-            expect.objectContaining({ fileUri: 'gs://new/upload.mp4' }),
-            expect.anything()
-        );
-        expect(data.geminiFileUri).toBe('gs://new/upload.mp4');
+        expect(mockTranscribe).toHaveBeenCalledWith(expect.objectContaining({
+            sourcePath: '/mock/staging/file.mp4',
+            duration: 6738.8,
+            modelName: 'gemini-3.1-pro-preview',
+            secondaryLanguage: 'English',
+            promptHints: 'Speaker: Neptune',
+        }));
+        expect(mockUpload).not.toHaveBeenCalled(); // no Files API upload that expires
+        expect(data.subtitles).toHaveLength(1);
+        expect(data.detectedLanguage).toBe('Russian');
+        expect(data.subtitleWarning).toBe('No subtitles for 0:45-0:50: Gemini would not transcribe that part');
+    });
+
+    it('previews only the first sampleDuration seconds', async () => {
+        (fs.existsSync as jest.Mock).mockReturnValue(true);
+        mockFfprobe.mockResolvedValue({ duration: 6738.8 });
+        mockTranscribe.mockResolvedValue({ subtitles: [], gaps: [] });
+
+        const req = new NextRequest('http://localhost/api/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'reprocess', filePath: '/mock/staging/file.mp4', sampleDuration: 10, secondaryLanguage: 'None' }),
+        });
+
+        expect((await POST(req)).status).toBe(200);
+        expect(mockTranscribe).toHaveBeenCalledWith(expect.objectContaining({ duration: 10, secondaryLanguage: undefined }));
+    });
+
+    it('reports a missing source file', async () => {
+        (fs.existsSync as jest.Mock).mockReturnValue(false);
+        const req = new NextRequest('http://localhost/api/process', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'reprocess', filePath: '/mock/staging/gone.mp4' }),
+        });
+
+        const res = await POST(req);
+        expect(res.status).toBe(404);
+        expect(mockTranscribe).not.toHaveBeenCalled();
     });
 
     it('should block unsafe filePath even with sampleDuration', async () => {

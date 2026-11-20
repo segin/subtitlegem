@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent, queryByText } from '@testing-library/react';
-import { SubtitleTimeline } from './SubtitleTimeline';
+import { SubtitleTimeline, ZOOM_100_PIXELS_PER_SECOND } from './SubtitleTimeline';
 import { SubtitleLine } from '@/types/subtitle';
 
 // Mock ResizeObserver
@@ -84,18 +84,14 @@ describe('SubtitleTimeline Virtualization', () => {
     const scrollContainer = container.querySelector('.overflow-x-auto') as HTMLElement;
     Object.defineProperty(scrollContainer, 'clientWidth', { configurable: true, value: 1000 });
     
-    // Scroll to 5000px (50 seconds in)
-    Object.defineProperty(scrollContainer, 'scrollLeft', { configurable: true, value: 5000 });
+    // Scroll to 50 seconds in at the default zoom (~33 px/s, so ~1640px)
+    Object.defineProperty(scrollContainer, 'scrollLeft', { configurable: true, value: 50 * ZOOM_100_PIXELS_PER_SECOND });
     fireEvent.scroll(scrollContainer);
 
-    // Visible range roughly: 
-    // Start pixel: 5000 - 1000 (buffer) = 4000px -> 40s
-    // End pixel: 5000 + 1000 (width) + 1000 (buffer) = 7000px -> 70s
-    // Should render subs around 40s - 70s.
-    // Sub 45 should be visible. Sub 5 should NOT be visible.
+    // Visible range: one 1000px screen of buffer either side of the viewport,
+    // roughly 19.5s - 111s. Sub 45 should be visible. Sub 5 should NOT be visible.
 
-    // Subtitle 5 (5s-5.9s) should be out of view (range starts at 40s)
-    // Subtitle 5 (5s-5.9s) should be out of view (range starts at 40s)
+    // Subtitle 5 (5s-5.9s) should be out of view (range starts at ~19.5s)
     // We use queryByText which matches full string by default, ensuring we don't match "Subtitle 50"
     const sub5 = queryByText(container, 'Subtitle 5');
     expect(sub5).toBeNull();

@@ -86,6 +86,12 @@ export type TimelineRef = {
   zoomOut: () => void;
 };
 
+/**
+ * Scale shown as 100% zoom, and the starting zoom: about 33 px per second.
+ * (Previously 100 px/s was 100%; this was the old 33%, five zoom-out steps from it.)
+ */
+export const ZOOM_100_PIXELS_PER_SECOND = 100 * 0.8 ** 5;
+
 export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelineProps>((props, ref) => {
   // Normalize props to new interface
   const subtitles = props.subtitles;
@@ -113,7 +119,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
   const isMultiVideoMode = videoClips && timelineClips && timelineClips.length > 0;
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const [pixelsPerSecond, setPixelsPerSecond] = useState(100);
+  const [pixelsPerSecond, setPixelsPerSecond] = useState(ZOOM_100_PIXELS_PER_SECOND);
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [followPlayhead, setFollowPlayhead] = useState(true);
   // Removed internal isV2Collapsed state in favor of controlled showSecondaryTracks prop
@@ -558,7 +564,7 @@ export const SubtitleTimeline = React.forwardRef<TimelineRef, SubtitleTimelinePr
            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
          </button>
          <span className="text-[10px] text-[#888888] font-mono min-w-[32px] text-center">
-            {Math.round((pixelsPerSecond / 100) * 100)}%
+            {Math.round((pixelsPerSecond / ZOOM_100_PIXELS_PER_SECOND) * 100)}%
          </span>
          <button 
            onClick={handleZoomIn}

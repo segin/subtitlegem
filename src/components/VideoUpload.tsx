@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, ArrowUpFromLine, Lock } from "lucide-react";
-import { validateVideoFile, prepareUploadFormData, generateClipId } from "@/lib/upload-utils";
+import { validateVideoFile, prepareUploadFormData, generateClipId, describeLostConnection } from "@/lib/upload-utils";
 import { checkModelAvailability } from "@/lib/model-cache";
 import { RawSubtitleItem, ProcessResponse, SubtitleLine } from "@/types/subtitle";
 import { createNdjsonReader, describeIncompleteStream } from "@/lib/ndjson-utils";
@@ -55,7 +55,11 @@ interface StreamMessage {
   stage?: string;
   percent?: number;
   message?: string;
-  data?: ProcessResponse & { subtitleGenerationFailed?: boolean };
+  data?: ProcessResponse & {
+    subtitleGenerationFailed?: boolean;
+    /** Parts of a long recording left without subtitles (each has a placeholder line) */
+    subtitleWarning?: string;
+  };
 }
 
 interface VideoUploadProps {
@@ -140,9 +144,42 @@ export function VideoUpload({
   const uploadHistoryRef = useRef<{ timestamp: number; loaded: number }[]>([]);
 
   const activeXhrsRef = useRef<XMLHttpRequest[]>([]);
+  // If a page disconnects mid-job, the server saves the result as a draft.
+  // Each request carries an upload ID so Cancel can tell the server to discard it instead.
+  const uploadIdsRef = useRef(new WeakMap<XMLHttpRequest, string>());
+  const cancelledXhrsRef = useRef(new WeakSet<XMLHttpRequest>());
+
+  const saveClipsAsDraft = async (name: string, clips: UploadedClip[]) => {
+    const res = await fetch('/api/drafts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        version: 2,
+        clips,
+        timeline: buildSequentialTimeline(clips),
+        subtitleConfig: { primaryLanguage: 'English' },
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to save project "${name}" (HTTP ${res.status})`);
+    }
+  };
 
   const cancelUpload = useCallback(() => {
+    const uploadIds = activeXhrsRef.current
+      .map(xhr => uploadIdsRef.current.get(xhr))
+      .filter((id): id is string => !!id);
+    if (uploadIds.length > 0) {
+      fetch('/api/process/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uploadIds }),
+        keepalive: true,
+      }).catch(() => {});
+    }
     activeXhrsRef.current.forEach(xhr => {
+      cancelledXhrsRef.current.add(xhr);
       try { xhr.abort(); } catch {}
     });
     activeXhrsRef.current = [];
@@ -360,14 +397,19 @@ export function VideoUpload({
     setTotalBytes(file.size);
     setUploadSpeed(0);
 
+    const uploadId = generateClipId();
     const formData = prepareUploadFormData(file, {
       secondaryLanguage: secondaryLanguage !== 'None' ? secondaryLanguage : undefined,
       model,
+      uploadId,
     });
 
     const xhr = new XMLHttpRequest();
     activeXhrsRef.current.push(xhr);
+    uploadIdsRef.current.set(xhr, uploadId);
     startTimeRef.current = Date.now();
+    let uploadFinished = false;
+    xhr.upload.addEventListener("load", () => { uploadFinished = true; });
 
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) {
@@ -380,7 +422,8 @@ export function VideoUpload({
     });
 
     xhr.addEventListener("error", () => {
-      setError("Network error");
+      setServerStage(null);
+      setError(describeLostConnection(uploadFinished));
       activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
       setLoading(false);
     });
@@ -401,7 +444,8 @@ export function VideoUpload({
         } else if (part.stage === "gemini_processing") {
           setProgress(part.percent ?? 100);
         } else if (part.stage === "generating_subtitles") {
-          setProgress(100);
+          // Long recordings report progress piece by piece
+          setProgress(part.percent ?? 100);
         }
       } else if (part.type === "complete" && part.data) {
         finished = true;
@@ -1089,24 +1133,34 @@ export function VideoUpload({
               setTotalBytes(totalSize);
               setFileProgressMap(initialProgress);
 
+              // Clips already processed for the project in progress, saved if a later file fails
+              let unsaved: { name: string; clips: UploadedClip[] } | null = null;
+              let cancelled = false;
+
               try {
                 // 2. Process each project sequentially (could be parallelized)
                 for (const project of projectsToProcess) {
                   const uploadedClips: UploadedClip[] = [];
+                  unsaved = { name: project.name || 'Untitled Project', clips: uploadedClips };
 
                   // Process files in project
                   for (const file of project.files) {
+                      const uploadId = generateClipId();
                       const formData = prepareUploadFormData(file, {
                         secondaryLanguage,
-                        model
+                        model,
+                        uploadId,
                       });
 
                       // Wrapped XHR Promise for Upload
                       const result = await new Promise<ProcessResponse>((resolve, reject) => {
                           const xhr = new XMLHttpRequest();
                           activeXhrsRef.current.push(xhr);
+                          uploadIdsRef.current.set(xhr, uploadId);
+                          let uploadFinished = false;
+                          xhr.upload.addEventListener('load', () => { uploadFinished = true; });
                           const key = `${project.id}-${file.name}`;
-                          
+
                           xhr.upload.onprogress = (e) => {
                               if (e.lengthComputable) {
                                   // Update file progress
@@ -1157,7 +1211,7 @@ export function VideoUpload({
                                   percent: undefined,
                                   warning: part.data?.subtitleGenerationFailed
                                     ? 'Subtitle generation failed — video added without subtitles'
-                                    : undefined,
+                                    : part.data?.subtitleWarning,
                                 }
                               }));
                               resolve(part.data);
@@ -1175,16 +1229,17 @@ export function VideoUpload({
                               reader.end();
                               activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                               if (!finished) {
-                                reject(new Error(xhr.status === 0
-                                  ? 'Upload cancelled or network error'
-                                  : describeIncompleteStream(xhr.status, lastMessage)));
+                                if (cancelledXhrsRef.current.has(xhr)) cancelled = true;
+                                reject(new Error(xhr.status !== 0
+                                  ? describeIncompleteStream(xhr.status, lastMessage)
+                                  : cancelled ? 'Upload cancelled by user' : describeLostConnection(uploadFinished)));
                               }
                             }
                           };
 
                           xhr.onerror = () => {
                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                             reject(new Error('Network error'));
+                             reject(new Error(describeLostConnection(uploadFinished)));
                           };
                           xhr.open('POST', '/api/process');
                           xhr.send(formData);
@@ -1206,32 +1261,27 @@ export function VideoUpload({
                   }
 
                   // 3. Create Draft for Project
+                  unsaved = null;
                   if (uploadedClips.length > 0) {
-                      const draftRes = await fetch('/api/drafts', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                              name: project.name || 'Untitled Project',
-                              version: 2,
-                              clips: uploadedClips,
-                              timeline: buildSequentialTimeline(uploadedClips),
-                              subtitleConfig: {
-                                  primaryLanguage: 'English',
-                              }
-                          })
-                      });
-                      if (!draftRes.ok) {
-                          throw new Error(`Failed to save project "${project.name || 'Untitled Project'}" (HTTP ${draftRes.status})`);
-                      }
+                      await saveClipsAsDraft(project.name || 'Untitled Project', uploadedClips);
                   }
                 }
 
                 // Complete
                 onUploadComplete([], '', '', '', '', '', 0); // Trigger refresh/redirect
-                
+
               } catch (err) {
                 console.error('Upload failed:', err);
-                setError((err instanceof Error ? err.message : String(err)) || 'Upload failed');
+                let message = (err instanceof Error ? err.message : String(err)) || 'Upload failed';
+                // Don't lose the clips that did finish
+                const partial = unsaved as { name: string; clips: UploadedClip[] } | null;
+                if (!cancelled && partial && partial.clips.length > 0) {
+                  try {
+                    await saveClipsAsDraft(partial.name, partial.clips);
+                    message += ` The ${partial.clips.length} finished video(s) of "${partial.name}" were saved to Drafts.`;
+                  } catch { /* report the original failure */ }
+                }
+                setError(message);
               } finally {
                 setLoading(false);
                 setIsUploading(false);
@@ -1486,9 +1536,13 @@ export function VideoUpload({
               setTotalBytes(totalSize);
               setFileProgressMap(initialProgress);
 
+              // Saves projects whose finished clips weren't saved yet, if a later upload fails
+              let saveUnfinished: (() => Promise<number>) | null = null;
+              let cancelled = false;
+
               try {
                 // 1. Prepare Projects
-                const projectsToCreate = uploadMode === 'multi-video' 
+                const projectsToCreate = uploadMode === 'multi-video'
                   ? [{ id: 'multi-video', name: multiVideoProjectName || 'New Project', files: files }]
                   : files.map((f, i) => ({ id: `batch-${i}`, name: f.name, files: [f] }));
 
@@ -1506,24 +1560,22 @@ export function VideoUpload({
                 let activeUploads = 0;
                 let completedCount = 0;
 
+                const savedProjects = new Set<string>();
                 const saveProjectDraft = async (project: UploadProject) => {
+                  savedProjects.add(project.id);
                   const clips = [...projectResults[project.id]]
                     .sort((a, b) => a.order - b.order)
                     .map(r => r.clip);
-                  const res = await fetch('/api/drafts', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      name: project.name,
-                      version: 2,
-                      clips,
-                      timeline: buildSequentialTimeline(clips),
-                      subtitleConfig: { primaryLanguage: 'English' }
-                    })
-                  });
-                  if (!res.ok) {
-                    throw new Error(`Failed to save project "${project.name}" (HTTP ${res.status})`);
+                  await saveClipsAsDraft(project.name, clips);
+                };
+                saveUnfinished = async () => {
+                  let saved = 0;
+                  for (const project of projectsToCreate) {
+                    if (savedProjects.has(project.id) || !projectResults[project.id]?.length) continue;
+                    await saveProjectDraft(project);
+                    saved += projectResults[project.id].length;
                   }
+                  return saved;
                 };
 
                 await new Promise<void>((resolve, reject) => {
@@ -1540,9 +1592,13 @@ export function VideoUpload({
                     nextToUpload = index + 1;
 
                     const item = uploadQueue[index];
-                    const formData = prepareUploadFormData(item.file, { secondaryLanguage, model });
+                    const uploadId = generateClipId();
+                    const formData = prepareUploadFormData(item.file, { secondaryLanguage, model, uploadId });
                     const xhr = new XMLHttpRequest();
                     activeXhrsRef.current.push(xhr);
+                    uploadIdsRef.current.set(xhr, uploadId);
+                    let uploadFinished = false;
+                    xhr.upload.addEventListener('load', () => { uploadFinished = true; });
                     let pipelined = false;
 
                     xhr.upload.onprogress = (e) => {
@@ -1599,7 +1655,7 @@ export function VideoUpload({
                           percent: undefined,
                           warning: data.subtitleGenerationFailed
                             ? 'Subtitle generation failed — video added without subtitles'
-                            : undefined,
+                            : data.subtitleWarning,
                         }
                       }));
 
@@ -1643,16 +1699,17 @@ export function VideoUpload({
                         reader.end();
                         activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
                         if (!finished) {
-                          reject(new Error(xhr.status === 0
-                            ? 'Upload cancelled or network error'
-                            : describeIncompleteStream(xhr.status, lastMessage)));
+                          if (cancelledXhrsRef.current.has(xhr)) cancelled = true;
+                          reject(new Error(xhr.status !== 0
+                            ? describeIncompleteStream(xhr.status, lastMessage)
+                            : cancelled ? 'Upload cancelled by user' : describeLostConnection(uploadFinished)));
                         }
                       }
                     };
 
                     xhr.onerror = () => {
                       activeXhrsRef.current = activeXhrsRef.current.filter(x => x !== xhr);
-                      reject(new Error('Network error'));
+                      reject(new Error(describeLostConnection(uploadFinished)));
                     };
                     xhr.open('POST', '/api/process');
                     xhr.send(formData);
@@ -1663,7 +1720,16 @@ export function VideoUpload({
 
               } catch (err) {
                 console.error('Upload failed:', err);
-                setError((err instanceof Error ? err.message : String(err)) || 'Upload failed');
+                let message = (err instanceof Error ? err.message : String(err)) || 'Upload failed';
+                // Don't lose the videos that did finish
+                const save = saveUnfinished as (() => Promise<number>) | null;
+                if (!cancelled && save) {
+                  try {
+                    const saved = await save();
+                    if (saved > 0) message += ` ${saved} finished video(s) were saved to Drafts.`;
+                  } catch { /* report the original failure */ }
+                }
+                setError(message);
               } finally {
                 setLoading(false);
                 setIsUploading(false);

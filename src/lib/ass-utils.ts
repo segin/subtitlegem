@@ -115,17 +115,20 @@ export function generateAss(
         '',
     ].join('\n');
 
+    // Notes like "[Subtitles missing ...]" are for the editor only, never burned in
+    const exported = subtitles.filter(sub => !sub.placeholder);
+
     const events = [
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
-        ...subtitles.map(sub => {
+        ...exported.map(sub => {
             // If line has custom color, use it; otherwise use resolved style
             const customColor = sub.styleOverrides?.color || sub.primaryColor;
             const colorTag = customColor ? `{\\c${hexToAssColor(customColor)}}` : '';
             
             return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Primary,,0,0,0,,${colorTag}${sanitizeAssText(sub.text)}`;
         }),
-        ...subtitles
+        ...exported
             .filter(sub => sub.secondaryText)
             .map(sub => {
                 const customColor = sub.secondaryColor;

@@ -20,7 +20,13 @@ export interface SubtitleLine {
   
   // Multi-video support: tracks which clip this subtitle belongs to
   clipId?: string;
-  
+
+  /**
+   * An editor-only note rather than speech, e.g. "[Subtitles missing 0:45-0:50: ...]"
+   * where Gemini refused part of a long recording. Never exported or burned in.
+   */
+  placeholder?: boolean;
+
   // Per-line specific overrides (sparse)
   styleOverrides?: Partial<TrackStyle>;
 }

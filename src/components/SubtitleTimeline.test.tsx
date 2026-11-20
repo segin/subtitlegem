@@ -140,7 +140,7 @@ describe('SubtitleTimeline', () => {
       it('handles zoom interaction with buttons', () => {
         render(<SubtitleTimeline {...defaultProps} />);
     
-        // Initial zoom text (approx 100% of 100px/s default)
+        // Timeline opens at 100% (~33 px/s)
         expect(screen.getByText('100%')).toBeInTheDocument();
     
         const zoomInBtn = screen.getByTitle('Zoom In (+)');

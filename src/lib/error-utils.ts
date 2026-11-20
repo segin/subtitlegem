@@ -43,6 +43,37 @@ export function createSafeErrorResponse(
 }
 
 /**
+ * One-line description of an error for server logs, including its cause chain.
+ * Node's fetch reports every network failure as "fetch failed"; the real reason
+ * (timeout, DNS, reset) only appears in `cause`.
+ *
+ * e.g. "TypeError: fetch failed ← HeadersTimeoutError: Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]"
+ */
+export function describeError(error: unknown): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current !== undefined && current !== null && !seen.has(current) && parts.length < 5) {
+    seen.add(current);
+    if (current instanceof Error) {
+      const code = (current as { code?: unknown }).code;
+      const status = (current as { status?: unknown }).status;
+      let part = `${current.name}: ${current.message}`;
+      if (typeof code === 'string' || typeof code === 'number') part += ` [${code}]`;
+      if (typeof status === 'number') part += ` (HTTP ${status})`;
+      parts.push(part);
+      current = (current as { cause?: unknown }).cause;
+    } else {
+      parts.push(typeof current === 'string' ? current : JSON.stringify(current) ?? String(current));
+      break;
+    }
+  }
+
+  return parts.join(' ← ') || String(error);
+}
+
+/**
  * HTTP status code suggestions based on error type
  */
 export function suggestHttpStatus(error: Error | unknown): number {

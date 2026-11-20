@@ -17,6 +17,7 @@ import {
   VideoDimensions 
 } from './ass-utils';
 import { SubtitleLine, SubtitleConfig, DEFAULT_CONFIG } from '@/types/subtitle';
+import { generateSrtContent } from './time-utils';
 
 // Helper to generate hex color strings (always uppercase for consistency)
 const hexColorArb = fc.tuple(
@@ -256,6 +257,20 @@ describe('generateAss', () => {
   const defaultConfig: SubtitleConfig = { ...DEFAULT_CONFIG };
 
   describe('unit tests', () => {
+    test('leaves out editor-only placeholder lines', () => {
+      const result = generateAss([
+        createSubtitle({ text: 'Spoken line', secondaryText: 'Translated' }),
+        createSubtitle({ id: 'gap', text: '[Subtitles missing 0:45-0:50: Gemini would not transcribe this part]', secondaryText: 'x', placeholder: true }),
+      ], defaultConfig);
+      expect(result).toContain('Spoken line');
+      expect(result).not.toContain('Subtitles missing');
+      expect(result.match(/^Dialogue:/gm)).toHaveLength(2); // primary + secondary of the real line
+      expect(generateSrtContent([
+        createSubtitle({ text: 'Spoken line' }),
+        createSubtitle({ id: 'gap', text: '[Subtitles missing]', placeholder: true }),
+      ], 'primary')).not.toContain('Subtitles missing');
+    });
+
     test('generates valid ASS structure', () => {
       const subtitles = [createSubtitle()];
       const result = generateAss(subtitles, defaultConfig);

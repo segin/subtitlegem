@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { uploadToGemini } from "@/lib/gemini";
-import { extractAudio, getAudioCodec, createSampleClip, ffprobe } from "@/lib/ffmpeg-utils"; // Added createSampleClip
+import { uploadToGemini, deleteFileFromGemini } from "@/lib/gemini";
+import { isSafeId } from "@/lib/path-utils";
+import { isUploadCancelled } from "@/lib/upload-cancellations";
+import { resolveMediaMimeType } from "@/lib/upload-utils";
+import { extractAudio, getAudioCodec, ffprobe } from "@/lib/ffmpeg-utils";
+import { describeGaps, LONG_MEDIA_SECONDS } from "@/lib/chunked-generation";
 import fs from "fs";
 import path from "path";
 import { getStorageConfig, isPathSafe } from "@/lib/storage-config";
@@ -9,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 import busboy from "busboy";
 import { Readable } from "stream";
 import { secureDelete } from "@/lib/security";
+import { describeError } from "@/lib/error-utils";
 import { validateAuth } from "@/lib/auth";
 import { SubtitleLine } from "@/types/subtitle";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
       }
 
-      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, clipId, sampleDuration, promptHints } = validation.data as {
+      const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model: modelName, clipId, sampleDuration, promptHints } = validation.data as {
         mode: 'reprocess' | 'translate';
         fileUri?: string;
         filePath?: string;
@@ -106,185 +111,59 @@ export async function POST(req: NextRequest) {
 
          const { getGlobalSettings } = await import("@/lib/global-settings-store");
          const { processWithFallback } = await import("@/lib/ai-provider");
-         const { uploadToGemini } = await import("@/lib/gemini");
          const settings = getGlobalSettings();
          const config = getStorageConfig();
+         const secondary = secondaryLanguage && secondaryLanguage !== "None" ? secondaryLanguage : undefined;
 
-         // Security check: strict path validation for local files
          if (filePath) {
+             // Security check: strict path validation for local files
              if (!isPathSafe(filePath)) {
                  console.warn(`[Process] Blocked unauthorized path access: ${filePath}`);
                  return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
              }
-         }
-         
-         let targetUri = fileUri;
-         let targetMime = "video/mp4"; // Default assumption, or derive from path
-         let newGeminiFile = null;
-
-         // If we have a local path but no URI (or we want to re-upload), handle that
-         if (!targetUri && filePath) {
-             console.log(`Reprocessing from local file: ${filePath}`);
-             
-             const resolvedPath = path.resolve(filePath);
-             if (!fs.existsSync(resolvedPath)) {
-                 return NextResponse.json({ error: "Local file not found" }, { status: 404 });
-             }
-             
-             // Check size/type - simplify for now assuming video/mp4 or audio
-             // In a real scenario we'd check mime type properly
-             const ext = path.extname(filePath).toLowerCase();
-             if (['.mp3', '.wav', '.m4a', '.flac', '.ogg'].includes(ext)) {
-                 targetMime = "audio/" + ext.replace('.', '');
-                 if (ext === '.m4a') targetMime = "audio/mp4";
+             if (!fs.existsSync(filePath)) {
+                 return NextResponse.json({ error: "The video file is missing from the server" }, { status: 404 });
              }
 
-             // Check if we can do inline
-             const stats = fs.statSync(filePath);
-             const fileSizeInMB = stats.size / (1024 * 1024);
-             let processPath = filePath;
-             let useInlineData = false;
-             const INLINE_SIZE_LIMIT_MB = 95;
-             
-             if (fileSizeInMB > 400 && !sampleDuration) {
-                 console.log("File > 400MB, extracting audio for reprocess...");
-                 try {
-                     const codec = await getAudioCodec(filePath);
-                     console.log(`Detected audio codec: ${codec}`);
+             // Transcribe from the local file as audio pieces: works for any length
+             // (no output cap, no Files API upload that expires after 48 hours).
+             // A preview only transcribes the first `sampleDuration` seconds.
+             const info = await ffprobe(filePath);
+             const duration = sampleDuration ? Math.min(sampleDuration, info.duration || sampleDuration) : info.duration;
+             const label = `${path.basename(filePath)}${sampleDuration ? ` (${sampleDuration}s preview)` : ""}`;
+             console.log(`[Process] Reprocessing ${label} with ${modelName ?? "default model"}`);
 
-                     let ext = "m4a";
-                     let newMime = "audio/mp4";
+             const { transcribeAudio } = await import("@/lib/audio-transcription");
+             const result = await transcribeAudio({
+                 sourcePath: filePath,
+                 duration,
+                 workDir: path.join(config.stagingDir, 'temp'),
+                 secondaryLanguage: secondary,
+                 modelName,
+                 promptHints,
+                 fallbackChain: settings.aiFallbackChain,
+                 label,
+             });
+             const subtitleWarning = result.gaps.length > 0 ? describeGaps(result.gaps) : undefined;
+             if (subtitleWarning) console.warn(`[Process] ${label}: ${subtitleWarning}`);
 
-                     switch (codec) {
-                         case "aac": ext = "m4a"; newMime = "audio/mp4"; break;
-                         case "mp3": ext = "mp3"; newMime = "audio/mpeg"; break;
-                         case "opus": ext = "ogg"; newMime = "audio/ogg"; break;
-                         case "vorbis": ext = "ogg"; newMime = "audio/ogg"; break;
-                         case "flac": ext = "flac"; newMime = "audio/flac"; break;
-                         default: ext = "m4a"; newMime = "audio/mp4";
-                     }
-
-                     const stagingDir = config.stagingDir;
-                     const tempDir = path.join(stagingDir, 'temp');
-                     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-                     const audioPath = path.join(tempDir, `${path.basename(filePath, path.extname(filePath))}_audio_${Date.now()}.${ext}`);
-                     
-                     await extractAudio(filePath, audioPath);
-                     console.log('Audio extraction complete');
-                     
-                     processPath = audioPath;
-                     targetMime = newMime;
-                     
-                     const audioStats = fs.statSync(audioPath);
-                     const audioSizeInMB = audioStats.size / (1024 * 1024);
-                     useInlineData = audioSizeInMB < INLINE_SIZE_LIMIT_MB;
-                     
-                 } catch (audioErr) {
-                     console.error('Audio extraction failed, using original file:', audioErr);
-                     useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
-                 }
-             } else {
-                 useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
-             }
-             
-             if (useInlineData && !sampleDuration) {
-                  // Inline
-                  if (!isPathSafe(processPath)) {
-                      console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
-                      return NextResponse.json({ error: 'Unauthorized path' }, { status: 403 });
-                  }
-                  const fileBuffer = fs.readFileSync(processPath);
-                  const base64Data = fileBuffer.toString('base64');
-                  console.log(`Reprocessing inline`);
-                  
-                  const result = await processWithFallback(
-                    'generate',
-                    { 
-                        base64Data, 
-                        mimeType: targetMime, 
-                        secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
-                        isInline: true,
-                        promptHints
-                    },
-                    settings.aiFallbackChain
-                  );
-                  
-                  if (processPath !== filePath && fs.existsSync(processPath)) {
-                      fs.unlinkSync(processPath); // cleanup extracted audio
-                  }
-                  
-                  return NextResponse.json({ ...result, clipId });
-             } else {
-                 // Upload to Gemini
-                 // NOTE: We only upload here if NOT doing sampleDuration. 
-                 // If doing usage sampleDuration, we handle it below.
-                 if (!sampleDuration) {
-                    console.log(`Uploading local file to Gemini...`);
-                    newGeminiFile = await uploadToGemini(processPath, targetMime);
-                    targetUri = newGeminiFile.uri;
-                    
-                    if (processPath !== filePath && fs.existsSync(processPath)) {
-                        fs.unlinkSync(processPath); // cleanup extracted audio
-                    }
-                 }
-             }
+             return NextResponse.json({
+                 subtitles: result.subtitles,
+                 detectedLanguage: result.detectedLanguage,
+                 clipId,
+                 ...(subtitleWarning && { subtitleWarning }),
+             });
          }
 
-         // Handle Sample Mode
-         let processUri = targetUri;
-         let cleanupPath: string | null = null;
-         let uploadedSampleFile: Awaited<ReturnType<typeof uploadToGemini>> | null = null;
-
-         if (sampleDuration && filePath) {
-             console.log(`Creating ${sampleDuration}s sample from ${filePath}`);
-             
-             const tempDir = path.join(config.stagingDir, 'temp');
-             if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-             
-             const ext = path.extname(filePath) || ".mp4";
-             const samplePath = path.join(tempDir, `sample_${uuidv4()}${ext}`);
-             
-             try {
-                 await createSampleClip(filePath, samplePath, sampleDuration);
-                 console.log(`Sample created: ${samplePath}`);
-                 
-                 // Upload Sample to Gemini
-                 uploadedSampleFile = await uploadToGemini(samplePath, targetMime);
-                 processUri = uploadedSampleFile.uri;
-                 cleanupPath = samplePath; // Mark for cleanup
-             } catch (sampleErr) {
-                 console.error("Sample creation failed:", sampleErr);
-                 // Cleanup if partially created
-                 if (fs.existsSync(samplePath)) fs.unlinkSync(samplePath);
-                 throw new Error("Failed to create sample clip");
-             }
-         }
-
-         console.log(`Reprocessing with URI: ${processUri}, Lang: ${language}`);
+         // No local file: transcribe a file already uploaded to Gemini (expires after 48 hours)
+         console.log(`Reprocessing with URI: ${fileUri}, Lang: ${language}`);
          const result = await processWithFallback(
            'generate',
-           { 
-               fileUri: processUri, 
-               mimeType: targetMime, 
-               secondaryLanguage: secondaryLanguage === "None" ? undefined : secondaryLanguage,
-               promptHints: promptHints
-           },
+           { fileUri, mimeType: "video/mp4", secondaryLanguage: secondary, modelName, promptHints },
            settings.aiFallbackChain
          );
-         
-         if (cleanupPath && fs.existsSync(cleanupPath)) {
-            try { fs.unlinkSync(cleanupPath); } catch { /* ignore */ }
-         }
-         
-         return NextResponse.json({ 
-             ...result, 
-             clipId,
-             // Pass back new gemini info if we uploaded
-             geminiFileUri: newGeminiFile?.uri || fileUri,
-             geminiFileExpiration: newGeminiFile?.expirationTime || undefined,
-             fileId: newGeminiFile?.name || undefined
-         });
-      
+         return NextResponse.json({ ...result, clipId, geminiFileUri: fileUri });
+
       } else if (mode === 'translate') {
          if (!subtitles) return NextResponse.json({ error: "No subtitles provided" }, { status: 400 });
          
@@ -314,6 +193,7 @@ export async function POST(req: NextRequest) {
   console.log("Processing POST request to /api/process (Streamed via Busboy)");
 
   let videoPath = ""; // Hoisted for error cleanup
+  let originalFilename = "";
 
   try {
     const contentType = req.headers.get("content-type");
@@ -329,7 +209,7 @@ export async function POST(req: NextRequest) {
     let mimeType = "";
     let secondaryLanguage = "Simplified Chinese";
     let modelName = "gemini-3.8-flash";
-    let originalFilename = "";
+    let uploadId: string | null = null;
 
     // Resolve the per-file size limit up front so we can abort mid-stream
     // rather than writing the entire (potentially huge) upload to disk first.
@@ -346,7 +226,7 @@ export async function POST(req: NextRequest) {
        bb.on("file", (name, file, info) => {
         if (name === "video") {
           const { filename, mimeType: fileMime } = info;
-          mimeType = fileMime;
+          mimeType = resolveMediaMimeType(filename, fileMime);
           originalFilename = filename;
 
           const ext = filename.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || "tmp";
@@ -386,6 +266,7 @@ export async function POST(req: NextRequest) {
       bb.on("field", (name, val) => {
         if (name === "secondaryLanguage") secondaryLanguage = val;
         if (name === "model") modelName = val;
+        if (name === "uploadId" && isSafeId(val)) uploadId = val;
       });
       
       // If busboy finishes but we never got a file, we might hang if we rely only on writeStream.finish
@@ -436,18 +317,58 @@ export async function POST(req: NextRequest) {
     const stagingDir = tempDir;
     const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 
-    // Use streaming response for progress feedback
+    // Use streaming response for progress feedback.
+    // The browser may go away mid-job (phone asleep, tab closed, network drop).
+    // Processing carries on and the result is saved as a draft, unless the
+    // user pressed Cancel (reported via /api/process/cancel), which discards it.
+    let clientGone = false;
+    const noteClientGone = () => {
+      if (clientGone) return;
+      clientGone = true;
+      // Whether to keep or discard the result is decided once processing ends,
+      // since a cancel request may arrive just after the disconnect
+      console.warn(`[Process] Client disconnected while processing ${originalFilename}; continuing in the background`);
+    };
+    const discardCancelled = (stage: string, processPath: string, geminiFileId?: string | null) => {
+      console.log(`[Process] Discarding cancelled upload ${originalFilename} (${stage})`);
+      secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
+      if (processPath !== videoPath && fs.existsSync(processPath)) {
+        secureDelete(processPath).catch(err => console.error("Failed to cleanup extracted audio:", err));
+      }
+      if (geminiFileId) deleteFileFromGemini(geminiFileId).catch(() => {});
+    };
+
     const stream = new ReadableStream({
+      cancel: noteClientGone,
       async start(controller) {
         let processPath = videoPath;
         let useInlineData = false;
         const encoder = new TextEncoder();
-        const sendProgress = (stage: string, percent?: number) => {
-          controller.enqueue(encoder.encode(JSON.stringify({ type: "progress", stage, percent }) + "\n"));
+        const send = (message: object) => {
+          if (clientGone) return;
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify(message) + "\n"));
+          } catch {
+            noteClientGone();
+          }
         };
+        const close = () => {
+          try { controller.close(); } catch { /* already closed by the client */ }
+        };
+        const sendProgress = (stage: string, percent?: number) => send({ type: "progress", stage, percent });
 
         try {
-          if (fileSizeInMB > 400) {
+          // Duration decides whether to transcribe in pieces; it's also sent back
+          // so multi-video uploads can lay clips out on the timeline without overlap
+          const videoInfo = await ffprobe(videoPath).catch(e => {
+            console.warn("[Process] ffprobe failed; clip duration unknown:", e instanceof Error ? e.message : e);
+            return null;
+          });
+          const transcribeInPieces = (videoInfo?.duration ?? 0) > LONG_MEDIA_SECONDS;
+
+          if (transcribeInPieces) {
+            // Pieces are cut straight from the upload; no whole-file audio extraction needed
+          } else if (fileSizeInMB > 400) {
             sendProgress("extracting_audio", 0);
             try {
               const codec = await getAudioCodec(videoPath);
@@ -485,19 +406,44 @@ export async function POST(req: NextRequest) {
             useInlineData = fileSizeInMB < INLINE_SIZE_LIMIT_MB;
           }
 
+          // Don't spend Gemini time on an upload the user already cancelled
+          if (clientGone && isUploadCancelled(uploadId)) {
+            discardCancelled("before subtitle generation", processPath);
+            close();
+            return;
+          }
+
           // Generate subtitles
           let result: { subtitles: unknown; detectedLanguage?: unknown } | null = null;
           let geminiFileUri: string | null = null;
           let geminiFileExpiration: string | null = null;
           let fileId: string | null = null;
           let subtitleGenerationFailed = false;
+          let subtitleWarning: string | null = null;
 
           const { getGlobalSettings } = await import("@/lib/global-settings-store");
           const { processWithFallback } = await import("@/lib/ai-provider");
           const settings = getGlobalSettings();
 
           try {
-            if (useInlineData) {
+            if (transcribeInPieces) {
+              const { transcribeAudio } = await import("@/lib/audio-transcription");
+              const chunked = await transcribeAudio({
+                sourcePath: videoPath,
+                duration: videoInfo!.duration,
+                workDir: stagingDir,
+                secondaryLanguage,
+                modelName,
+                fallbackChain: settings.aiFallbackChain,
+                label: originalFilename,
+                onProgress: (done, total) => sendProgress("generating_subtitles", Math.round((done / total) * 100)),
+              });
+              result = chunked;
+              if (chunked.gaps.length > 0) {
+                subtitleWarning = describeGaps(chunked.gaps);
+                console.warn(`[Process] ${originalFilename}: ${subtitleWarning}`);
+              }
+            } else if (useInlineData) {
               sendProgress("generating_subtitles");
               console.log(`Using inline data transmission (file < ${INLINE_SIZE_LIMIT_MB} MB)`);
 
@@ -545,7 +491,7 @@ export async function POST(req: NextRequest) {
             // Re-throw security/infrastructure errors; only swallow AI service failures
             const aiErrorMessage = aiError instanceof Error ? aiError.message : String(aiError);
             if (aiErrorMessage === 'Unauthorized path') throw aiError;
-            console.warn("[Process] Subtitle generation failed, adding video with no subtitles:", aiErrorMessage);
+            console.warn(`[Process] Subtitle generation failed for ${originalFilename}, adding video with no subtitles: ${describeError(aiError)}`);
             subtitleGenerationFailed = true;
           }
 
@@ -558,13 +504,32 @@ export async function POST(req: NextRequest) {
               }
           } catch (e) { console.error("Cleanup error", e); }
 
-          // Lets multi-video uploads lay clips out on the timeline without overlap
-          const videoInfo = await ffprobe(videoPath).catch(e => {
-            console.warn("[Process] ffprobe failed; clip duration unknown:", e instanceof Error ? e.message : e);
-            return null;
-          });
+          if (clientGone) {
+            if (isUploadCancelled(uploadId)) {
+              discardCancelled("after subtitle generation", processPath, fileId);
+              return;
+            }
+            // No page is waiting to add this clip to a project; keep the work as a draft
+            const { saveOrphanedUpload } = await import("@/lib/orphaned-upload");
+            const draft = saveOrphanedUpload({
+              videoPath,
+              originalFilename,
+              fileSize: fs.statSync(videoPath).size,
+              subtitles: (subtitles as SubtitleLine[]) ?? [],
+              detectedLanguage: typeof detectedLanguage === 'string' ? detectedLanguage : null,
+              secondaryLanguage,
+              duration: videoInfo?.duration,
+              width: videoInfo?.width,
+              height: videoInfo?.height,
+              geminiFileUri,
+              geminiFileExpiration,
+              fileId,
+            });
+            console.log(`[Process] Saved ${originalFilename} as draft "${draft.name}" (${draft.id}) after the client disconnected`);
+            return;
+          }
 
-          controller.enqueue(encoder.encode(JSON.stringify({
+          send({
             type: "complete",
             data: {
               subtitles,
@@ -576,13 +541,14 @@ export async function POST(req: NextRequest) {
               fileSize: fs.statSync(videoPath).size,
               originalFilename,
               ...(videoInfo && { duration: videoInfo.duration, width: videoInfo.width, height: videoInfo.height }),
-              ...(subtitleGenerationFailed && { subtitleGenerationFailed: true })
+              ...(subtitleGenerationFailed && { subtitleGenerationFailed: true }),
+              ...(subtitleWarning && { subtitleWarning })
             }
-          }) + "\n"));
-          controller.close();
+          });
+          close();
         } catch (error) {
-          console.error("Error processing video:", error);
-          controller.enqueue(encoder.encode(JSON.stringify({ type: "error", message: error instanceof Error ? error.message : "Failed to process video" }) + "\n"));
+          console.error(`[Process] Processing ${originalFilename} failed: ${describeError(error)}`, error instanceof Error ? error.stack : "");
+          send({ type: "error", message: error instanceof Error ? error.message : "Failed to process video" });
           
           if (videoPath && fs.existsSync(videoPath)) {
               secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
@@ -590,7 +556,7 @@ export async function POST(req: NextRequest) {
           if (processPath && processPath !== videoPath && fs.existsSync(processPath)) {
               secureDelete(processPath).catch(err => console.error("Failed to cleanup extracted audio:", err));
           }
-          controller.close();
+          close();
         }
       }
     });
@@ -604,7 +570,11 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    console.error("Fatal Error processing video:", error);
+    // Typically the browser disconnecting mid-upload ("Unexpected end of form")
+    console.error(`[Process] Upload of ${originalFilename || "(unnamed file)"} failed before processing: ${describeError(error)}`);
+    if (videoPath && fs.existsSync(videoPath)) {
+      secureDelete(videoPath).catch(e => console.error("Failed to cleanup partial upload:", e));
+    }
     return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to process video" }, { status: 500 });
   }
 }

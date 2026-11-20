@@ -6,8 +6,28 @@ import {
   createSafeErrorResponse, 
   suggestHttpStatus, 
   isProduction,
-  withSafeErrorHandling 
+  withSafeErrorHandling,
+  describeError,
 } from './error-utils';
+
+describe('describeError', () => {
+  it('includes the cause chain and error codes', () => {
+    const cause = Object.assign(new Error('Headers Timeout Error'), { name: 'HeadersTimeoutError', code: 'UND_ERR_HEADERS_TIMEOUT' });
+    const err = new TypeError('fetch failed', { cause });
+    expect(describeError(err)).toBe(
+      'TypeError: fetch failed ← HeadersTimeoutError: Headers Timeout Error [UND_ERR_HEADERS_TIMEOUT]'
+    );
+  });
+
+  it('includes HTTP status and handles non-errors and cycles', () => {
+    expect(describeError(Object.assign(new Error('quota'), { status: 429 }))).toBe('Error: quota (HTTP 429)');
+    expect(describeError('plain')).toBe('plain');
+    expect(describeError(new Error('a', { cause: { reason: 'x' } }))).toBe('Error: a ← {"reason":"x"}');
+    const loop = new Error('loop');
+    (loop as { cause?: unknown }).cause = loop;
+    expect(describeError(loop)).toBe('Error: loop');
+  });
+});
 
 // NODE_ENV is typed as a read-only property; expose a writable view for tests.
 type WritableEnv = { -readonly [K in keyof NodeJS.ProcessEnv]: NodeJS.ProcessEnv[K] };

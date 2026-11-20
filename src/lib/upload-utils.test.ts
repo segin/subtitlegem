@@ -2,8 +2,26 @@ import {
   validateVideoFile, 
   prepareUploadFormData, 
   generateClipId,
-  isValidProcessingResponse 
+  isValidProcessingResponse,
+  describeLostConnection,
+  resolveMediaMimeType,
 } from './upload-utils';
+
+describe('resolveMediaMimeType', () => {
+  test('keeps a declared media type and falls back to the extension otherwise', () => {
+    expect(resolveMediaMimeType('a.webm', 'video/webm')).toBe('video/webm');
+    expect(resolveMediaMimeType('a.MKV', 'application/octet-stream')).toBe('video/x-matroska');
+    expect(resolveMediaMimeType('a.mov', '')).toBe('video/quicktime');
+    expect(resolveMediaMimeType('a.xyz', 'application/octet-stream')).toBe('application/octet-stream');
+  });
+});
+
+describe('describeLostConnection', () => {
+  test('points to Drafts only when the server has the whole file', () => {
+    expect(describeLostConnection(true)).toContain('Drafts');
+    expect(describeLostConnection(false)).toContain('try again');
+  });
+});
 
 describe('upload-utils', () => {
   describe('validateVideoFile', () => {
@@ -31,6 +49,12 @@ describe('upload-utils', () => {
       const formData = prepareUploadFormData(file);
       
       expect(formData.get('video')).toBe(file);
+    });
+
+    test('includes the upload ID when given', () => {
+      const file = new File(['video content'], 'test.mp4', { type: 'video/mp4' });
+      expect(prepareUploadFormData(file, { uploadId: 'abc-123' }).get('uploadId')).toBe('abc-123');
+      expect(prepareUploadFormData(file).get('uploadId')).toBeNull();
     });
 
     test('includes optional parameters', () => {

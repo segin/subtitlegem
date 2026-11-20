@@ -195,6 +195,37 @@ export async function extractAudio(
 }
 
 /**
+ * Cut one piece of a recording's audio as small mono Opus (~4.6 MB per 20 min),
+ * for transcribing long recordings in pieces. Gemini downsamples speech to
+ * 16 kHz mono anyway, so nothing it would use is lost.
+ */
+export async function extractAudioChunk(
+  inputPath: string,
+  outputPath: string,
+  startSeconds: number,
+  durationSeconds: number
+): Promise<string> {
+  const args = [
+    '-v', 'error',
+    '-ss', String(startSeconds),
+    '-t', String(durationSeconds),
+    '-i', inputPath,
+    '-vn', '-ac', '1', '-c:a', 'libopus', '-b:a', '32k',
+    '-y', outputPath,
+  ];
+  return new Promise((resolve, reject) => {
+    const proc = spawn('ffmpeg', args);
+    let stderr = '';
+    proc.stderr.on('data', (data) => { stderr += data.toString(); });
+    proc.on('close', (code) => {
+      if (code !== 0) return reject(new Error(`ffmpeg audio chunk failed (code ${code}): ${stderr.trim()}`));
+      resolve(outputPath);
+    });
+    proc.on('error', reject);
+  });
+}
+
+/**
  * Parse ffmpeg progress line to get current time in seconds
  */
 function parseProgressTime(line: string): number | null {

@@ -8,6 +8,7 @@ import { validateSubtitleArraySize, MAX_SUBTITLES } from "./validation-utils";
 import { normalizeGeneratedSubtitles, mergeTranslatedSubtitles } from "./ai-output";
 import { DEFAULT_AI_MODEL, RETIRED_GEMINI_MODEL } from "@/types/constants";
 import { buildTranslationPrompt, TranslationContext } from "./translation-prompt";
+import { describeError } from "./error-utils";
 
 // Re-export for backwards compatibility
 export { validateSubtitleArraySize, MAX_SUBTITLES };
@@ -90,6 +91,8 @@ export async function processWithFallback(
   let lastError: unknown = null;
 
   for (const config of enabledChain) {
+    const startedAt = Date.now();
+    const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
     try {
       console.log(`[AI-Provider] Trying ${config.provider} (${config.modelName}) for task: ${task}`);
       
@@ -110,6 +113,7 @@ export async function processWithFallback(
         ? mergeTranslatedSubtitles(params.subtitles || [], result.subtitles)
         : normalizeGeneratedSubtitles(result.subtitles);
 
+      console.log(`[AI-Provider] ${config.provider} (${config.modelName}) finished ${task} in ${elapsed()}: ${subtitles.length} line(s)`);
       return {
         detectedLanguage: result.detectedLanguage,
         subtitles,
@@ -122,14 +126,13 @@ export async function processWithFallback(
       
       const isSafetyRefusal = detectSafetyRefusal(config.provider, error);
       if (isSafetyRefusal) {
-        console.warn(`[AI-Provider] Safety refusal from ${config.provider}. Re-routing...`);
+        console.warn(`[AI-Provider] Safety refusal from ${config.provider} (${config.modelName}) after ${elapsed()}. Re-routing...`);
         continue; // Try next in chain
       }
 
       // If it's not a safety refusal (e.g. network error, auth error), we might want to re-route anyway
       // but let's be specific for now.
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error(`[AI-Provider] Error from ${config.provider}:`, errorMessage);
+      console.error(`[AI-Provider] ${config.provider} (${config.modelName}) failed ${task} after ${elapsed()}: ${describeError(error)}`);
       
       // For now, let's re-route on most transient/recoverable errors too
       const status = (error as { status?: number })?.status;
@@ -154,7 +157,8 @@ async function callGenerate(config: ModelConfig, params: AIParams): Promise<Part
         params.mimeType!,
         params.secondaryLanguage,
         1,
-        params.modelName || config.modelName
+        params.modelName || config.modelName,
+        params.promptHints
       );
     }
     const { generateSubtitles } = await import("./gemini");
@@ -163,7 +167,8 @@ async function callGenerate(config: ModelConfig, params: AIParams): Promise<Part
       params.mimeType!,
       params.secondaryLanguage,
       1,
-      params.modelName || config.modelName
+      params.modelName || config.modelName,
+      params.promptHints
     );
   }
 

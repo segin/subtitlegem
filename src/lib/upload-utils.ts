@@ -53,11 +53,17 @@ export function prepareUploadFormData(
     model?: string;
     reprocess?: boolean;
     existingFileUri?: string;
+    /** Lets the page cancel this upload via /api/process/cancel */
+    uploadId?: string;
   } = {}
 ): FormData {
   const formData = new FormData();
   formData.append('video', file);
-  
+
+  if (options.uploadId) {
+    formData.append('uploadId', options.uploadId);
+  }
+
   if (options.secondaryLanguage) {
     formData.append('secondaryLanguage', options.secondaryLanguage);
   }
@@ -75,6 +81,35 @@ export function prepareUploadFormData(
   }
 
   return formData;
+}
+
+const MEDIA_TYPES_BY_EXTENSION: Record<string, string> = {
+  mp4: 'video/mp4', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska',
+  mov: 'video/quicktime', avi: 'video/x-msvideo', mpeg: 'video/mpeg', mpg: 'video/mpeg',
+  ogv: 'video/ogg', m4a: 'audio/mp4', mp3: 'audio/mpeg', wav: 'audio/wav',
+  ogg: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac',
+};
+
+/**
+ * The upload's media type, falling back to its extension when the browser
+ * didn't name one (some send "" or application/octet-stream for .mkv and
+ * others, which Gemini rejects).
+ */
+export function resolveMediaMimeType(filename: string, declared: string | undefined): string {
+  if (declared && /^(video|audio)\//.test(declared)) return declared;
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  return MEDIA_TYPES_BY_EXTENSION[ext] ?? declared ?? 'application/octet-stream';
+}
+
+/**
+ * Message for an upload whose connection dropped (phone asleep, Wi-Fi lost).
+ * Once the server has the whole file it keeps processing and saves the result
+ * to Drafts by itself.
+ */
+export function describeLostConnection(uploadFinished: boolean): string {
+  return uploadFinished
+    ? 'Lost connection to the server after the upload finished. Processing continues on the server, and the result will appear in Drafts.'
+    : 'Lost connection to the server during the upload. Please try again.';
 }
 
 /**

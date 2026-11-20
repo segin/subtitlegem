@@ -2,6 +2,7 @@ import { GoogleGenAI, FileState, HarmCategory, HarmBlockThreshold, Part, type Th
 import { SubtitleLine } from "@/types/subtitle";
 import { subtitleSchema, translationSchema } from "./gemini-schemas";
 import { buildTranslationPrompt, TranslationContext } from "./translation-prompt";
+import { GEMINI_REQUEST_TIMEOUT_MS } from "./gemini-timeouts";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || process.env.GEMINI_API_KEY || "",
@@ -106,20 +107,24 @@ async function performSubtitleGeneration(
   mediaPart: Part,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-3.8-flash"
+  modelName: string = "gemini-3.8-flash",
+  promptHints?: string
 ) {
   const prompt = `
     Analyze the audio in this video.
     1. Detect the primary spoken language.
     2. Generate subtitles in that detected primary language.
     ${secondaryLanguage ? `3. Also provide a translation in ${secondaryLanguage} for the 'secondaryText' field. If the detected primary language is already ${secondaryLanguage}, simply copy the primary text into 'secondaryText'.` : ""}
-    
+
     CRITICAL TIMESTAMP RULES:
     1. Format MUST be exactly "HH:MM:SS,mmm" (Hours:Minutes:Seconds,Milliseconds).
     2. ALWAYS include the Hour part, even if it is 00. Example: "00:01:30,500" is CORRECT.
     3. Use a comma (,) for milliseconds.
     4. Ensure timings are synchronized with the audio speech.
-  `;
+  ${promptHints?.trim() ? `
+    Notes from the user about this recording (speaker names, terms, spellings). Use them only to transcribe and translate accurately:
+    ${promptHints.trim()}
+  ` : ""}`;
 
   try {
     const response = await ai.models.generateContent({
@@ -136,10 +141,28 @@ async function performSubtitleGeneration(
       config: {
         responseMimeType: "application/json",
         responseSchema: subtitleSchema,
+        safetySettings,
+        // Long recordings take minutes; also tells Gemini's server how long to keep working
+        httpOptions: { timeout: GEMINI_REQUEST_TIMEOUT_MS },
       },
     });
 
-    const text = response.text!;
+    // A response cut off at the output cap is unparseable JSON; say what actually happened
+    if (response.candidates?.[0]?.finishReason === "MAX_TOKENS") {
+      const used = response.usageMetadata?.candidatesTokenCount;
+      throw new Error(
+        `Gemini stopped at its output limit${used ? ` (${used} tokens)` : ""} before finishing the subtitles; the recording is too long for one request`
+      );
+    }
+
+    const text = response.text;
+    if (!text) {
+      const candidate = response.candidates?.[0];
+      const reason = response.promptFeedback?.blockReason
+        ? `prompt blocked: ${response.promptFeedback.blockReason}`
+        : `finish reason: ${candidate?.finishReason ?? "none"}${candidate?.finishMessage ? ` (${candidate.finishMessage})` : ""}`;
+      throw new Error(`Gemini returned no subtitles (${reason})`);
+    }
     return JSON.parse(cleanJsonOutput(text));
   } catch (error: unknown) {
     const status = (error as { status?: number })?.status;
@@ -162,7 +185,7 @@ async function performSubtitleGeneration(
         `API error (${status}). Retrying in ${(delayMs / 1000).toFixed(1)}s (Attempt ${attempt}/4)...`
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
-      return performSubtitleGeneration(mediaPart, secondaryLanguage, attempt + 1, modelName);
+      return performSubtitleGeneration(mediaPart, secondaryLanguage, attempt + 1, modelName, promptHints);
     }
     throw error;
   }
@@ -173,7 +196,8 @@ export async function generateSubtitles(
   mimeType: string,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-3.8-flash"
+  modelName: string = "gemini-3.8-flash",
+  promptHints?: string
 ) {
   return performSubtitleGeneration(
     {
@@ -184,7 +208,8 @@ export async function generateSubtitles(
     },
     secondaryLanguage,
     attempt,
-    modelName
+    modelName,
+    promptHints
   );
 }
 
@@ -197,7 +222,8 @@ export async function generateSubtitlesInline(
   mimeType: string,
   secondaryLanguage?: string,
   attempt = 1,
-  modelName: string = "gemini-3.8-flash"
+  modelName: string = "gemini-3.8-flash",
+  promptHints?: string
 ) {
   return performSubtitleGeneration(
     {
@@ -208,7 +234,8 @@ export async function generateSubtitlesInline(
     },
     secondaryLanguage,
     attempt,
-    modelName
+    modelName,
+    promptHints
   );
 }
 

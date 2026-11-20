@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { loadModels } from "@/lib/model-cache";
 import { PreviewDialog } from './PreviewDialog';
 import { SubtitleLine } from "@/types/subtitle";
+import { DEFAULT_AI_MODEL } from "@/types/constants";
 
 export interface ReprocessOptions {
   model: string;
@@ -35,8 +36,8 @@ export function ReprocessDialog({
   videoPath,
 }: ReprocessDialogProps) {
   // Form state
-  const [model, setModel] = useState(currentModel || "gemini-3.8-flash");
-  const [secondaryLanguage, setSecondaryLanguage] = useState(currentSecondaryLanguage || "");
+  const [model, setModel] = useState(currentModel || DEFAULT_AI_MODEL);
+  const [secondaryLanguage, setSecondaryLanguage] = useState(currentSecondaryLanguage || "None");
   const [mode, setMode] = useState<'replace' | 'merge'>('replace');
   
   // Advanced options
@@ -70,10 +71,15 @@ export function ReprocessDialog({
             .catch(console.error)
             .finally(() => setLoadingModels(false));
             
-        // Reset advanced options if needed
+        // Start from the project's current settings each time
+        setModel(currentModel || DEFAULT_AI_MODEL);
+        setSecondaryLanguage(currentSecondaryLanguage || "None");
+        setError(null);
         setShowAdvanced(false);
         setPromptHints("");
     }
+    // Only when the dialog opens: re-reading them mid-edit would discard the user's choices
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   const handleReprocess = async () => {
@@ -156,6 +162,7 @@ export function ReprocessDialog({
                <AlertTriangle className="w-4 h-4 text-[#ffc107]" />
                <span>{subtitleCount} subtitles will be affected. Undo with Ctrl+Z</span>
            </div>
+           <p className="text-[10px] text-[#888]">Long videos are transcribed in 20-minute pieces and can take several minutes. Keep this page open until it finishes.</p>
 
            {/* Model Selection */}
            <div className="space-y-1">
@@ -166,15 +173,15 @@ export function ReprocessDialog({
                disabled={loadingModels}
                className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#cccccc] text-xs p-2 focus:border-[#007acc] outline-none rounded-sm"
              >
-                {loadingModels ? <option>Loading models...</option> : 
-                    availableModels.length > 0 ? (
-                        availableModels.map(m => (
+                {loadingModels ? <option>Loading models...</option> : (
+                    <>
+                        {/* Keep the selected model selectable even if the list doesn't include it */}
+                        {!availableModels.some(m => m.name === model) && <option value={model}>{model}</option>}
+                        {availableModels.map(m => (
                             <option key={m.name} value={m.name}>{m.displayName}</option>
-                        ))
-                    ) : (
-                        <option value="gemini-3.8-flash">Gemini 3.8 Flash (Default)</option>
-                    )
-                }
+                        ))}
+                    </>
+                )}
              </select>
            </div>
 

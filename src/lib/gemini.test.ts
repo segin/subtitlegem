@@ -87,6 +87,45 @@ describe('Gemini Integration', () => {
         });
     });
 
+    describe('output limit', () => {
+        it('reports a response cut off at the output cap instead of a JSON error', async () => {
+            mockGenerateContent.mockResolvedValueOnce({
+                text: '{"detectedLanguage": "Russian", "subtitles": [{"startTime": "01:2',
+                candidates: [{ finishReason: 'MAX_TOKENS' }],
+                usageMetadata: { candidatesTokenCount: 65485 },
+            });
+
+            await expect(generateSubtitles('test-uri', 'audio/ogg'))
+                .rejects.toThrow('Gemini stopped at its output limit (65485 tokens)');
+        });
+    });
+
+    describe('prompt hints', () => {
+        it('adds the user\'s notes to the prompt only when given', async () => {
+            mockGenerateContent.mockResolvedValue({ text: '{"detectedLanguage": "Russian", "subtitles": []}' });
+
+            await generateSubtitlesInline('b64', 'audio/ogg', undefined, 1, 'gemini-3.8-flash', 'Speakers: Josie, Neptune');
+            await generateSubtitlesInline('b64', 'audio/ogg', undefined, 1, 'gemini-3.8-flash');
+
+            const promptOf = (call: number) => mockGenerateContent.mock.calls[call][0].contents[0].parts[1].text;
+            expect(promptOf(0)).toContain('Notes from the user');
+            expect(promptOf(0)).toContain('Speakers: Josie, Neptune');
+            expect(promptOf(1)).not.toContain('Notes from the user');
+        });
+    });
+
+    describe('empty response', () => {
+        it('names the finish reason instead of crashing', async () => {
+            mockGenerateContent.mockResolvedValueOnce({
+                text: undefined,
+                candidates: [{ finishReason: 'OTHER' }],
+            });
+
+            await expect(generateSubtitles('test-uri', 'audio/ogg'))
+                .rejects.toThrow('Gemini returned no subtitles (finish reason: OTHER)');
+        });
+    });
+
     describe('generateSubtitlesInline', () => {
         it('handles inline data correctly', async () => {
             const cleanJson = '{"detectedLanguage": "en", "subtitles": []}';

@@ -161,7 +161,12 @@ subtitlegem/
 **Key Functions:**
 - `generateSubtitles()` - Full video transcription (Robust JSON parsing with markdown stripping)
 - `generateSubtitlesInline()` - File (<95MB) inline processing
+- `generateInChunks()` (`src/lib/chunked-generation.ts`) - Recordings over 30 min are cut into 20-min mono Opus pieces (`extractAudioChunk()`, via `transcribeAudio()` in `src/lib/audio-transcription.ts`), transcribed 3 at a time, and stitched with shifted timestamps. Gemini caps a response at 65,536 output tokens, which dense speech reaches after ~90 min. A failing piece is retried, then halved down to 5 min (Gemini intermittently refuses stretches with `blockReason: OTHER`); what still fails becomes a gap with a `placeholder: true` line, which `generateAss()`/`generateSrtContent()` and the transcript export leave out.
+- **Reprocess** (File → Reprocess Video, Project Settings → Reprocess): `POST /api/process` `{ mode: 'reprocess', filePath, model, secondaryLanguage, promptHints, sampleDuration? }` transcribes the local file with `transcribeAudio()` (any length; preview = first `sampleDuration` s). The page reprocesses each timeline clip's source file and applies the result with `applyReprocessedSubtitles()` (`src/lib/reprocess-utils.ts`): "Replace" swaps that clip's lines, "Update text only" keeps timings and takes the best-overlapping new text. One undo step restores the old lines.
 - `translateSubtitles()` - Re-translation (Enforced Structured Output Schema)
+- **Timeouts:** `src/instrumentation.ts` raises Node fetch's 300 s header/body timeout (undici dispatcher) at server start; generation requests carry `GEMINI_REQUEST_TIMEOUT_MS` (30 min, `src/lib/gemini-timeouts.ts`)
+- **Disconnects:** if the uploading page goes away mid-job (phone asleep, tab closed), processing continues and the result is saved as a draft (`src/lib/orphaned-upload.ts`). The page's Cancel button first posts the upload's `uploadId` to `POST /api/process/cancel` (`src/lib/upload-cancellations.ts`), so cancelled uploads are discarded instead. An upload interrupted before the whole file arrives cannot be recovered; its partial file is deleted.
+- **Logging:** errors are logged with their cause chain via `describeError()` (`src/lib/error-utils.ts`); AI attempts log provider, model, duration and line count
 - `PATCH /api/drafts` - Project renaming (Lightweight partial update)
 
 #### 3.2.3. Export Queue Service
@@ -374,7 +379,8 @@ npm run dev -- -H 0.0.0.0
 User uploads video
     → /api/process receives file
     → File saved to {STAGING_DIR}/temp/
-    → If >400MB: Extract audio only
+    → If longer than 30 min: transcribe in 20-min audio pieces (generateInChunks)
+    → Else if >400MB: Extract audio only
     → If <95MB: Send inline to Gemini
     → Otherwise: Upload to Gemini Files API
     → Gemini returns JSON subtitles ("HH:MM:SS,mmm" strings, no IDs)
@@ -424,7 +430,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-11-08 |
+| **Date of Last Update** | 2026-11-19 |
 
 ---
 

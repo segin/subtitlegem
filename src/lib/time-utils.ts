@@ -45,6 +45,7 @@ export const parseTimestamp = (timeStr: string | number): number => {
 // Export-only utility
 export function generateSrtContent(subtitles: SubtitleLine[], type: 'primary' | 'secondary'): string {
   return subtitles
+    .filter(sub => !sub.placeholder) // editor-only notes, e.g. "[Subtitles missing ...]"
     .filter(sub => type === 'primary' ? !!sub.text : !!sub.secondaryText)
     .map((sub, index) => {
       const text = type === 'primary' ? sub.text : sub.secondaryText;

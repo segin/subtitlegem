@@ -14,6 +14,8 @@ import { GlobalSettingsDialog } from "@/components/GlobalSettingsDialog";
 import { VideoPropertiesDialog } from "@/components/VideoPropertiesDialog";
 import { AssetLibrary } from "@/components/AssetLibrary";
 import { TimelineToolbar } from "@/components/TimelineToolbar";
+import { ReprocessDialog, ReprocessOptions } from "@/components/ReprocessDialog";
+import { applyReprocessedSubtitles, ReprocessedClip } from "@/lib/reprocess-utils";
 import { FindReplaceDialog, FindOptions, FindResult } from "@/components/FindReplaceDialog";
 import { 
   SubtitleLine,
@@ -99,7 +101,7 @@ export default function Home() {
   const [pendingProjectFile, setPendingProjectFile] = useState<File | null>(null);
   
   // Reprocess dialog state
-  const [, setShowReprocessDialog] = useState(false);
+  const [showReprocessDialog, setShowReprocessDialog] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
 
   // Check if we're in multi-video mode
@@ -369,6 +371,64 @@ export default function Home() {
      }
   };
   
+  // File > Reprocess Video (and Project Settings > Reprocess): regenerate subtitles
+  // from each source video on the server. One undo step restores the old lines.
+  const handleReprocess = async (options: ReprocessOptions): Promise<SubtitleLine[]> => {
+    // Multi-video: each library clip on the timeline, with lines tagged by its timeline clip
+    const targets = videoClips.length > 0
+      ? videoClips
+          .map(clip => ({
+            videoClipId: clip.id,
+            filePath: clip.filePath,
+            lineClipId: timelineClips.find(tc => tc.videoClipId === clip.id)?.id,
+          }))
+          .filter(t => t.lineClipId)
+      : videoPath ? [{ videoClipId: "", filePath: videoPath, lineClipId: undefined }] : [];
+    if (targets.length === 0) throw new Error("No video loaded");
+
+    const results: ReprocessedClip[] = [];
+    let detectedLanguage: string | undefined;
+    // One video at a time: each request already sends several audio pieces at once
+    for (const target of targets) {
+      const res = await fetch('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: 'reprocess',
+          filePath: target.filePath,
+          model: options.model,
+          secondaryLanguage: options.secondaryLanguage,
+          promptHints: options.promptHints,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !Array.isArray(data.subtitles)) {
+        const name = target.filePath.split('/').pop();
+        throw new Error(`${targets.length > 1 ? `${name}: ` : ""}${data.error || `Reprocessing failed (HTTP ${res.status})`}`);
+      }
+      results.push({ videoClipId: target.videoClipId, lineClipId: target.lineClipId, subtitles: data.subtitles });
+      detectedLanguage ??= data.detectedLanguage;
+    }
+
+    const timelineToVideo = new Map(timelineClips.map(tc => [tc.id, tc.videoClipId]));
+    const videoClipIdOf = (line: SubtitleLine) => {
+      if (videoClips.length === 0) return "";
+      // Same rule as saving: lines without a known clip belong to the first clip
+      return (line.clipId && (timelineToVideo.get(line.clipId) ?? line.clipId)) || videoClips[0].id;
+    };
+    const updated = applyReprocessedSubtitles(subtitles, results, options.mode, videoClipIdOf);
+    setSubtitles(updated);
+
+    const secondary = options.secondaryLanguage && options.secondaryLanguage !== "None" ? options.secondaryLanguage : undefined;
+    setConfig(prev => ({
+      ...prev,
+      geminiModel: options.model,
+      ...(options.mode === 'replace' && detectedLanguage && { primaryLanguage: detectedLanguage }),
+      ...(secondary && { secondaryLanguage: secondary }),
+    }));
+    return updated;
+  };
+
   const handleExport =(format: 'ass' | 'srt' | 'srt-primary' | 'srt-secondary' | 'txt') => {
     let content = "";
     let fileName = "subtitles";
@@ -384,7 +444,7 @@ export default function Home() {
       content = generateSrtContent(subtitles, 'secondary');
       fileName = 'subtitles_secondary.srt';
     } else if (format === 'txt') {
-      content = subtitles.map(s => s.text).join('\n');
+      content = subtitles.filter(s => !s.placeholder).map(s => s.text).join('\n');
       fileName = 'transcript.txt';
     }
 
@@ -1559,6 +1619,16 @@ export default function Home() {
         onReplaceAll={handleReplaceAll}
       />
 
+      <ReprocessDialog
+        isOpen={showReprocessDialog}
+        onClose={() => setShowReprocessDialog(false)}
+        subtitleCount={subtitles.filter(s => !s.placeholder).length}
+        currentModel={config.geminiModel}
+        currentSecondaryLanguage={config.secondaryLanguage}
+        onReprocess={handleReprocess}
+        videoPath={videoClips[0]?.filePath ?? videoPath}
+      />
+
       <ProjectSettingsDialog
         isOpen={showProjectSettings}
         onClose={() => setShowProjectSettings(false)}
@@ -1566,21 +1636,14 @@ export default function Home() {
         onUpdateConfig={(updates) => setConfig(prev => ({ ...prev, ...updates }))}
         projectConfig={projectConfig}
         onUpdateProjectConfig={(updates) => setProjectConfig(prev => ({ ...prev, ...updates }))}
-        onReprocess={async (lang, model) => {
-            const res = await fetch('/api/process', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    mode: 'reprocess',
-                    fileUri: config.geminiFileUri,
-                    language: lang,
-                    secondaryLanguage: config.secondaryLanguage,
-                    model: model 
-                })
+        onReprocess={async (_lang, model) => {
+            // Same path as File > Reprocess Video: transcribes the local files
+            // (the Gemini upload this used to rely on expires after 48 hours)
+            await handleReprocess({
+                model,
+                secondaryLanguage: config.secondaryLanguage || "None",
+                mode: 'replace',
             });
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-            setSubtitles(data.subtitles);
         }}
         onRetranslate={async (secLang, model) => {
             const res = await fetch('/api/process', {
