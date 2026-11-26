@@ -1,6 +1,6 @@
-// ... imports
 import { TrackStyle } from "@/types/subtitle";
 import { RotateCcw } from "lucide-react";
+import { parseCssColor, toHexColor } from "@/lib/css-color";
 
 interface TrackStyleEditorProps {
   style: Partial<TrackStyle>;
@@ -8,6 +8,69 @@ interface TrackStyleEditorProps {
   onReset?: () => void;
   compact?: boolean;
   mode?: 'percentage' | 'pixel'; // New prop to control unit behavior
+  /** For override editors: the style used when a field is left on Inherit */
+  inherited?: Partial<TrackStyle>;
+}
+
+const DEFAULT_BOX_OPACITY = 70;
+
+/**
+ * The box drawn behind subtitle text: on/off, colour and opacity.
+ * Stored as a CSS colour ("transparent" = no box); undefined = inherit.
+ */
+export function BackgroundBoxInput({ value, inheritedValue, allowInherit = false, onChange }: {
+  value: string | undefined;
+  inheritedValue?: string;
+  allowInherit?: boolean;
+  onChange: (value: string | undefined) => void;
+}) {
+  const parsed = parseCssColor(value ?? inheritedValue);
+  const on = parsed !== null && parsed.a > 0;
+  const color = on ? parsed : { r: 0, g: 0, b: 0, a: DEFAULT_BOX_OPACITY / 100 };
+  const opacity = Math.round(color.a * 100);
+  const set = (c: { r: number; g: number; b: number }, percent: number) =>
+    onChange(`rgba(${c.r},${c.g},${c.b},${percent / 100})`);
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1 text-xs text-[#ccc] cursor-pointer shrink-0">
+          <input
+            type="checkbox"
+            checked={on}
+            onChange={(e) => (e.target.checked ? set(color, opacity) : onChange('transparent'))}
+            className="accent-[#007acc]"
+          />
+          Box
+        </label>
+        <input
+          type="color"
+          aria-label="Box colour"
+          value={toHexColor(color)}
+          disabled={!on}
+          onChange={(e) => { const c = parseCssColor(e.target.value); if (c) set(c, opacity); }}
+          className="w-8 h-7 border border-[#3e3e42] cursor-pointer opacity-80 hover:opacity-100 disabled:opacity-30 disabled:cursor-default shrink-0"
+        />
+        <input
+          type="range"
+          aria-label="Box opacity"
+          min={5}
+          max={100}
+          step={5}
+          value={opacity}
+          disabled={!on}
+          onChange={(e) => set(color, Number(e.target.value))}
+          className="flex-1 min-w-0 accent-[#007acc] disabled:opacity-30"
+        />
+        <span className="text-[10px] text-[#888] w-8 text-right shrink-0">{on ? `${opacity}%` : 'Off'}</span>
+      </div>
+      {allowInherit && (
+        value === undefined
+          ? <p className="text-[10px] text-[#555]">Inherited</p>
+          : <button onClick={() => onChange(undefined)} className="text-[10px] text-[#007acc] hover:underline">Use inherited</button>
+      )}
+    </div>
+  );
 }
 
 const ALIGNMENTS = [
@@ -18,7 +81,7 @@ const ALIGNMENTS = [
 
 const FONTS = ['Arial', 'Helvetica', 'Verdana', 'Tahoma', 'Trebuchet MS', 'Georgia', 'Times New Roman', 'Courier New'];
 
-export function TrackStyleEditor({ style, onChange, onReset, compact = false, mode = 'pixel' }: TrackStyleEditorProps) {
+export function TrackStyleEditor({ style, onChange, onReset, compact = false, mode = 'pixel', inherited }: TrackStyleEditorProps) {
   
   const update = (key: keyof TrackStyle, value: string | number | undefined) => {
     // If unit mode is different, handle conversion if needed, OR just save raw
@@ -52,9 +115,10 @@ export function TrackStyleEditor({ style, onChange, onReset, compact = false, mo
       return parseFloat(val); // Extract number from "50%"
   };
 
-  const unitLabel = mode === 'percentage' ? '(%)' : '(px)';
-  const step = mode === 'percentage' ? 0.1 : 1; 
-  const fineStep = mode === 'percentage' ? 0.05 : 0.1;
+  // Both modes mean percent of the video (see normalizeToPx); 'pixel' only stores plain numbers
+  const unitLabel = '(%)';
+  const step = 0.1;
+  const fineStep = 0.05;
 
   return (
     <div className={`space-y-3 ${compact ? 'text-xs' : ''}`}>
@@ -153,13 +217,12 @@ export function TrackStyleEditor({ style, onChange, onReset, compact = false, mo
 
       {/* Background */}
       <div>
-        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Background</label>
-        <input
-          type="text"
-          value={style.backgroundColor ?? ''}
-          onChange={(e) => update('backgroundColor', e.target.value || undefined)}
-          placeholder="Inherit (e.g. rgba(0,0,0,0.5))"
-          className="w-full bg-[#1e1e1e] border border-[#3e3e42] text-[#ccc] text-xs p-1.5 focus:border-[#007acc] outline-none font-mono placeholder:text-[#444]"
+        <label className="text-[9px] uppercase text-[#666] font-bold mb-1 block">Background Box</label>
+        <BackgroundBoxInput
+          value={style.backgroundColor}
+          inheritedValue={inherited?.backgroundColor}
+          allowInherit={inherited !== undefined}
+          onChange={(value) => onChange({ backgroundColor: value })}
         />
       </div>
 

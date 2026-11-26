@@ -1,6 +1,13 @@
-import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
+import { SubtitleLine, SubtitleConfig, TrackStyle } from "@/types/subtitle";
 import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
-import { resolveTrackStyle, normalizeToPx } from "./style-resolver";
+import { toAssColour } from "./css-color";
+import {
+    assFontName,
+    getTrackMetrics,
+    GlobalStyleDefaults,
+    isTrackShown,
+    resolveProjectStyles,
+} from "./subtitle-render-style";
 
 // Convert hex color (#RRGGBB) to BGR for ASS format (&HBBGGRR)
 export function hexToAssColor(hex: string | undefined): string {
@@ -24,44 +31,38 @@ export function formatAssTime(seconds: number): string {
     return `${h}:${mm}:${ss}.${cs}`;
 }
 
-function generateStyleLine(name: string, style: TrackStyle, playResX: number = REFERENCE_WIDTH, playResY: number = REFERENCE_HEIGHT): string {
-    const { fontFamily, fontSize, color, backgroundColor, marginV, marginH, outlineWidth } = style;
-    
-    // IMPORTANT: Font sizes and margins are stored as percentages relative to the REFERENCE resolution (1920x1080).
-    // To maintain visual consistency across different video resolutions:
-    // 1. Calculate the pixel value at REFERENCE resolution
-    // 2. Scale that pixel value to the target PlayRes
-    // This ensures a "5% font size" looks the same whether the video is 1080p or 2160p.
-    
-    // Scale factors: how much bigger/smaller is target vs reference?
-    const scaleX = playResX / REFERENCE_WIDTH;
-    const scaleY = playResY / REFERENCE_HEIGHT;
-    
-    // Calculate at reference resolution, then scale to target
-    const refFontSize = normalizeToPx(fontSize, REFERENCE_HEIGHT);
-    const refMarginV = normalizeToPx(marginV, REFERENCE_HEIGHT);
-    const refMarginH = normalizeToPx(marginH, REFERENCE_WIDTH);
-    const refOutlineWidth = normalizeToPx(outlineWidth ?? 2.0, REFERENCE_HEIGHT);
-    
-    // Scale to target PlayRes
-    // USER REQUEST: Font size needs to be doubled from whatever the user input.
-    // "If it says 5%, act like the user put in 10% when doing the render."
-    const assFontSize = Math.round(refFontSize * scaleY * 2);
-    const assMarginV = Math.round(refMarginV * scaleY);
-    const assMarginH = Math.round(refMarginH * scaleX);
-    // Clamp outline to prevent massive globs
-    const assOutlineWidth = Math.min(refOutlineWidth * scaleY, 20); 
+/**
+ * Sizes are stored as percentages of the video (see getTrackMetrics) and
+ * PlayRes is the video's own size, so these are video pixels.
+ *
+ * With a background, BorderStyle 4 (libass 0.17+) draws one box around the
+ * whole event in BackColour and still draws the outline in OutlineColour.
+ * The box reaches Outline + Shadow pixels past the text, so Shadow sets the
+ * padding (libass draws no separate drop shadow in this mode). Renderers
+ * without BorderStyle 4 fall back to a plain outline.
+ */
+function generateStyleLine(name: string, style: TrackStyle, playResX: number, playResY: number): string {
+    const m = getTrackMetrics(style, playResX, playResY);
+    const hasBox = m.boxColor !== null;
 
-    const primaryColour = hexToAssColor(color);
-    const backColour = hexToAssColor(backgroundColor);
-    
-    // Fallback for Arial on Linux systems to Noto Sans (Better CJK support)
-    const finalFontFamily = (fontFamily === 'Arial') ? 'Noto Sans' : fontFamily;
-
-    // Alignment is numpad based
-    const alignment = style.alignment;
-
-    return `Style: ${name},${finalFontFamily},${assFontSize},${primaryColour},&H00FFFFFF,&H00000000,${backColour},0,0,0,0,100,100,0,0,1,${assOutlineWidth.toFixed(1)},0,${alignment},${assMarginH},${assMarginH},${assMarginV},1`;
+    const fields = [
+        name,
+        assFontName(style.fontFamily),
+        Math.round(m.fontSize),
+        toAssColour(m.textColor),           // PrimaryColour
+        '&H00FFFFFF',                       // SecondaryColour (karaoke only)
+        toAssColour(m.outlineColor),        // OutlineColour
+        hasBox ? toAssColour(m.boxColor!) : '&H00000000', // BackColour
+        0, 0, 0, 0,                         // Bold, Italic, Underline, StrikeOut
+        100, 100, 0, 0,                     // ScaleX, ScaleY, Spacing, Angle
+        hasBox ? 4 : 1,                     // BorderStyle
+        m.outline.toFixed(1),
+        hasBox ? (m.boxPadding - m.outline).toFixed(1) : 0, // Shadow
+        m.alignment,
+        Math.round(m.marginH), Math.round(m.marginH), Math.round(m.marginV),
+        1,                                  // Encoding
+    ];
+    return `Style: ${fields.join(',')}`;
 }
 
 
@@ -77,25 +78,25 @@ export interface VideoDimensions {
     height: number;
 }
 
+/**
+ * @param globalStyles Global Settings styles, which sit between the built-in
+ *   defaults and the project's own overrides.
+ */
 export function generateAss(
-    subtitles: SubtitleLine[], 
-    config: SubtitleConfig, 
-    videoDimensions?: VideoDimensions
+    subtitles: SubtitleLine[],
+    config: SubtitleConfig,
+    videoDimensions?: VideoDimensions,
+    globalStyles?: GlobalStyleDefaults | null,
 ): string {
     // Use actual video dimensions if provided, otherwise default to 1080p
     const playResX = videoDimensions?.width || REFERENCE_WIDTH;
     const playResY = videoDimensions?.height || REFERENCE_HEIGHT;
-    
-    // Resolve styles with inheritance (Global -> Project -> Line)
-    const resolvedPrimary = resolveTrackStyle(
-        DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle,
-        config.primary
-    );
-    const resolvedSecondary = resolveTrackStyle(
-        DEFAULT_GLOBAL_SETTINGS.defaultSecondaryStyle,
-        config.secondary
-    );
-    
+
+    // Built-in defaults -> Global Settings -> project overrides (lines add a colour below)
+    const styles = resolveProjectStyles(config, globalStyles);
+    const showPrimary = isTrackShown(config, 'primary', styles.primary);
+    const showSecondary = isTrackShown(config, 'secondary', styles.secondary);
+
     const scriptInfo = [
         '[Script Info]',
         'Title: SubtitleGem Export',
@@ -106,12 +107,12 @@ export function generateAss(
         'ScaledBorderAndShadow: yes',
         '',
     ].join('\n');
-    
-    const styles = [
+
+    const styleSection = [
         '[V4+ Styles]',
         'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-        generateStyleLine('Primary', resolvedPrimary, playResX, playResY),
-        generateStyleLine('Secondary', resolvedSecondary, playResX, playResY),
+        generateStyleLine('Primary', styles.primary, playResX, playResY),
+        generateStyleLine('Secondary', styles.secondary, playResX, playResY),
         '',
     ].join('\n');
 
@@ -121,14 +122,14 @@ export function generateAss(
     const events = [
         '[Events]',
         'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
-        ...exported.map(sub => {
+        ...(showPrimary ? exported : []).map(sub => {
             // If line has custom color, use it; otherwise use resolved style
             const customColor = sub.styleOverrides?.color || sub.primaryColor;
             const colorTag = customColor ? `{\\c${hexToAssColor(customColor)}}` : '';
-            
+
             return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Primary,,0,0,0,,${colorTag}${sanitizeAssText(sub.text)}`;
         }),
-        ...exported
+        ...(showSecondary ? exported : [])
             .filter(sub => sub.secondaryText)
             .map(sub => {
                 const customColor = sub.secondaryColor;
@@ -136,6 +137,6 @@ export function generateAss(
                 return `Dialogue: 0,${formatAssTime(sub.startTime)},${formatAssTime(sub.endTime)},Secondary,,0,0,0,,${colorTag}${sanitizeAssText(sub.secondaryText!)}`;
             }),
     ].join('\n');
-    
-    return `${scriptInfo}${styles}${events}`;
+
+    return `${scriptInfo}${styleSection}${events}`;
 }

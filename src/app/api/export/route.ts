@@ -9,6 +9,7 @@ import * as path from "path";
 import { getStagingDir } from "@/lib/storage-config";
 import { v4 as uuidv4 } from "uuid";
 import { isSafeId } from "@/lib/path-utils";
+import { getGlobalSettings } from "@/lib/global-settings-store";
 
 export const runtime = 'nodejs';
 
@@ -88,7 +89,7 @@ export async function POST(req: NextRequest) {
        };
 
        // Generate ASS
-       const assContent = generateAss(flattenedSubtitles, project.subtitleConfig, videoDimensions);
+       const assContent = generateAss(flattenedSubtitles, project.subtitleConfig, videoDimensions, getGlobalSettings());
        await fsPromises.writeFile(assPath, assContent);
 
        // Queue Job
@@ -185,8 +186,8 @@ export async function POST(req: NextRequest) {
       console.warn('[Export] Could not get video dimensions, using default 1920x1080:', e);
     }
 
-    // Generate ASS file with actual video dimensions
-    const assContent = generateAss(subtitles, config, videoDimensions);
+    // Generate ASS file with actual video dimensions and the Global Settings styles
+    const assContent = generateAss(subtitles, config, videoDimensions, getGlobalSettings());
     await fsPromises.writeFile(assPath, assContent);
 
     // Add to queue with persistent metadata

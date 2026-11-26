@@ -1,5 +1,5 @@
 import { TrackStyle } from "@/types/subtitle";
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT } from "@/types/constants";
+import { REFERENCE_HEIGHT } from "@/types/constants";
 
 /**
  * Resolves the final style for a subtitle line by merging:
@@ -78,32 +78,5 @@ export function getPreviewStyle(style: TrackStyle, videoHeightPx: number = 360) 
           ? `0 0 ${outlinePx}px ${style.outlineColor || '#000'}` 
           : 'none',
         boxShadow: 'none', 
-    };
-}
-
-/**
- * Calculates CSS margin/padding style for preview containers based on alignment.
- * Reusable across GlobalSettingsDialog and ProjectSettingsDialog.
- */
-export function getMarginPreviewStyle(
-    marginV: number | string,
-    marginH: number | string,
-    alignment: number
-): React.CSSProperties {
-    // Convert to percentage strings if they're numbers (reference pixel values)
-    const vPct = typeof marginV === 'string' ? marginV : `${(marginV / REFERENCE_HEIGHT) * 100}%`;
-    const hPct = typeof marginH === 'string' ? marginH : `${(marginH / REFERENCE_WIDTH) * 100}%`;
-
-    return {
-        paddingTop: alignment >= 7 ? vPct : 0,
-        paddingBottom: alignment <= 3 ? vPct : 0,
-        paddingLeft: hPct,
-        paddingRight: hPct,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: [1, 4, 7].includes(alignment) ? 'flex-start' :
-                    [3, 6, 9].includes(alignment) ? 'flex-end' : 'center',
-        justifyContent: [7, 8, 9].includes(alignment) ? 'flex-start' :
-                        [1, 2, 3].includes(alignment) ? 'flex-end' : 'center',
     };
 }

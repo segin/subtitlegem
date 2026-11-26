@@ -50,7 +50,8 @@ export interface TrackStyle {
   marginV: number;
   /** Horizontal margin as percentage of video width */
   marginH: number;
-  backgroundColor: string; // rgba() format for transparency
+  /** Box behind the text: a CSS colour (rgba() for transparency); "transparent" or "none" for no box */
+  backgroundColor: string;
   outlineColor?: string; // Optional outline color
   /** Outline width as percentage of video height */
   outlineWidth?: number;
@@ -73,6 +74,12 @@ export interface SubtitleConfig {
   ffmpeg: FFmpegConfig;
   primaryLanguage?: string;
   secondaryLanguage?: string;
+  /**
+   * Whether each language is drawn on the video (preview, burned-in export, .ass).
+   * Unset means shown. Hidden lines stay in the project and its .srt exports.
+   */
+  showPrimary?: boolean;
+  showSecondary?: boolean;
   geminiFileUri?: string | null;
   geminiFileExpiration?: string | null;
   fileId?: string | null;
@@ -409,7 +416,9 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     fontFamily: 'Arial',
     marginV: 4,            // 4% from edge
     marginH: 4,            // 4% horizontal padding
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    // No box by default: exports never drew one before boxes were supported,
+    // so existing projects keep their look. e.g. 'rgba(0,0,0,0.7)' for a box.
+    backgroundColor: 'transparent',
     outlineColor: '#000000',
     outlineWidth: 0.2,     // 0.2% outline
   },
@@ -420,7 +429,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     fontFamily: 'Arial',
     marginV: 4,
     marginH: 4,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'transparent',
     outlineColor: '#000000',
     outlineWidth: 0.2,
   },

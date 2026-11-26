@@ -56,10 +56,7 @@ describe('GlobalSettingsDialog', () => {
         screen.getByText('16:9');
         const btn916 = screen.getByText('9:16');
         
-        const sampleText = screen.getByText(/Sample Text Line 1/);
-        const previewContainer = sampleText.closest('div')?.parentElement; // The container holding the text box
-        
-        if (!previewContainer) throw new Error('Preview container not found');
+        const previewContainer = screen.getByTestId('style-sample-frame'); // The simulated video frame
 
         // Check height for 16:9
         expect(previewContainer).toHaveStyle({ height: '180px' });

@@ -271,6 +271,89 @@ describe('generateAss', () => {
       ], 'primary')).not.toContain('Subtitles missing');
     });
 
+    const styleFields = (ass: string, name: 'Primary' | 'Secondary') => {
+      const line = ass.split('\n').find(l => l.startsWith(`Style: ${name},`));
+      if (!line) throw new Error(`no ${name} style`);
+      const [, Fontname, Fontsize, PrimaryColour, , OutlineColour, BackColour, , , , , , , , , BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV] =
+        line.slice('Style: '.length).split(',');
+      return { Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV };
+    };
+
+    test('no background box by default: outline only, in the outline colour', () => {
+      const s = styleFields(generateAss([createSubtitle()], defaultConfig), 'Primary');
+      expect(s.BorderStyle).toBe('1');
+      expect(s.Shadow).toBe('0');
+      expect(s.Outline).toBe('2.2'); // 0.2% of 1080
+      expect(s.OutlineColour).toBe('&H00000000');
+      expect(s.PrimaryColour).toBe('&H00FFFFFF');
+      expect(s.Fontname).toBe('Noto Sans');
+    });
+
+    test('a background colour draws a box (BorderStyle 4) with its transparency and padding', () => {
+      const config: SubtitleConfig = {
+        ...defaultConfig,
+        primary: { backgroundColor: 'rgba(0,0,0,0.7)', outlineColor: '#ff0000', color: '#ffff00' },
+      };
+      const s = styleFields(generateAss([createSubtitle()], config, { width: 1920, height: 1080 }), 'Primary');
+      expect(s.BorderStyle).toBe('4');
+      expect(s.BackColour).toBe('&H4D000000');       // 70% opaque black
+      expect(s.OutlineColour).toBe('&H000000FF');    // red, as chosen
+      expect(s.PrimaryColour).toBe('&H0000FFFF');    // yellow
+      expect(s.Fontsize).toBe('108');
+      // libass pads the box by Outline + Shadow: a tenth of the 108 px line height
+      expect(Number(s.Outline) + Number(s.Shadow)).toBeCloseTo(10.8, 1);
+    });
+
+    test('an opaque hex background works too; transparent or none means no box', () => {
+      const boxed = generateAss([createSubtitle()], { ...defaultConfig, secondary: { backgroundColor: '#202020' } });
+      expect(styleFields(boxed, 'Secondary').BorderStyle).toBe('4');
+      expect(styleFields(boxed, 'Secondary').BackColour).toBe('&H00202020');
+      for (const backgroundColor of ['transparent', 'none', 'rgba(0,0,0,0)']) {
+        const plain = generateAss([createSubtitle()], { ...defaultConfig, primary: { backgroundColor } });
+        expect(styleFields(plain, 'Primary').BorderStyle).toBe('1');
+      }
+    });
+
+    test('Global Settings styles apply under project overrides', () => {
+      const globalStyles = {
+        defaultPrimaryStyle: { color: '#00ff00', fontSize: 3, backgroundColor: '#000000' },
+      };
+      const inherited = styleFields(generateAss([createSubtitle()], defaultConfig, undefined, globalStyles), 'Primary');
+      expect(inherited.PrimaryColour).toBe('&H0000FF00');
+      expect(inherited.Fontsize).toBe('65'); // 3% of 1080, doubled
+      expect(inherited.BorderStyle).toBe('4');
+      const overridden = styleFields(
+        generateAss([createSubtitle()], { ...defaultConfig, primary: { fontSize: 4 } }, undefined, globalStyles),
+        'Primary',
+      );
+      expect(overridden.Fontsize).toBe('86');
+      expect(overridden.PrimaryColour).toBe('&H0000FF00');
+    });
+
+    test('a font list from the style panel becomes a single font name', () => {
+      const ass = generateAss([createSubtitle()], { ...defaultConfig, primary: { fontFamily: 'Georgia, serif' } });
+      expect(styleFields(ass, 'Primary').Fontname).toBe('Georgia');
+      expect(styleFields(ass, 'Primary').Alignment).toBe('2'); // fields after the font stay in place
+    });
+
+    test('hidden languages are left out of the events', () => {
+      const subs = [createSubtitle({ text: 'Spoken', secondaryText: 'Translated' })];
+      const noPrimary = generateAss(subs, { ...defaultConfig, showPrimary: false });
+      expect(noPrimary).not.toContain(',Primary,,0,0,0,,Spoken');
+      expect(noPrimary).toContain(',Secondary,,0,0,0,,Translated');
+      const noSecondary = generateAss(subs, { ...defaultConfig, showSecondary: false });
+      expect(noSecondary).toContain(',Primary,,0,0,0,,Spoken');
+      expect(noSecondary).not.toContain('Translated');
+      expect(generateAss(subs, { ...defaultConfig, showPrimary: false, showSecondary: false })).not.toContain('Dialogue:');
+    });
+
+    test('font size 0 still hides a language, as older projects relied on', () => {
+      const subs = [createSubtitle({ text: 'Spoken', secondaryText: 'Translated' })];
+      const ass = generateAss(subs, { ...defaultConfig, primary: { fontSize: 0 } });
+      expect(ass).not.toContain('Spoken');
+      expect(ass).toContain('Translated');
+    });
+
     test('generates valid ASS structure', () => {
       const subtitles = [createSubtitle()];
       const result = generateAss(subtitles, defaultConfig);

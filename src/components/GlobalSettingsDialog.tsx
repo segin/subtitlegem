@@ -2,20 +2,18 @@
 
 import React, { useState, useEffect } from "react";
 import { GlobalSettings, DEFAULT_GLOBAL_SETTINGS, AIProvider } from "@/types/subtitle";
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_AI_MODEL } from "@/types/constants";
+import { DEFAULT_AI_MODEL } from "@/types/constants";
 import { Settings, X, Type, Languages, Cpu, Sparkles, RotateCcw, Plus, Trash2, ChevronUp, ChevronDown, Palette, Lock, LogOut } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
-import { getMarginPreviewStyle } from "@/lib/style-resolver";
-
-interface GlobalSettingsDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
+import { StyleSamplePreview } from "./StyleSamplePreview";
+import { resolveProjectStyles } from "@/lib/subtitle-render-style";
 
 interface GlobalSettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: TabId;
+  /** Called with the settings after a successful save or reset */
+  onSaved?: (settings: GlobalSettings) => void;
 }
 
 export type TabId = 'styles' | 'languages' | 'encoding' | 'ai' | 'appearance' | 'security';
@@ -37,7 +35,7 @@ const LANGUAGES = [
   'Hindi', 'Thai', 'Vietnamese', 'Indonesian', 'Dutch', 'Polish', 'Turkish', 'None'
 ];
 
-export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }: GlobalSettingsDialogProps) {
+export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles', onSaved }: GlobalSettingsDialogProps) {
   const [activeTab, setActiveTab] = useState<TabId>(initialTab);
   const [stylesSubTab, setStylesSubTab] = useState<'primary' | 'secondary'>('primary');
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_GLOBAL_SETTINGS);
@@ -135,6 +133,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
         body: JSON.stringify(settings),
       });
       if (res.ok) {
+        onSaved?.(settings);
         onClose();
       }
     } catch (err) {
@@ -151,6 +150,7 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
       if (res.ok) {
         const data = await res.json();
         setSettings(data.settings);
+        onSaved?.(data.settings);
       }
     } catch (err) {
       console.error('Failed to reset settings:', err);
@@ -170,24 +170,6 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
   };
 
 
-
-  // Resolution details for "true to life" simulation
-  const previewWidth = 320; 
-  const previewHeight = previewAspect === '16:9' ? previewWidth * (9/16) : previewWidth * (16/9);
-  
-  const referenceHeight = previewAspect === '16:9' ? REFERENCE_HEIGHT : REFERENCE_WIDTH; 
-  const scale = previewHeight / referenceHeight;
-
-  // Helper to normalize style values for preview
-  const getPreviewFontSize = (val: string | number) => {
-    // 1. Normalize to 1080p pixels (e.g. "5%" -> 54px)
-    const px = typeof val === 'string' && val.endsWith('%') 
-      ? (parseFloat(val) / 100) * 1080 
-      : (typeof val === 'number' ? val : parseFloat(String(val)) || 0);
-      
-    // 2. Scale to preview size
-    return (px / 1080) * referenceHeight * scale;
-  };
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -251,50 +233,12 @@ export function GlobalSettingsDialog({ isOpen, onClose, initialTab = 'styles' }:
                          </button>
                     </div>
 
-                    <div 
-                        className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm relative overflow-hidden transition-all mx-auto"
-                        style={{ width: previewWidth, height: previewHeight }}
-                    >
-                      {/* Simulated video background */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222] pointer-events-none" />
-                      
-                      {/* Reference Grid */}
-                      <div className="absolute inset-0 opacity-10 pointer-events-none grid grid-cols-3 grid-rows-3">
-                        {[...Array(9)].map((_, i) => (
-                            <div key={i} className="border border-white/20"></div>
-                        ))}
-                      </div>
-
-                      {/* Preview subtitles */}
-                      <div 
-                        className="absolute inset-0 pointer-events-none p-4"
-                        style={getMarginPreviewStyle(currentStyle.marginV, currentStyle.marginH, currentStyle.alignment)}
-                      >
-                        <span 
-                          style={{
-                            fontFamily: currentStyle.fontFamily || 'Arial',
-                            // Use correct scaling logic matching ASS renderer
-                            fontSize: `${getPreviewFontSize(currentStyle.fontSize)}px`,
-                            color: currentStyle.color,
-                            backgroundColor: currentStyle.backgroundColor,
-                            padding: '0.1em 0.3em',
-                            textShadow: currentStyle.outlineWidth 
-                              ? `0 0 ${getPreviewFontSize(currentStyle.outlineWidth || 0)}px ${currentStyle.outlineColor || '#000'}` 
-                              : 'none',
-                            boxShadow: 'none',
-                            display: 'inline-block',
-                            textAlign: [1, 4, 7].includes(currentStyle.alignment) ? 'left' : 
-                                       [3, 6, 9].includes(currentStyle.alignment) ? 'right' : 'center', 
-                            maxWidth: '100%',
-                            wordBreak: 'break-word',
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {stylesSubTab === 'primary' ? 'Sample Text Line 1\nExample Line 2' : '样本文字第一行\n示例文字第二行'}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-[9px] text-[#555] mt-1 text-center">Live Preview ({Math.round(referenceHeight)}p base)</p>
+                    <StyleSamplePreview
+                      style={resolveProjectStyles({}, settings)[stylesSubTab]}
+                      aspect={previewAspect}
+                      width={320}
+                      text={stylesSubTab === 'primary' ? 'Sample Text Line 1\nExample Line 2' : '样本文字第一行\n示例文字第二行'}
+                    />
                   </div>
 
                   {/* Controls Panel */}

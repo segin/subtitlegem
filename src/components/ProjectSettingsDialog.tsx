@@ -3,15 +3,18 @@
 import React, { useState, useEffect } from "react";
 import { Settings, X, RefreshCw, Type, Languages } from "lucide-react";
 import { TrackStyleEditor } from "./TrackStyleEditor";
+import { StyleSamplePreview } from "./StyleSamplePreview";
 import { SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS } from "@/types/subtitle";
-import { REFERENCE_WIDTH, REFERENCE_HEIGHT, DEFAULT_AI_MODEL } from "@/types/constants";
-import { resolveTrackStyle, normalizeToPx, getMarginPreviewStyle } from "@/lib/style-resolver";
+import { DEFAULT_AI_MODEL } from "@/types/constants";
+import { GlobalStyleDefaults, resolveProjectStyles } from "@/lib/subtitle-render-style";
 import { getCachedModelResult } from "@/lib/model-cache";
 
 interface ProjectSettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
   config: SubtitleConfig;
+  /** Styles from Global Settings, which project overrides sit on top of */
+  globalStyles?: GlobalStyleDefaults | null;
   onUpdateConfig: (newConfig: Partial<SubtitleConfig>) => void;
   onReprocess: (language: string, model: string) => Promise<void>;
   onRetranslate: (language: string, model: string) => Promise<void>;
@@ -30,6 +33,7 @@ export function ProjectSettingsDialog({
   isOpen,
   onClose,
   config,
+  globalStyles,
   onUpdateConfig,
   onReprocess,
   onRetranslate,
@@ -39,6 +43,8 @@ export function ProjectSettingsDialog({
   // Config state
   const [primaryLang, setPrimaryLang] = useState(config.primaryLanguage || "English");
   const [secondaryLang, setSecondaryLang] = useState(config.secondaryLanguage || "Secondary");
+  const [showPrimary, setShowPrimary] = useState(config.showPrimary !== false);
+  const [showSecondary, setShowSecondary] = useState(config.showSecondary !== false);
   const [model, setModel] = useState(config.geminiModel || DEFAULT_AI_MODEL);
   
   // Project Config state
@@ -90,6 +96,8 @@ export function ProjectSettingsDialog({
         setModel(config.geminiModel || DEFAULT_GLOBAL_SETTINGS.defaultGeminiModel);
         setPrimaryLang(config.primaryLanguage || DEFAULT_GLOBAL_SETTINGS.defaultPrimaryLanguage);
         setSecondaryLang(config.secondaryLanguage || DEFAULT_GLOBAL_SETTINGS.defaultSecondaryLanguage);
+        setShowPrimary(config.showPrimary !== false);
+        setShowSecondary(config.showSecondary !== false);
         setWidth(projectConfig.width);
         setHeight(projectConfig.height);
         setFps(projectConfig.fps);
@@ -100,6 +108,8 @@ export function ProjectSettingsDialog({
        onUpdateConfig({ 
            primaryLanguage: primaryLang, 
            secondaryLanguage: secondaryLang,
+           showPrimary,
+           showSecondary,
            geminiModel: model,
            primary: primaryOverride,
            secondary: secondaryOverride
@@ -164,19 +174,15 @@ export function ProjectSettingsDialog({
 
   if (!isOpen) return null;
 
-  // Resolve current effective style for preview
+  // Resolve current effective style for preview: defaults -> Global Settings -> these overrides
   const currentOverride = stylesSubTab === 'primary' ? primaryOverride : secondaryOverride;
-  const baseStyle = stylesSubTab === 'primary' ? DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle : DEFAULT_GLOBAL_SETTINGS.defaultSecondaryStyle;
-  const resolvedStyle = resolveTrackStyle(baseStyle, currentOverride);
+  const inheritedStyle = resolveProjectStyles({}, globalStyles)[stylesSubTab];
+  const resolvedStyle: TrackStyle = resolveProjectStyles(
+    { primary: primaryOverride, secondary: secondaryOverride },
+    globalStyles,
+  )[stylesSubTab];
 
   const canReprocess = true; // Simplified
-
-  // Resolution details for "true to life" simulation
-  const previewWidth = 400; 
-  const previewHeight = previewAspect === '16:9' ? previewWidth * (9/16) : previewWidth * (16/9);
-  
-  const referenceHeight = previewAspect === '16:9' ? REFERENCE_HEIGHT : REFERENCE_WIDTH; 
-  const scale = previewHeight / referenceHeight;
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={onClose}>
@@ -235,6 +241,7 @@ export function ProjectSettingsDialog({
                             Reprocess
                         </button>
                         </div>
+                        <ShowOnVideoToggle checked={showPrimary} onChange={setShowPrimary} />
                     </div>
 
                     {/* Output Resolution Settings */}
@@ -322,6 +329,7 @@ export function ProjectSettingsDialog({
                             Translate
                         </button>
                         </div>
+                        <ShowOnVideoToggle checked={showSecondary} onChange={setShowSecondary} />
                     </div>
                </div>
            )}
@@ -345,52 +353,12 @@ export function ProjectSettingsDialog({
                              </button>
                         </div>
                         
-                        <div 
-                            className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm relative overflow-hidden shrink-0 mx-auto transition-all"
-                            style={{ width: previewWidth, height: previewHeight }}
-                        >
-                            <div className="absolute inset-0 bg-gradient-to-br from-[#333] to-[#222] pointer-events-none" />
-                            
-                            {/* Reference Grid */}
-                            <div className="absolute inset-0 opacity-10 pointer-events-none grid grid-cols-3 grid-rows-3">
-                                {[...Array(9)].map((_, i) => (
-                                    <div key={i} className="border border-white/20"></div>
-                                ))}
-                            </div>
-                            
-                            {/* Subtitle Render */}
-                            <div 
-                                className="absolute inset-0 pointer-events-none p-4"
-                                style={getMarginPreviewStyle(resolvedStyle.marginV, resolvedStyle.marginH, resolvedStyle.alignment)}
-                            >
-                                <span 
-                                    style={{
-                                    fontFamily: resolvedStyle.fontFamily || 'Arial',
-                                    // Scale 1080p ref pixels to preview height
-                                    fontSize: `${(normalizeToPx(resolvedStyle.fontSize, REFERENCE_HEIGHT) / REFERENCE_HEIGHT) * referenceHeight * scale}px`, 
-                                    color: resolvedStyle.color || '#FFF',
-                                    backgroundColor: resolvedStyle.backgroundColor || 'transparent',
-                                    padding: '0.1em 0.3em',
-                                    textShadow: resolvedStyle.outlineWidth 
-                                        ? `0 0 ${(normalizeToPx(resolvedStyle.outlineWidth, REFERENCE_HEIGHT) / REFERENCE_HEIGHT * referenceHeight * scale)}px ${resolvedStyle.outlineColor || '#000'}` 
-                                        : 'none',
-                                    boxShadow: 'none',
-                                    display: 'inline-block',
-                                    lineHeight: 1.5,
-                                    textAlign: [1, 4, 7].includes(resolvedStyle.alignment) ? 'left' : 
-                                               [3, 6, 9].includes(resolvedStyle.alignment) ? 'right' : 'center', 
-                                    whiteSpace: 'pre-wrap', 
-                                    maxWidth: '100%',
-                                    wordBreak: 'break-word',
-                                    }}
-                                >
-                                    {stylesSubTab === 'primary' ? 'This is a sample subtitle line.\nIt demonstrates the style.' : '这是一行示例子幕。\n它展示了样式效果。'}
-                                </span>
-                            </div>
-                        </div>
-                        <p className="text-[10px] text-[#555] text-center">
-                            Preview ({previewAspect}) • {Math.round(referenceHeight)}p base
-                        </p>
+                        <StyleSamplePreview
+                            style={resolvedStyle}
+                            aspect={previewAspect}
+                            width={400}
+                            text={stylesSubTab === 'primary' ? 'This is a sample subtitle line.\nIt demonstrates the style.' : '这是一行示例字幕。\n它展示了样式效果。'}
+                        />
                     </div>
 
                     {/* Controls */}
@@ -427,6 +395,7 @@ export function ProjectSettingsDialog({
                         <div className="bg-[#1e1e1e] border border-[#3e3e42] rounded-sm p-4 overflow-y-auto max-h-[400px]">
                             <TrackStyleEditor
                                 style={currentOverride}
+                                inherited={inheritedStyle}
                                 onChange={updateStyleOverride}
                                 onReset={Object.keys(currentOverride).length > 0 ? resetCurrentOverride : undefined}
                             />
@@ -453,5 +422,27 @@ export function ProjectSettingsDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Whether a language is drawn on the video; hidden lines stay editable and in the .srt export */
+function ShowOnVideoToggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="flex items-start gap-2 cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 accent-[#007acc]"
+      />
+      <span className="text-xs text-[#ccc]">
+        Show on video
+        {!checked && (
+          <span className="block text-[10px] text-[#666]">
+            Hidden in the preview, exported video and .ass file. The text stays in the editor and its .srt export.
+          </span>
+        )}
+      </span>
+    </label>
   );
 }

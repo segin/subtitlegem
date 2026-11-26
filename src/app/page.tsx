@@ -32,6 +32,7 @@ import { QueueItem } from "@/types/queue";
 import { parseTimestamp, generateSrtContent } from "@/lib/time-utils";
 import { getRangeSelectionIds, mergeSubtitles } from "@/lib/subtitle-utils";
 import { generateAss } from "@/lib/ass-utils";
+import { GlobalStyleDefaults } from "@/lib/subtitle-render-style";
 import { useHomeState } from "@/hooks/useHomeState";
 import { getProjectDuration, repairPlaceholderTimeline } from "@/lib/timeline-utils";
 import { buildDraftSaveBody } from "@/lib/draft-payload";
@@ -103,6 +104,15 @@ export default function Home() {
   // Reprocess dialog state
   const [showReprocessDialog, setShowReprocessDialog] = useState(false);
   const [isSplitMode, setIsSplitMode] = useState(false);
+
+  // Subtitle styles from Global Settings; the preview and exports layer project overrides on top
+  const [globalStyles, setGlobalStyles] = useState<GlobalStyleDefaults | null>(null);
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (data?.defaultPrimaryStyle) setGlobalStyles(data); })
+      .catch(err => console.warn('[Settings] Could not load global styles; using defaults:', err));
+  }, []);
 
   // Check if we're in multi-video mode
   // (isMultiVideoMode is now provided by homeState.isMultiVideoMode)
@@ -435,7 +445,7 @@ export default function Home() {
     const mimeType = "text/plain";
 
     if (format === 'ass') {
-      content = generateAss(subtitles, config);
+      content = generateAss(subtitles, config, undefined, globalStyles);
       fileName = 'project.ass';
     } else if (format === 'srt' || format === 'srt-primary') {
       content = generateSrtContent(subtitles, 'primary');
@@ -1266,7 +1276,8 @@ export default function Home() {
                   timelineImages={timelineImages}
                   imageAssets={imageAssets}
                   projectConfig={projectConfig}
-                  config={config} 
+                  config={config}
+                  globalStyles={globalStyles}
                   currentTime={currentTime}
                   onTimeUpdate={setCurrentTime}
                   onDurationChange={setDuration}
@@ -1500,7 +1511,7 @@ export default function Home() {
                 </div>
               ) : (
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
-                   <ConfigPanel config={config} onChange={setConfig} />
+                   <ConfigPanel config={config} onChange={setConfig} globalSettings={globalStyles} />
                 </div>
               )}
               
@@ -1633,6 +1644,7 @@ export default function Home() {
         isOpen={showProjectSettings}
         onClose={() => setShowProjectSettings(false)}
         config={config}
+        globalStyles={globalStyles}
         onUpdateConfig={(updates) => setConfig(prev => ({ ...prev, ...updates }))}
         projectConfig={projectConfig}
         onUpdateProjectConfig={(updates) => setProjectConfig(prev => ({ ...prev, ...updates }))}
@@ -1678,6 +1690,7 @@ export default function Home() {
       <GlobalSettingsDialog
         isOpen={showGlobalSettings}
         onClose={() => setShowGlobalSettings(false)}
+        onSaved={setGlobalStyles}
       />
       
       <VideoPropertiesDialog

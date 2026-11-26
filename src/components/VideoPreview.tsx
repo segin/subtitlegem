@@ -1,10 +1,20 @@
 "use client";
 
 import React, { useRef, useEffect, useState } from "react";
-import { SubtitleLine, SubtitleConfig, TrackStyle, DEFAULT_GLOBAL_SETTINGS, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
-import { REFERENCE_WIDTH } from "@/types/constants";
-import { resolveTrackStyle, normalizeToPx } from "@/lib/style-resolver";
+import { SubtitleLine, SubtitleConfig, TimelineClip, VideoClip, TimelineImage, ImageAsset, ProjectConfig } from "@/types/subtitle";
 import { probeBrowserSupport, isMetadataSupported, BrowserSupport, SupportProbeMetadata } from "@/lib/browser-support";
+import {
+  assFontName,
+  GlobalStyleDefaults,
+  getTrackMetrics,
+  getTrackPreviewCss,
+  isTrackShown,
+  resolveProjectStyles,
+  scaleTrackMetrics,
+  Track,
+} from "@/lib/subtitle-render-style";
+import { parseCssColor } from "@/lib/css-color";
+import { useExportFonts } from "@/hooks/useExportFonts";
 
 // Minimal shape of the probed metadata actually consumed by the preview. Both the
 // VideoProperties prop and the /api/video-info response satisfy this.
@@ -28,6 +38,8 @@ interface PreviewProps {
   projectConfig?: ProjectConfig;
   
   config: SubtitleConfig;
+  /** Styles from Global Settings, under the project's own overrides */
+  globalStyles?: GlobalStyleDefaults | null;
   currentTime: number;
   onTimeUpdate: (time: number) => void;
   onDurationChange: (duration: number) => void;
@@ -42,16 +54,17 @@ export function VideoPreview({
   timelineImages = [],
   imageAssets = [],
   projectConfig,
-  config, 
-  currentTime, 
-  onTimeUpdate, 
+  config,
+  globalStyles,
+  currentTime,
+  onTimeUpdate,
   onDurationChange,
   videoProperties
 }: PreviewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeSubtitle, setActiveSubtitle] = useState<SubtitleLine | null>(null);
-  const [containerHeight, setContainerHeight] = useState<number>(0);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   
   // Multi-video state
   const isMultiVideo = timelineClips.length > 0 || timelineImages.length > 0;
@@ -248,18 +261,14 @@ export function VideoPreview({
   }, [videoUrl, activeVideoUrl, useTranscoding, isMultiVideo]);
 
 
-  // Resolve styles with proper inheritance: Global -> Project -> Line
-  const resolvedPrimaryStyle = resolveTrackStyle(
-    DEFAULT_GLOBAL_SETTINGS.defaultPrimaryStyle,
-    config.primary
-  );
-  const resolvedSecondaryStyle = resolveTrackStyle(
-    DEFAULT_GLOBAL_SETTINGS.defaultSecondaryStyle,
-    config.secondary
-  );
+  // Same styles as the export: built-in defaults -> Global Settings -> project
+  const styles = resolveProjectStyles(config, globalStyles);
+  const fontNames = { primary: assFontName(styles.primary.fontFamily), secondary: assFontName(styles.secondary.fontFamily) };
+  const exportFonts = useExportFonts([fontNames.primary, fontNames.secondary]);
 
   useEffect(() => {
-    const active = subtitles.find(s => currentTime >= s.startTime && currentTime <= s.endTime);
+    // Placeholder notes ("[Subtitles missing ...]") aren't burned in, so don't preview them
+    const active = subtitles.find(s => !s.placeholder && currentTime >= s.startTime && currentTime <= s.endTime);
     setActiveSubtitle(active || null);
   }, [currentTime, subtitles]);
 
@@ -270,7 +279,7 @@ export function VideoPreview({
     const observer = new ResizeObserver((entries) => {
       for (const entry of entries) {
         if (entry.contentRect) {
-          setContainerHeight(entry.contentRect.height);
+          setContainerSize({ width: entry.contentRect.width, height: entry.contentRect.height });
         }
       }
     });
@@ -303,51 +312,24 @@ export function VideoPreview({
     }
   };
 
-  // Convert numpad alignment to flex/grid styles
-  const getPositionStyles = (style: TrackStyle) => {
-    const { alignment, marginV, marginH } = style;
-    
-    // Normalize to 1080p pixels, then scale to container
-    const pxMarginV = normalizeToPx(marginV, 1080);
-    const pxMarginH = normalizeToPx(marginH, REFERENCE_WIDTH); // horizontal uses width ref
-    
-    const scaleFactor = containerHeight > 0 ? containerHeight / 1080 : 1;
-    const scaledMarginV = pxMarginV * scaleFactor;
-    const scaledMarginH = pxMarginH * scaleFactor;
-
-    // Horizontal alignment
-    let justifyContent = 'center';
-    if ([1, 4, 7].includes(alignment)) justifyContent = 'flex-start';
-    if ([3, 6, 9].includes(alignment)) justifyContent = 'flex-end';
-
-    // Vertical alignment
-    let alignItems = 'center';
-    if ([7, 8, 9].includes(alignment)) alignItems = 'flex-start';
-    if ([1, 2, 3].includes(alignment)) alignItems = 'flex-end';
-
-    return {
-      display: 'flex',
-      width: '100%',
-      height: '100%',
-      position: 'absolute' as const,
-      top: 0,
-      left: 0,
-      pointerEvents: 'none' as const,
-      justifyContent,
-      alignItems,
-      paddingTop: `${scaledMarginV}px`,
-      paddingBottom: `${scaledMarginV}px`,
-      paddingLeft: `${scaledMarginH}px`,
-      paddingRight: `${scaledMarginH}px`,
-    };
+  // Lay a track out the way libass will on the exported video, scaled to the preview
+  const getTrackCss = (track: Track, lineColor: string | undefined) => {
+    const videoWidth = activeMetadata?.width || projectConfig?.width || containerSize.width;
+    const videoHeight = activeMetadata?.height || projectConfig?.height || containerSize.height;
+    const metrics = scaleTrackMetrics(
+      getTrackMetrics(styles[track], videoWidth, videoHeight),
+      containerSize.height / videoHeight,
+    );
+    const textColor = parseCssColor(lineColor) ?? metrics.textColor; // per-line colour, as in the export
+    return getTrackPreviewCss({ ...metrics, textColor }, exportFonts[fontNames[track]]);
   };
 
-  // Helper to scale font size relative to 1080p height
-  const getScaledFontSize = (fontSize: number | string) => {
-    if (containerHeight === 0) return 16; // Fallback
-    const pxSize = normalizeToPx(fontSize, 1080);
-    return (pxSize / 1080) * containerHeight;
-  };
+  const overlayTracks = activeSubtitle && containerSize.height > 0
+    ? ([
+        { track: 'primary', text: activeSubtitle.text, color: activeSubtitle.styleOverrides?.color || activeSubtitle.primaryColor },
+        { track: 'secondary', text: activeSubtitle.secondaryText, color: activeSubtitle.secondaryColor },
+      ] as const).filter(t => t.text && isTrackShown(config, t.track, styles[t.track]))
+    : [];
 
   // getRawPath moved to line 64 (before effects)
  
@@ -426,43 +408,17 @@ export function VideoPreview({
           </>
         )}
         
-        {activeSubtitle && (
-          <div className="absolute inset-0 pointer-events-none">
-            {/* Primary Track Layer */}
-            <div style={getPositionStyles(resolvedPrimaryStyle)}>
-               <div 
-                  className="p-2 text-center max-w-[90%]"
-                  style={{ 
-                    backgroundColor: activeSubtitle.primaryColor || resolvedPrimaryStyle.backgroundColor,
-                    color: activeSubtitle.primaryColor ? '#ffffff' : resolvedPrimaryStyle.color,
-                    fontSize: `${getScaledFontSize(resolvedPrimaryStyle.fontSize)}px`,
-                    fontFamily: resolvedPrimaryStyle.fontFamily,
-                    borderRadius: '2px',
-                    textShadow: 'none',
-                  }}
-                >
-                  {activeSubtitle.text}
-               </div>
-            </div>
-
-            {/* Secondary Track Layer */}
-            {activeSubtitle.secondaryText && (
-              <div style={getPositionStyles(resolvedSecondaryStyle)}>
-                 <div 
-                    className="p-2 text-center max-w-[90%]"
-                    style={{ 
-                      backgroundColor: activeSubtitle.secondaryColor || resolvedSecondaryStyle.backgroundColor,
-                      color: activeSubtitle.secondaryColor ? '#ffffff' : resolvedSecondaryStyle.color,
-                      fontSize: `${getScaledFontSize(resolvedSecondaryStyle.fontSize)}px`,
-                      fontFamily: resolvedSecondaryStyle.fontFamily,
-                      borderRadius: '2px',
-                    textShadow: 'none',
-                    }}
-                  >
-                    {activeSubtitle.secondaryText}
-                 </div>
-              </div>
-            )}
+        {overlayTracks.length > 0 && (
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            {/* Secondary comes last, as in the .ass file, so it draws on top */}
+            {overlayTracks.map(({ track, text, color }) => {
+              const css = getTrackCss(track, color);
+              return (
+                <div key={track} style={css.wrapper} data-subtitle-track={track}>
+                  <div style={css.text}>{text}</div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

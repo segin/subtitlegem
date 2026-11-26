@@ -1,32 +1,27 @@
 "use client";
 
 import React, { useState } from "react";
-import { SubtitleConfig, TrackStyle, Alignment, GlobalSettings, DEFAULT_GLOBAL_SETTINGS, FFmpegConfig } from "@/types/subtitle";
-import { resolveTrackStyle } from "@/lib/style-resolver";
+import { SubtitleConfig, TrackStyle, Alignment, FFmpegConfig } from "@/types/subtitle";
+import { GlobalStyleDefaults, resolveProjectStyles } from "@/lib/subtitle-render-style";
+import { BackgroundBoxInput } from "./TrackStyleEditor";
 import { Type, Palette, Layout, Move, Cpu, Settings, MonitorPlay } from "lucide-react";
 
 interface ConfigProps {
   config: SubtitleConfig;
   onChange: (config: SubtitleConfig) => void;
-  /** Loaded global settings (falls back to system defaults if not provided) */
-  globalSettings?: GlobalSettings;
+  /** Global Settings styles (falls back to system defaults if not provided) */
+  globalSettings?: GlobalStyleDefaults | null;
 }
+
+/** Sizes may be saved as numbers or "5%" strings */
+const numericValue = (value: number | string | undefined) => parseFloat(String(value ?? 0)) || 0;
 
 export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
   const [activeTab, setActiveTab] = useState<'primary' | 'secondary' | 'encoding'>('primary');
 
-  // Resolve: Loaded Global Settings → System Defaults
-  const effectiveGlobalSettings = globalSettings || DEFAULT_GLOBAL_SETTINGS;
-
-  // Get base style from effective global settings
-  const baseStyle = activeTab === 'primary' 
-    ? effectiveGlobalSettings.defaultPrimaryStyle 
-    : effectiveGlobalSettings.defaultSecondaryStyle;
-
-  // Resolve current style: base (global+system) + project overrides
-  const projectOverride = activeTab !== 'encoding' ? config[activeTab] : undefined;
-  const currentStyle = activeTab !== 'encoding' 
-    ? resolveTrackStyle(baseStyle, projectOverride) 
+  // Resolve current style: system defaults → Global Settings → project overrides
+  const currentStyle = activeTab !== 'encoding'
+    ? resolveProjectStyles(config, globalSettings)[activeTab]
     : ({} as TrackStyle);
 
   const updateStyle = (key: keyof TrackStyle, value: number | string) => {
@@ -105,7 +100,7 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
                         step="0.5"
                         min="0.5"
                         max="50"
-                        value={currentStyle.fontSize || 0} 
+                        value={numericValue(currentStyle.fontSize)}
                         onChange={(e) => updateStyle('fontSize', parseFloat(e.target.value) || 0)}
                         className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                       />
@@ -147,16 +142,24 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] text-[#888888] block">Background</label>
+                  <label className="text-[10px] text-[#888888] block">Outline</label>
                   <div className="flex items-center space-x-2 bg-[#1e1e1e] border border-[#333333] rounded-sm p-1">
-                    <input 
-                      type="color" 
-                      value={currentStyle.backgroundColor} 
-                      onChange={(e) => updateStyle('backgroundColor', e.target.value)}
+                    <input
+                      type="color"
+                      value={currentStyle.outlineColor || '#000000'}
+                      onChange={(e) => updateStyle('outlineColor', e.target.value)}
                       className="w-full h-4 bg-transparent border-none p-0 cursor-pointer"
                     />
                   </div>
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-[#888888] block">Background box</label>
+                <BackgroundBoxInput
+                  value={currentStyle.backgroundColor}
+                  onChange={(value) => updateStyle('backgroundColor', value ?? 'transparent')}
+                />
               </div>
             </div>
 
@@ -174,7 +177,7 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={currentStyle.marginV || 0} 
+                      value={numericValue(currentStyle.marginV)}
                       onChange={(e) => updateStyle('marginV', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
@@ -186,7 +189,7 @@ export function ConfigPanel({ config, onChange, globalSettings }: ConfigProps) {
                       step="0.1"
                       min="0"
                       max="50"
-                      value={currentStyle.marginH || 0} 
+                      value={numericValue(currentStyle.marginH)}
                       onChange={(e) => updateStyle('marginH', parseFloat(e.target.value) || 0)}
                       className="w-full bg-[#1e1e1e] border border-[#333333] rounded-sm p-1.5 text-xs text-[#cccccc] focus:border-[#007acc] outline-none"
                     />
