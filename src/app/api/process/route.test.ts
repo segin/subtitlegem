@@ -56,6 +56,13 @@ jest.mock('@/lib/audio-transcription', () => ({
   transcribeAudio: jest.fn(),
 }));
 
+jest.mock('@/lib/upload-sessions', () => {
+  class UploadSessionError extends Error {
+    constructor(message: string, public status: number, public received?: number) { super(message); }
+  }
+  return { takeCompletedUpload: jest.fn(), UploadSessionError };
+});
+
 // Mock Busboy (we won't use it in these tests, but it's initialized)
 jest.mock('busboy', () => {
     return jest.fn().mockImplementation(() => ({
@@ -68,6 +75,7 @@ import { uploadToGemini } from '@/lib/gemini';
 import { isPathSafe } from '@/lib/storage-config';
 import { ffprobe } from '@/lib/ffmpeg-utils';
 import { transcribeAudio } from '@/lib/audio-transcription';
+import { takeCompletedUpload, UploadSessionError } from '@/lib/upload-sessions';
 
 describe('/api/process (JSON modes)', () => {
   const mockProcess = processWithFallback as jest.Mock;
@@ -248,6 +256,63 @@ describe('/api/process (JSON modes)', () => {
            expect.anything()
        );
        expect(data.subtitles[0].secondaryText).toBe('translated');
+    });
+
+    it('uses the model chosen in Project Settings', async () => {
+       mockProcess.mockResolvedValue({ subtitles: [] });
+       await POST(new NextRequest('http://localhost/api/process', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ mode: 'translate', subtitles: [], secondaryLanguage: 'Spanish', model: 'gemini-3.1-pro-preview' }),
+       }));
+       expect(mockProcess).toHaveBeenCalledWith('translate', expect.objectContaining({ modelName: 'gemini-3.1-pro-preview' }), expect.anything());
+    });
+  });
+
+  describe('Uploaded Mode (resumable uploads)', () => {
+    const mockTake = takeCompletedUpload as jest.Mock;
+    const uploadedRequest = (body: object) => new NextRequest('http://localhost/api/process', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'uploaded', ...body }),
+    });
+    const readStream = async (res: Response) =>
+      (await res.text()).trim().split('\n').map(line => JSON.parse(line));
+
+    it('refuses an unfinished upload with how much arrived', async () => {
+      mockTake.mockRejectedValue(new UploadSessionError('The upload is incomplete (5 of 10 bytes)', 409, 5));
+      const res = await POST(uploadedRequest({ uploadId: 'abc-123' }));
+      expect(res.status).toBe(409);
+      expect(await res.json()).toEqual({ error: 'The upload is incomplete (5 of 10 bytes)', received: 5 });
+    });
+
+    it('rejects an unsafe upload id', async () => {
+      const res = await POST(uploadedRequest({ uploadId: '../../etc' }));
+      expect(res.status).toBe(400);
+      expect(mockTake).not.toHaveBeenCalled();
+    });
+
+    it('transcribes the assembled file and streams the result, as a one-request upload does', async () => {
+      mockTake.mockResolvedValue({ path: '/mock/staging/temp/abc.mp4', filename: 'holiday.mp4', mimeType: 'video/mp4', size: 1000 });
+      (fs.statSync as jest.Mock).mockReturnValue({ size: 1000 });
+      (fs.readFileSync as jest.Mock).mockReturnValue(Buffer.from('video'));
+      (isPathSafe as jest.Mock).mockReturnValue(true);
+      mockFfprobe.mockResolvedValue({ duration: 60, width: 1920, height: 1080 });
+      mockProcess.mockResolvedValue({ subtitles: [{ id: '1', startTime: 0, endTime: 1, text: 'hi' }], detectedLanguage: 'English' });
+
+      const res = await POST(uploadedRequest({ uploadId: 'abc-123', secondaryLanguage: 'None', model: 'gemini-3.1-pro-preview' }));
+      const messages = await readStream(res);
+
+      expect(mockTake).toHaveBeenCalledWith('abc-123');
+      expect(mockProcess).toHaveBeenCalledWith(
+        'generate',
+        expect.objectContaining({ isInline: true, mimeType: 'video/mp4', modelName: 'gemini-3.1-pro-preview', secondaryLanguage: undefined }),
+        expect.anything(),
+      );
+      expect(messages.at(-1)).toMatchObject({
+        type: 'complete',
+        data: { videoPath: '/mock/staging/temp/abc.mp4', originalFilename: 'holiday.mp4', duration: 60, subtitles: [{ text: 'hi' }] },
+      });
     });
   });
 });

@@ -1,4 +1,4 @@
-import { processWithFallback, replaceRetiredModel } from './ai-provider';
+import { buildAttemptOrder, processWithFallback, replaceRetiredModel } from './ai-provider';
 import { DEFAULT_AI_MODEL } from '@/types/constants';
 import * as gemini from './gemini';
 import { ModelConfig } from '@/types/subtitle';
@@ -144,6 +144,68 @@ describe('ai-provider output normalization', () => {
     const result = await processWithFallback('translate', { subtitles: input, targetLanguage: 'Spanish' }, [geminiConfig]);
 
     expect(result.subtitles).toEqual([{ ...input[0], secondaryText: 'hola' }]);
+  });
+});
+
+describe('ai-provider job model and backups', () => {
+  const flash: ModelConfig = { id: 'default-gemini', provider: 'gemini', modelName: 'gemini-3.8-flash', enabled: true };
+  const openai: ModelConfig = { id: 'oa', provider: 'openai', modelName: 'whisper-1', enabled: true };
+  const order = (chain: ModelConfig[], requested?: string) =>
+    buildAttemptOrder(chain, requested).map(c => `${c.provider}:${c.modelName}`);
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('the job model goes first, then the chain entry it displaced', () => {
+    expect(order([flash], 'gemini-3.1-pro-preview')).toEqual(['gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.8-flash']);
+  });
+
+  test('no duplicate attempt when the job model is already in the chain', () => {
+    expect(order([flash], 'gemini-3.8-flash')).toEqual(['gemini:gemini-3.8-flash']);
+    const pro = { ...flash, id: 'pro', modelName: 'gemini-3.1-pro-preview' };
+    expect(order([flash, pro], 'gemini-3.1-pro-preview')).toEqual(['gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.8-flash']);
+  });
+
+  test('keeps the provider order and other entries keep their own models', () => {
+    const lite = { ...flash, id: 'lite', modelName: 'gemini-3.8-flash-lite' };
+    expect(order([openai, flash, lite], 'gemini-3.1-pro-preview')).toEqual([
+      'openai:whisper-1', 'gemini:gemini-3.1-pro-preview', 'gemini:gemini-3.8-flash', 'gemini:gemini-3.8-flash-lite',
+    ]);
+  });
+
+  test('without a job model, or without a Gemini entry, the chain is used as is', () => {
+    expect(order([flash, openai])).toEqual(['gemini:gemini-3.8-flash', 'openai:whisper-1']);
+    expect(order([openai], 'gemini-3.1-pro-preview')).toEqual(['openai:whisper-1']);
+    expect(order([{ ...flash, enabled: false }, openai], 'gemini-3.1-pro-preview')).toEqual(['openai:whisper-1']);
+  });
+
+  test('a rate-limited job model falls back to the chain model, and reports it', async () => {
+    const rateLimited = Object.assign(new Error('Resource exhausted'), { status: 429 });
+    (gemini.generateSubtitles as jest.Mock)
+      .mockRejectedValueOnce(rateLimited)
+      .mockResolvedValueOnce({ subtitles: [{ startTime: 0, endTime: 1, text: 'hi' }] });
+
+    const result = await processWithFallback(
+      'generate',
+      { fileUri: 'f', mimeType: 'video/mp4', modelName: 'gemini-3.1-pro-preview' },
+      [flash],
+    );
+
+    const models = (gemini.generateSubtitles as jest.Mock).mock.calls.map(call => call[4]);
+    expect(models).toEqual(['gemini-3.1-pro-preview', 'gemini-3.8-flash']);
+    expect(result.modelName).toBe('gemini-3.8-flash');
+  });
+
+  test('translation uses the job model first too', async () => {
+    (gemini.translateSubtitles as jest.Mock).mockResolvedValue([{ text: 'hello', secondaryText: 'hola' }]);
+    const result = await processWithFallback(
+      'translate',
+      { subtitles: [{ id: 'a', startTime: 0, endTime: 1, text: 'hello' }], targetLanguage: 'Spanish', modelName: 'gemini-3.1-pro-preview' },
+      [flash],
+    );
+    expect((gemini.translateSubtitles as jest.Mock).mock.calls[0][2]).toBe('gemini-3.1-pro-preview');
+    expect(result.modelName).toBe('gemini-3.1-pro-preview');
   });
 });
 

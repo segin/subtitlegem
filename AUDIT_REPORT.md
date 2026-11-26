@@ -52,11 +52,12 @@ The audit followed a rigorous process:
 -   **Description:** `next@16.1.1` was flagged for GHSA-h25m-26qc-wcjf (DoS).
 -   **Remediation:** Upgraded to `next@16.1.6`.
 
-#### SEC-003: Missing CI/CD Security Gates (Open)
+#### SEC-003: Missing CI/CD Security Gates (Partially Fixed)
 -   **Severity:** Medium
 -   **Location:** `.github/workflows/ci.yml`
 -   **Description:** CI only runs `lint` and `test`. Vulnerabilities introduced in dependencies or secrets committed to code would not be blocked.
 -   **Remediation:** Add `npm audit` and a secret scanning tool (e.g., TruffleHog) to the workflow.
+-   **Status (2026-11-23):** `npm audit --omit=dev --audit-level=high` now gates CI (dev-tool advisories are reported only). Secret scanning is still open.
 
 ### Correctness
 
@@ -66,11 +67,12 @@ The audit followed a rigorous process:
 -   **Description:** `FFmpegConfig` type definition was missing the `codec` property required by `ExportConfig`. Tests were also failing due to read-only `NODE_ENV` assignment.
 -   **Remediation:** Updated types and fixed test mocking logic.
 
-#### COR-002: Linting Violations (Open)
+#### COR-002: Linting Violations (Fixed)
 -   **Severity:** Low
 -   **Location:** Various
 -   **Description:** 400+ ESLint issues, primarily unused variables and `any` usage.
 -   **Remediation:** Schedule a "cleanup sprint" to resolve these.
+-   **Status (2026-11-23):** `npm run lint` reports no errors or warnings.
 
 ## 5. Architecture & Design
 

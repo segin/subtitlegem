@@ -1,9 +1,12 @@
-FROM node:20-alpine
+# Node 24 LTS (undici 8, used for the long Gemini request timeouts, needs Node >= 22.19)
+FROM node:24-alpine
 
 # Install system dependencies
 # ffmpeg: required for video processing
+# font-noto*: fonts for burned-in subtitles (without any, libass draws no text):
+#   Latin/Cyrillic/Greek, Chinese/Japanese/Korean, Arabic
 # python3, make, g++: build tools for native modules (better-sqlite3)
-RUN apk add --no-cache ffmpeg python3 make g++
+RUN apk add --no-cache ffmpeg font-noto font-noto-cjk font-noto-arabic python3 make g++
 
 WORKDIR /app
 

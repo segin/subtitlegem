@@ -46,14 +46,18 @@ subtitlegem/
 │   │   ├── ShiftTimingsDialog.tsx # Offset all subtitle times
 │   │   ├── SubtitleList.tsx    # Editable subtitle lines
 │   │   ├── SubtitleTimeline.tsx # Visual timeline editor (zoomable, scrubbable) with viewport-based virtualization
-│   │   ├── TrackStyleEditor.tsx # Font/color/margin controls
-│   │   ├── VideoPreview.tsx    # Video player with overlays
+│   │   ├── StyleSamplePreview.tsx # Sample text in a track style, as exported (style dialogs)
+│   │   ├── TrackStyleEditor.tsx # Font/color/margin/background-box controls
+│   │   ├── VideoPreview.tsx    # Video player with subtitle overlay drawn as the export draws it
 │   │   ├── VideoUpload.tsx     # Drag-drop file uploader
 │   │   └── ui/                 # Reusable UI primitives
 │   │       └── Menu.tsx        # Accessible dropdown menu (keyboard nav, ARIA, nested flyouts)
 │   │
 │   ├── lib/                    # Core Business Logic (17 files)
 │   │   ├── ass-utils.ts        # ASS subtitle file generation
+│   │   ├── css-color.ts        # CSS colour parsing; ASS &HAABBGGRR output
+│   │   ├── font-metrics.ts     # Font libass will use (fc-match) and its line ratio (server-only)
+│   │   ├── subtitle-render-style.ts # Track geometry shared by the ASS export and the preview
 │   │   ├── ai-output.ts        # Normalizes AI provider output into SubtitleLines (server-only)
 │   │   ├── draft-payload.ts    # Builds the autosave body (V1/V2) from editor state
 │   │   ├── draft-store.ts      # SQLite draft persistence
@@ -71,6 +75,8 @@ subtitlegem/
 │   │   ├── style-resolver.ts   # Style inheritance resolver
 │   │   ├── timeline-utils.ts   # Multi-video timeline calculations
 │   │   ├── upload-utils.ts     # Video upload helper (validation, data prep)
+│   │   ├── upload-client.ts    # Resumable upload + processing request (browser)
+│   │   ├── upload-sessions.ts  # Resumable upload storage behind /api/upload (server-only)
 │   │   ├── video-estimate-utils.ts # Client-safe video size estimation
 │   │   ├── metrics-utils.ts    # Project storage & count metrics
 │   │   ├── summary-generator.ts # AI project summary orchestration
@@ -79,6 +85,7 @@ subtitlegem/
 │   ├── hooks/                  # Custom React Hooks
 │   │   ├── useSubtitleSync.ts  # Video-subtitle time sync
    │   ├── useSubtitleHistory.ts # Undo/redo history management
+│   │   ├── useExportFonts.ts   # Server font + size ratio per subtitle font (/api/font-metrics)
 │   │   └── useHomeState.ts     # State hooks for home page (dialog, queue, drafts, video, multi-video, selection)
 │   │
 │   └── types/                  # TypeScript Definitions
@@ -145,7 +152,7 @@ subtitlegem/
 ### 3.2. Backend Services
 
 #### 3.2.1. Video Processing Service
-**Endpoints:** `/api/process`, `/api/stream`, `/api/video-info`  
+**Endpoints:** `/api/upload`, `/api/process`, `/api/stream`, `/api/video-info`  
 **Description:** Handles video upload, audio extraction for large files (>400MB), live transcoding for browser-incompatible formats, and metadata probing.  
 **Technologies:** Node.js (child_process.spawn), FFmpeg (system binary)  
 **Key Functions:**
@@ -165,7 +172,9 @@ subtitlegem/
 - **Reprocess** (File → Reprocess Video, Project Settings → Reprocess): `POST /api/process` `{ mode: 'reprocess', filePath, model, secondaryLanguage, promptHints, sampleDuration? }` transcribes the local file with `transcribeAudio()` (any length; preview = first `sampleDuration` s). The page reprocesses each timeline clip's source file and applies the result with `applyReprocessedSubtitles()` (`src/lib/reprocess-utils.ts`): "Replace" swaps that clip's lines, "Update text only" keeps timings and takes the best-overlapping new text. One undo step restores the old lines.
 - `translateSubtitles()` - Re-translation (Enforced Structured Output Schema)
 - **Timeouts:** `src/instrumentation.ts` raises Node fetch's 300 s header/body timeout (undici dispatcher) at server start; generation requests carry `GEMINI_REQUEST_TIMEOUT_MS` (30 min, `src/lib/gemini-timeouts.ts`)
-- **Disconnects:** if the uploading page goes away mid-job (phone asleep, tab closed), processing continues and the result is saved as a draft (`src/lib/orphaned-upload.ts`). The page's Cancel button first posts the upload's `uploadId` to `POST /api/process/cancel` (`src/lib/upload-cancellations.ts`), so cancelled uploads are discarded instead. An upload interrupted before the whole file arrives cannot be recovered; its partial file is deleted.
+- **Disconnects:** if the uploading page goes away mid-job (phone asleep, tab closed), processing continues and the result is saved as a draft (`src/lib/orphaned-upload.ts`). The page's Cancel button first posts the upload's `uploadId` to `POST /api/process/cancel` (`src/lib/upload-cancellations.ts`), so cancelled uploads are discarded instead.
+- **Resumable uploads:** `/api/upload` (`src/lib/upload-sessions.ts`) takes a file in pieces, so a dropped connection doesn't restart the upload. The browser (`src/lib/upload-client.ts`) retries for up to 30 min, abandoning a piece that stalls for 60 s, and asks the server how much arrived before resending. Starting the same file again (same name, size and modification time) continues an unfinished upload, e.g. after a reload. The stored size is the size of the `.part` file, since pieces are only appended whole, in order, under a per-upload lock. Unfinished uploads are pruned after 48 h; Cancel deletes them. `POST /api/process {mode: "uploaded", uploadId}` then runs the same processing (`processStoredUpload()`) as a one-request multipart upload.
+- **Model order:** a job's own model (`model` in the request) takes the first Gemini slot of the fallback chain, followed by the model that slot names; other entries keep their own models (`buildAttemptOrder()` in `src/lib/ai-provider.ts`). Safety refusals, 429 and 5xx move on to the next attempt.
 - **Logging:** errors are logged with their cause chain via `describeError()` (`src/lib/error-utils.ts`); AI attempts log provider, model, duration and line count
 - `PATCH /api/drafts` - Project renaming (Lightweight partial update)
 
@@ -176,6 +185,13 @@ subtitlegem/
 **Key Classes:**
 - `QueueManager` - Singleton state machine (pending/processing/completed/failed)
 - `JobProcessor` - FFmpeg execution with progress callbacks
+
+**Subtitle styling (export and preview):**
+- Styles resolve built-in defaults → Global Settings (`settings.db`) → project overrides (`resolveProjectStyles()`, `src/lib/subtitle-render-style.ts`). `/api/export` reads Global Settings itself; the editor fetches `/api/settings` once and passes the styles to the preview, the style panels and the client-side .ass download.
+- Sizes are percentages of the video height (horizontal margin: width); the font size is doubled when rendered. `getTrackMetrics()` turns a style into pixels; `generateAss()` writes them as the ASS style line and `getTrackPreviewCss()` as the preview CSS, so the two match (checked to 1–2 px against libass output).
+- A `backgroundColor` (any CSS colour; `transparent`/`none` = no box, the default) draws one box per event with libass `BorderStyle 4` (libass 0.17+): `BackColour` is the box, `Outline + Shadow` its padding (a tenth of the line height), and the outline is still drawn in `outlineColor`. Older renderers show only the outline.
+- libass sizes a font so one line (OS/2 win ascent + descent) equals the ASS Fontsize, and fontconfig may substitute fonts (e.g. Georgia → Noto Sans). `GET /api/font-metrics?families=…` (`src/lib/font-metrics.ts`) runs `fc-match` and reads the matched font file so the preview uses the same font and em size (`useExportFonts()` hook).
+- `SubtitleConfig.showPrimary` / `showSecondary` (Project Settings → "Show on video") leave a language out of the preview, the burned-in video and the .ass file; the lines stay editable and in their .srt export. A track with font size 0 is treated as hidden too.
 
 #### 3.2.4. Upload Size Limits
 **Enforcement:** Three-layer system for controlling maximum upload sizes.
@@ -287,8 +303,8 @@ interface ProjectMetadata {
 **Target Environment:** Self-hosted Linux server  
 **Cloud Provider:** N/A (designed for local deployment)  
 **Key System Dependencies:**
-- Node.js 20+
-- FFmpeg (with `libx264`, optionally hardware encoders)
+- Node.js 22.19+ (`undici` 8; CI runs 24 and 26)
+- FFmpeg (with `libx264`, optionally hardware encoders; libass 0.17+ for subtitle background boxes)
 - Noto Sans CJK font (for Chinese subtitle rendering)
 
 **Recommended Nginx Config:** See `nginx.conf.example`  
@@ -320,7 +336,7 @@ The application includes a production-ready `Dockerfile` and `docker-compose.yml
 ```bash
 docker-compose up --build
 ```
-This automatically handles system dependencies (FFmpeg, Node 20) and persistent storage volumes. The container runs as the unprivileged `node` user, and Compose publishes port 3050 on all interfaces so LAN devices (including phones) can reach it.
+This automatically handles system dependencies (FFmpeg, Noto fonts for burned-in subtitles, Node 24) and persistent storage volumes. The container runs as the unprivileged `node` user, and Compose publishes port 3050 on all interfaces so LAN devices (including phones) can reach it.
 
 > **Upgrading an existing volume:** volumes created by older (root) images are root-owned. Fix ownership once with
 > `docker run --rm -v subtitlegem_storage:/s alpine chown -R 1000:1000 /s`.
@@ -376,9 +392,11 @@ npm run dev -- -H 0.0.0.0
 
 ### 9.1. Video Upload → Subtitles
 ```
-User uploads video
-    → /api/process receives file
-    → File saved to {STAGING_DIR}/temp/
+User uploads video (startResumableUpload(), src/lib/upload-client.ts)
+    → POST /api/upload starts (or resumes) an upload; PUT /api/upload sends 8 MB pieces
+      to {STAGING_DIR}/temp/uploads/<id>.part, retrying and resuming after drops
+    → POST /api/process {mode: "uploaded", uploadId} moves the file to {STAGING_DIR}/temp/
+      (the older one-request multipart POST /api/process still works and ends up here too)
     → If longer than 30 min: transcribe in 20-min audio pieces (generateInChunks)
     → Else if >400MB: Extract audio only
     → If <95MB: Send inline to Gemini
@@ -400,7 +418,7 @@ User uploads video
 User clicks Export
     → /api/export receives config
     → getVideoDimensions() probes video
-    → generateAss() creates subtitle file (using actual resolution)
+    → generateAss() creates subtitle file (actual resolution, Global Settings + project styles, hidden languages left out)
     → Job added to QueueManager
     → JobProcessor executes FFmpeg with:
         - ASS subtitles filter
@@ -430,7 +448,7 @@ User detects "Missing File" in Video Library
 | **Project Name** | SubtitleGem |
 | **Repository URL** | https://github.com/segin/subtitlegem |
 | **Primary Contact** | segin |
-| **Date of Last Update** | 2026-11-19 |
+| **Date of Last Update** | 2026-11-23 |
 
 ---
 

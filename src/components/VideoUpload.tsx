@@ -2,10 +2,10 @@
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Upload, FileVideo, AlertCircle, Film, Cpu, Loader2, Zap, Check, X, FolderPlus, Files, Layers, Plus, Minus, GripVertical, ArrowUpFromLine, Lock } from "lucide-react";
-import { validateVideoFile, prepareUploadFormData, generateClipId, describeLostConnection } from "@/lib/upload-utils";
+import { validateVideoFile, generateClipId } from "@/lib/upload-utils";
+import { describeUploadFailure, startResumableUpload, UploadJob } from "@/lib/upload-client";
 import { checkModelAvailability } from "@/lib/model-cache";
 import { RawSubtitleItem, ProcessResponse, SubtitleLine } from "@/types/subtitle";
-import { createNdjsonReader, describeIncompleteStream } from "@/lib/ndjson-utils";
 import { buildSequentialTimeline } from "@/lib/timeline-utils";
 
 // Upload modes for multi-video support
@@ -60,6 +60,15 @@ interface StreamMessage {
     /** Parts of a long recording left without subtitles (each has a placeholder line) */
     subtitleWarning?: string;
   };
+}
+
+/** Per-file upload percentage, or a note while a dropped connection is retried */
+function UploadPercent({ prog }: { prog: FileProgress }) {
+  const percent = prog.total > 0 ? Math.round((prog.loaded / prog.total) * 100) : 0;
+  if (prog.stage === 'reconnecting') {
+    return <span className="text-[9px] text-[#d7ba7d] animate-pulse">Reconnecting... {percent}%</span>;
+  }
+  return <span className="text-[9px] text-[#007acc] font-mono">{percent}%</span>;
 }
 
 interface VideoUploadProps {
@@ -143,11 +152,11 @@ export function VideoUpload({
   const dragCounterRef = useRef(0);
   const uploadHistoryRef = useRef<{ timestamp: number; loaded: number }[]>([]);
 
-  const activeXhrsRef = useRef<XMLHttpRequest[]>([]);
-  // If a page disconnects mid-job, the server saves the result as a draft.
-  // Each request carries an upload ID so Cancel can tell the server to discard it instead.
-  const uploadIdsRef = useRef(new WeakMap<XMLHttpRequest, string>());
-  const cancelledXhrsRef = useRef(new WeakSet<XMLHttpRequest>());
+  // Uploads in progress (resumable, see src/lib/upload-client.ts). If a page
+  // disconnects mid-job, the server saves the result as a draft; Cancel tells
+  // the server to discard it instead, by upload ID.
+  const activeJobsRef = useRef<UploadJob[]>([]);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const saveClipsAsDraft = async (name: string, clips: UploadedClip[]) => {
     const res = await fetch('/api/drafts', {
@@ -167,8 +176,8 @@ export function VideoUpload({
   };
 
   const cancelUpload = useCallback(() => {
-    const uploadIds = activeXhrsRef.current
-      .map(xhr => uploadIdsRef.current.get(xhr))
+    const uploadIds = activeJobsRef.current
+      .map(job => job.uploadId)
       .filter((id): id is string => !!id);
     if (uploadIds.length > 0) {
       fetch('/api/process/cancel', {
@@ -178,11 +187,10 @@ export function VideoUpload({
         keepalive: true,
       }).catch(() => {});
     }
-    activeXhrsRef.current.forEach(xhr => {
-      cancelledXhrsRef.current.add(xhr);
-      try { xhr.abort(); } catch {}
-    });
-    activeXhrsRef.current = [];
+    // Also deletes any half-uploaded file from the server
+    activeJobsRef.current.forEach(job => job.abort());
+    activeJobsRef.current = [];
+    setReconnecting(false);
     setLoading(false);
     setIsUploading(false);
     setProgress(0);
@@ -396,42 +404,11 @@ export function VideoUpload({
     setUploadedBytes(0);
     setTotalBytes(file.size);
     setUploadSpeed(0);
-
-    const uploadId = generateClipId();
-    const formData = prepareUploadFormData(file, {
-      secondaryLanguage: secondaryLanguage !== 'None' ? secondaryLanguage : undefined,
-      model,
-      uploadId,
-    });
-
-    const xhr = new XMLHttpRequest();
-    activeXhrsRef.current.push(xhr);
-    uploadIdsRef.current.set(xhr, uploadId);
+    setReconnecting(false);
     startTimeRef.current = Date.now();
-    let uploadFinished = false;
-    xhr.upload.addEventListener("load", () => { uploadFinished = true; });
-
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable) {
-        const speed = calculateCurrentSpeed(event.loaded);
-        setUploadSpeed(speed);
-        setProgress(Math.round((event.loaded / event.total) * 100));
-        setUploadedBytes(event.loaded);
-        setTotalBytes(event.total);
-      }
-    });
-
-    xhr.addEventListener("error", () => {
-      setServerStage(null);
-      setError(describeLostConnection(uploadFinished));
-      activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-      setLoading(false);
-    });
 
     let finished = false;
-    let lastMessage: unknown = null;
-    const reader = createNdjsonReader((message) => {
-      lastMessage = message;
+    const onMessage = (message: unknown) => {
       const part = message as StreamMessage;
       if (part.type === "progress") {
         // Update UI with server progress
@@ -479,26 +456,30 @@ export function VideoUpload({
         setError(part.message ?? "Processing failed");
         setLoading(false);
       }
-    });
-
-    xhr.onreadystatechange = () => {
-      if (xhr.readyState === 3 || xhr.readyState === 4) {
-        reader.push(xhr.responseText);
-      }
-      if (xhr.readyState === 4) {
-        reader.end();
-        activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-        // status 0 is a network error/abort, reported by the "error" listener or the cancel action
-        if (!finished && xhr.status !== 0) {
-          setServerStage(null);
-          setError(describeIncompleteStream(xhr.status, lastMessage));
-          setLoading(false);
-        }
-      }
     };
 
-    xhr.open("POST", "/api/process");
-    xhr.send(formData);
+    // Sent in resumable pieces: a dropped connection retries and continues
+    const job = startResumableUpload(file, { secondaryLanguage, model }, {
+      onUploadProgress: (loaded, total) => {
+        setReconnecting(false);
+        setUploadSpeed(calculateCurrentSpeed(loaded));
+        setProgress(Math.round((loaded / total) * 100));
+        setUploadedBytes(loaded);
+        setTotalBytes(total);
+      },
+      onReconnecting: () => setReconnecting(true),
+      onMessage,
+    });
+    activeJobsRef.current.push(job);
+    const outcome = await job.done;
+    activeJobsRef.current = activeJobsRef.current.filter(j => j !== job);
+    setReconnecting(false);
+
+    // A cancelled job's state was already reset by cancelUpload
+    if (finished || outcome.aborted) return;
+    setServerStage(null);
+    setError(describeUploadFailure(outcome));
+    setLoading(false);
   };
 
   return (
@@ -1006,7 +987,7 @@ export function VideoUpload({
                                 const key = `${project.id}-${f.name}`;
                                 const prog = fileProgressMap[key];
                                 if (prog?.status === 'uploading') {
-                                  return <span className="text-[9px] text-[#007acc] font-mono">{Math.round((prog.loaded / prog.total) * 100)}%</span>;
+                                  return <UploadPercent prog={prog} />;
                                 }
                                 if (prog?.status === 'processing') {
                                   return (
@@ -1145,55 +1126,39 @@ export function VideoUpload({
 
                   // Process files in project
                   for (const file of project.files) {
-                      const uploadId = generateClipId();
-                      const formData = prepareUploadFormData(file, {
-                        secondaryLanguage,
-                        model,
-                        uploadId,
-                      });
-
-                      // Wrapped XHR Promise for Upload
+                      // Resumable upload, then processing; resolves with the processed clip
                       const result = await new Promise<ProcessResponse>((resolve, reject) => {
-                          const xhr = new XMLHttpRequest();
-                          activeXhrsRef.current.push(xhr);
-                          uploadIdsRef.current.set(xhr, uploadId);
-                          let uploadFinished = false;
-                          xhr.upload.addEventListener('load', () => { uploadFinished = true; });
                           const key = `${project.id}-${file.name}`;
 
-                          xhr.upload.onprogress = (e) => {
-                              if (e.lengthComputable) {
+                          const onUploadProgress = (loaded: number, total: number) => {
                                   // Update file progress
                                   setFileProgressMap(prev => {
                                       const now = Date.now();
                                       const elapsed = (now - startTime) / 1000;
-                                      
+
                                       // Calculate aggregate loaded
                                       const newMap = {
                                           ...prev,
-                                          [key]: { 
-                                            loaded: e.loaded, 
-                                            total: e.total, 
-                                            status: (e.loaded === e.total ? 'processing' : 'uploading') as FileProgress['status']
+                                          [key]: {
+                                            loaded,
+                                            total,
+                                            status: (loaded === total ? 'processing' : 'uploading') as FileProgress['status']
                                           }
                                       };
-                                      
+
                                       // Update global metrics
                                       const totalLoaded = Object.values(newMap).reduce((acc, curr) => acc + curr.loaded, 0);
                                       setUploadedBytes(totalLoaded);
                                       if (elapsed > 0) {
                                           setUploadSpeed(totalLoaded / elapsed);
                                       }
-                                      
+
                                       return newMap;
                                   });
-                              }
                           };
 
                           let finished = false;
-                          let lastMessage: unknown = null;
-                          const reader = createNdjsonReader((message) => {
-                            lastMessage = message;
+                          const onMessage = (message: unknown) => {
                             const part = message as StreamMessage;
                             if (part.type === "progress") {
                               setFileProgressMap(prev => ({
@@ -1219,30 +1184,23 @@ export function VideoUpload({
                               finished = true;
                               reject(new Error(part.message ?? 'Processing failed'));
                             }
+                          };
+
+                          const job = startResumableUpload(file, { secondaryLanguage, model }, {
+                            onUploadProgress,
+                            onReconnecting: (received, total) => setFileProgressMap(prev => ({
+                              ...prev,
+                              [key]: { loaded: received, total, status: 'uploading', stage: 'reconnecting' },
+                            })),
+                            onMessage,
                           });
-
-                          xhr.onreadystatechange = () => {
-                            if (xhr.readyState === 3 || xhr.readyState === 4) {
-                              reader.push(xhr.responseText);
-                            }
-                            if (xhr.readyState === 4) {
-                              reader.end();
-                              activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                              if (!finished) {
-                                if (cancelledXhrsRef.current.has(xhr)) cancelled = true;
-                                reject(new Error(xhr.status !== 0
-                                  ? describeIncompleteStream(xhr.status, lastMessage)
-                                  : cancelled ? 'Upload cancelled by user' : describeLostConnection(uploadFinished)));
-                              }
-                            }
-                          };
-
-                          xhr.onerror = () => {
-                             activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                             reject(new Error(describeLostConnection(uploadFinished)));
-                          };
-                          xhr.open('POST', '/api/process');
-                          xhr.send(formData);
+                          activeJobsRef.current.push(job);
+                          job.done.then(outcome => {
+                            activeJobsRef.current = activeJobsRef.current.filter(j => j !== job);
+                            if (finished) return;
+                            if (outcome.aborted) cancelled = true;
+                            reject(new Error(outcome.aborted ? 'Upload cancelled by user' : describeUploadFailure(outcome)));
+                          });
                       });
 
                       // Handle Result
@@ -1423,7 +1381,7 @@ export function VideoUpload({
                                  const prog = fileProgressMap[key];
 
                                  if (prog?.status === 'uploading') {
-                                   return <span className="text-[9px] text-[#007acc] font-mono">{Math.round((prog.loaded / prog.total) * 100)}%</span>;
+                                   return <UploadPercent prog={prog} />;
                                  }
 
                                  if (prog?.status === 'processing') {
@@ -1592,29 +1550,21 @@ export function VideoUpload({
                     nextToUpload = index + 1;
 
                     const item = uploadQueue[index];
-                    const uploadId = generateClipId();
-                    const formData = prepareUploadFormData(item.file, { secondaryLanguage, model, uploadId });
-                    const xhr = new XMLHttpRequest();
-                    activeXhrsRef.current.push(xhr);
-                    uploadIdsRef.current.set(xhr, uploadId);
-                    let uploadFinished = false;
-                    xhr.upload.addEventListener('load', () => { uploadFinished = true; });
                     let pipelined = false;
 
-                    xhr.upload.onprogress = (e) => {
-                      if (e.lengthComputable) {
+                    const onUploadProgress = (loaded: number, total: number) => {
                         setFileProgressMap(prev => {
                           const newMap = {
                             ...prev,
-                            [item.key]: { 
-                              loaded: e.loaded, 
-                              total: e.total, 
-                              status: (e.loaded === e.total ? 'processing' : 'uploading') as FileProgress['status']
+                            [item.key]: {
+                              loaded,
+                              total,
+                              status: (loaded === total ? 'processing' : 'uploading') as FileProgress['status']
                             }
                           };
-                          
+
                           // Pipeline logic: Start next upload as soon as this one hits 100%
-                          if (e.loaded === e.total && !pipelined && nextToUpload < uploadQueue.length) {
+                          if (loaded === total && !pipelined && nextToUpload < uploadQueue.length) {
                             pipelined = true;
                             startUpload(nextToUpload);
                           }
@@ -1624,7 +1574,6 @@ export function VideoUpload({
                           setUploadSpeed(calculateCurrentSpeed(totalLoaded));
                           return newMap;
                         });
-                      }
                     };
 
                     const handleComplete = async (data: NonNullable<StreamMessage['data']>) => {
@@ -1673,9 +1622,7 @@ export function VideoUpload({
                     };
 
                     let finished = false;
-                    let lastMessage: unknown = null;
-                    const reader = createNdjsonReader((message) => {
-                      lastMessage = message;
+                    const onMessage = (message: unknown) => {
                       const part = message as StreamMessage;
                       if (part.type === "progress") {
                         setFileProgressMap(prev => ({
@@ -1689,30 +1636,24 @@ export function VideoUpload({
                         finished = true;
                         reject(new Error(part.message ?? 'Processing failed'));
                       }
+                    };
+
+                    // Resumable upload, then processing
+                    const job = startResumableUpload(item.file, { secondaryLanguage, model }, {
+                      onUploadProgress,
+                      onReconnecting: (received, total) => setFileProgressMap(prev => ({
+                        ...prev,
+                        [item.key]: { loaded: received, total, status: 'uploading', stage: 'reconnecting' },
+                      })),
+                      onMessage,
                     });
-
-                    xhr.onreadystatechange = () => {
-                      if (xhr.readyState === 3 || xhr.readyState === 4) {
-                        reader.push(xhr.responseText);
-                      }
-                      if (xhr.readyState === 4) {
-                        reader.end();
-                        activeXhrsRef.current = activeXhrsRef.current.filter((x: XMLHttpRequest) => x !== xhr);
-                        if (!finished) {
-                          if (cancelledXhrsRef.current.has(xhr)) cancelled = true;
-                          reject(new Error(xhr.status !== 0
-                            ? describeIncompleteStream(xhr.status, lastMessage)
-                            : cancelled ? 'Upload cancelled by user' : describeLostConnection(uploadFinished)));
-                        }
-                      }
-                    };
-
-                    xhr.onerror = () => {
-                      activeXhrsRef.current = activeXhrsRef.current.filter(x => x !== xhr);
-                      reject(new Error(describeLostConnection(uploadFinished)));
-                    };
-                    xhr.open('POST', '/api/process');
-                    xhr.send(formData);
+                    activeJobsRef.current.push(job);
+                    job.done.then(outcome => {
+                      activeJobsRef.current = activeJobsRef.current.filter(j => j !== job);
+                      if (finished) return;
+                      if (outcome.aborted) cancelled = true;
+                      reject(new Error(outcome.aborted ? 'Upload cancelled by user' : describeUploadFailure(outcome)));
+                    });
                   };
 
                   startUpload(0);
@@ -1796,7 +1737,9 @@ export function VideoUpload({
                 <div className="flex justify-between items-center text-xs">
                   <span className="flex items-center gap-2 text-[#cccccc]">
                      <Loader2 className="w-3 h-3 animate-spin text-[#007acc]" />
-                      {progress < 100 ? (serverStage ? "Processing..." : "Uploading...") : "Analyzing..."}
+                      {reconnecting
+                        ? "Connection lost, reconnecting..."
+                        : progress < 100 ? (serverStage ? "Processing..." : "Uploading...") : "Analyzing..."}
                   </span>
                   <div className="flex items-center gap-2">
                     {serverStage && (

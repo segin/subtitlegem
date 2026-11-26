@@ -115,7 +115,7 @@ src/
 ## Dependencies
 
 - **FFmpeg** - Must be installed on system for video processing
-- **Node.js 20+** - Required runtime
+- **Node.js 22.19+** - Required runtime (undici 8); Docker uses 24 LTS
 - **Noto Sans CJK** - Recommended for Chinese subtitle rendering
 
 <!-- BEGIN:nextjs-agent-rules -->

@@ -71,6 +71,31 @@ export function replaceRetiredModel(modelName: string): string {
 }
 
 /**
+ * The models to try, in order. A job's own Gemini model (params.modelName)
+ * takes the first Gemini slot of the chain, with that entry's configured model
+ * as its backup right after it; every other entry keeps its own model.
+ * (Previously the job's model replaced every Gemini entry, so the backups
+ * just retried the same model.)
+ */
+export function buildAttemptOrder(fallbackChain: ModelConfig[], requestedModel?: string): ModelConfig[] {
+  const enabled = fallbackChain
+    .filter(c => c.enabled)
+    .map(c => c.provider === 'gemini' ? { ...c, modelName: replaceRetiredModel(c.modelName) } : c);
+  const firstGemini = enabled.findIndex(c => c.provider === 'gemini');
+  if (!requestedModel || firstGemini === -1) return enabled;
+
+  const model = replaceRetiredModel(requestedModel);
+  const slot = enabled[firstGemini];
+  const requested: ModelConfig = { ...slot, id: `${slot.id}:requested`, modelName: model };
+  const isRequested = (c: ModelConfig) => c.provider === 'gemini' && c.modelName === model;
+  return [
+    ...enabled.slice(0, firstGemini),
+    requested,
+    ...enabled.slice(firstGemini).filter(c => !isRequested(c)),
+  ];
+}
+
+/**
  * Main entry point for AI processing with safety re-route (fallback)
  */
 export async function processWithFallback(
@@ -78,19 +103,14 @@ export async function processWithFallback(
   params: AIParams,
   fallbackChain: ModelConfig[]
 ): Promise<AIResult> {
-  const enabledChain = fallbackChain
-    .filter(c => c.enabled)
-    .map(c => c.provider === 'gemini' ? { ...c, modelName: replaceRetiredModel(c.modelName) } : c);
-  if (enabledChain.length === 0) {
+  const attempts = buildAttemptOrder(fallbackChain, params.modelName);
+  if (attempts.length === 0) {
     throw new Error("No enabled AI models in fallback chain.");
-  }
-  if (params.modelName) {
-    params = { ...params, modelName: replaceRetiredModel(params.modelName) };
   }
 
   let lastError: unknown = null;
 
-  for (const config of enabledChain) {
+  for (const config of attempts) {
     const startedAt = Date.now();
     const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
     try {
@@ -157,7 +177,7 @@ async function callGenerate(config: ModelConfig, params: AIParams): Promise<Part
         params.mimeType!,
         params.secondaryLanguage,
         1,
-        params.modelName || config.modelName,
+        config.modelName, // the job's own model is its own attempt (buildAttemptOrder)
         params.promptHints
       );
     }
@@ -167,7 +187,7 @@ async function callGenerate(config: ModelConfig, params: AIParams): Promise<Part
       params.mimeType!,
       params.secondaryLanguage,
       1,
-      params.modelName || config.modelName,
+      config.modelName,
       params.promptHints
     );
   }
@@ -277,7 +297,7 @@ async function callTranslate(config: ModelConfig, params: AIParams) {
     const subtitles = await translateSubtitles(
       params.subtitles!,
       params.targetLanguage!,
-      params.modelName || config.modelName,
+      config.modelName,
       params.context
     );
     return { subtitles };

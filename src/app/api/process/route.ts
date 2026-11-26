@@ -16,6 +16,8 @@ import { secureDelete } from "@/lib/security";
 import { describeError } from "@/lib/error-utils";
 import { validateAuth } from "@/lib/auth";
 import { SubtitleLine } from "@/types/subtitle";
+import { DEFAULT_AI_MODEL } from "@/types/constants";
+import { CompletedUpload, takeCompletedUpload, UploadSessionError } from "@/lib/upload-sessions";
 // fluent-ffmpeg removed - using native child_process in ffmpeg-utils
 
 export const runtime = 'nodejs';
@@ -82,12 +84,41 @@ export async function POST(req: NextRequest) {
         clipId: z.string().optional(),
       });
 
-      const Schema = z.discriminatedUnion('mode', [ReprocessSchema, TranslateSchema]);
-      
+      // A file sent in pieces through /api/upload, now complete
+      const UploadedSchema = z.object({
+        mode: z.literal('uploaded'),
+        uploadId: z.string().refine(isSafeId, { message: "Invalid upload id" }),
+        secondaryLanguage: z.string().optional(),
+        model: z.string().optional(),
+      });
+
+      const Schema = z.discriminatedUnion('mode', [ReprocessSchema, TranslateSchema, UploadedSchema]);
+
       const validation = Schema.safeParse(body);
-      
+
       if (!validation.success) {
          return NextResponse.json({ error: "Invalid request data", details: validation.error.format() }, { status: 400 });
+      }
+
+      if (validation.data.mode === 'uploaded') {
+         const { uploadId, secondaryLanguage, model } = validation.data;
+         let upload: CompletedUpload;
+         try {
+           upload = await takeCompletedUpload(uploadId);
+         } catch (error) {
+           if (error instanceof UploadSessionError) {
+             return NextResponse.json({ error: error.message, received: error.received }, { status: error.status });
+           }
+           throw error;
+         }
+         return processStoredUpload({
+           videoPath: upload.path,
+           originalFilename: upload.filename,
+           mimeType: upload.mimeType,
+           secondaryLanguage: secondaryLanguage ?? "None",
+           modelName: model || DEFAULT_AI_MODEL,
+           uploadId,
+         });
       }
 
       const { mode, fileUri, filePath, language, secondaryLanguage, subtitles, model: modelName, clipId, sampleDuration, promptHints } = validation.data as {
@@ -171,10 +202,10 @@ export async function POST(req: NextRequest) {
          const { processWithFallback } = await import("@/lib/ai-provider");
          const settings = getGlobalSettings();
          
-         console.log(`Retranslating to: ${secondaryLanguage} using fallback chain`);
+         console.log(`Retranslating to: ${secondaryLanguage} with ${modelName ?? "the fallback chain"}`);
          const result = await processWithFallback(
            'translate',
-           { subtitles, targetLanguage: secondaryLanguage },
+           { subtitles, targetLanguage: secondaryLanguage, modelName },
            settings.aiFallbackChain
          );
          
@@ -304,17 +335,50 @@ export async function POST(req: NextRequest) {
          return NextResponse.json({ error: "File upload failed (empty file)" }, { status: 400 });
     }
     
-    if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
-        if (secondaryLanguage.trim() !== "") {
-             return NextResponse.json({ error: "Invalid secondary language" }, { status: 400 });
-        }
-    }
+    // Note: the per-file size limit is enforced mid-stream above; no post-write check needed.
+    return processStoredUpload({ videoPath, originalFilename, mimeType, secondaryLanguage, modelName, uploadId });
 
+  } catch (error) {
+    // Typically the browser disconnecting mid-upload ("Unexpected end of form")
+    console.error(`[Process] Upload of ${originalFilename || "(unnamed file)"} failed before processing: ${describeError(error)}`);
+    if (videoPath && fs.existsSync(videoPath)) {
+      secureDelete(videoPath).catch(e => console.error("Failed to cleanup partial upload:", e));
+    }
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to process video" }, { status: 500 });
+  }
+}
+
+/** A complete upload on disk, from either upload path, ready to be transcribed */
+interface StoredUpload {
+  videoPath: string;
+  originalFilename: string;
+  mimeType: string;
+  secondaryLanguage: string;
+  modelName: string;
+  /** Lets Cancel (/api/process/cancel) discard the result if the page goes away */
+  uploadId: string | null;
+}
+
+/**
+ * Transcribes an uploaded file, streaming progress and the result as NDJSON.
+ * Shared by the one-request multipart upload and resumable uploads (mode "uploaded").
+ */
+function processStoredUpload(upload: StoredUpload): NextResponse {
+  const { videoPath, originalFilename, secondaryLanguage, modelName, uploadId } = upload;
+  let mimeType = upload.mimeType;
+
+  if (secondaryLanguage && secondaryLanguage !== "None" && !ALLOWED_LANGUAGES.includes(secondaryLanguage)) {
+    if (secondaryLanguage.trim() !== "") {
+      secureDelete(videoPath).catch(e => console.error("Cleanup error", e));
+      return NextResponse.json({ error: "Invalid secondary language" }, { status: 400 });
+    }
+  }
+
+  try {
     const stats = fs.statSync(videoPath);
     const fileSizeInMB = stats.size / (1024 * 1024);
     console.log(`File uploaded: ${videoPath}, Size: ${fileSizeInMB.toFixed(2)}MB`);
-    // Note: the per-file size limit is enforced mid-stream above; no post-write check needed.
-    const stagingDir = tempDir;
+    const stagingDir = path.join(getStorageConfig().stagingDir, 'temp');
     const INLINE_SIZE_LIMIT_MB = 95; // New limit: 100MB base64, use 95MB raw for safety margin
 
     // Use streaming response for progress feedback.
@@ -570,11 +634,8 @@ export async function POST(req: NextRequest) {
     });
 
   } catch (error) {
-    // Typically the browser disconnecting mid-upload ("Unexpected end of form")
-    console.error(`[Process] Upload of ${originalFilename || "(unnamed file)"} failed before processing: ${describeError(error)}`);
-    if (videoPath && fs.existsSync(videoPath)) {
-      secureDelete(videoPath).catch(e => console.error("Failed to cleanup partial upload:", e));
-    }
+    console.error(`[Process] Could not start processing ${originalFilename}: ${describeError(error)}`);
+    secureDelete(videoPath).catch(e => console.error("Failed to cleanup upload:", e));
     return NextResponse.json({ error: error instanceof Error ? error.message : "Failed to process video" }, { status: 500 });
   }
 }

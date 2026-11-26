@@ -23,7 +23,7 @@ SubtitleGem is a powerful, web-based tool built with Next.js that leverages the 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22.19+ (24 LTS recommended)
 - npm
 - FFmpeg installed on your system
 
