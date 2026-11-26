@@ -515,7 +515,8 @@ function processStoredUpload(upload: StoredUpload): NextResponse {
                   console.warn(`[Process] Blocked unauthorized path access: ${processPath}`);
                   throw new Error('Unauthorized path');
               }
-              const fileBuffer = fs.readFileSync(processPath);
+              // (turbopackIgnore: a runtime upload path, not a file to bundle)
+              const fileBuffer = fs.readFileSync(/*turbopackIgnore: true*/ processPath);
               const base64Data = fileBuffer.toString('base64');
 
               result = await processWithFallback(
@@ -563,7 +564,7 @@ function processStoredUpload(upload: StoredUpload): NextResponse {
           const detectedLanguage = result?.detectedLanguage ?? null;
 
           try {
-              if (processPath !== videoPath && fs.existsSync(processPath)) {
+              if (processPath !== videoPath && fs.existsSync(/*turbopackIgnore: true*/ processPath)) {
                 secureDelete(processPath).catch(e => console.error("Cleanup error", e));
               }
           } catch (e) { console.error("Cleanup error", e); }
@@ -617,7 +618,7 @@ function processStoredUpload(upload: StoredUpload): NextResponse {
           if (videoPath && fs.existsSync(videoPath)) {
               secureDelete(videoPath).catch(err => console.error("Failed to cleanup temp video:", err));
           }
-          if (processPath && processPath !== videoPath && fs.existsSync(processPath)) {
+          if (processPath && processPath !== videoPath && fs.existsSync(/*turbopackIgnore: true*/ processPath)) {
               secureDelete(processPath).catch(err => console.error("Failed to cleanup extracted audio:", err));
           }
           close();
